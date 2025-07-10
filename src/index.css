@@ -93,30 +93,6 @@
 
 /* Custom utilities for PoultryConnect */
 @layer utilities {
-  .text-brand {
-    @apply text-primary;
-  }
-  
-  .bg-brand {
-    @apply bg-primary;
-  }
-  
-  .text-accent {
-    @apply text-accent;
-  }
-  
-  .bg-accent {
-    @apply bg-accent;
-  }
-  
-  .text-clay {
-    @apply text-secondary;
-  }
-  
-  .bg-clay {
-    @apply bg-secondary;
-  }
-  
   .gradient-hero {
     background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
   }

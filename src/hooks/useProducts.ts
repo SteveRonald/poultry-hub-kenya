@@ -26,7 +26,7 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
         .from('products')
         .select(`
           *,
-          vendor_profiles!inner(
+          vendor_profiles (
             farm_name,
             location
           )
@@ -35,15 +35,11 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
 
       // Apply filters
       if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,vendor_profiles.farm_name.ilike.%${searchTerm}%`);
+        query = query.or(`name.ilike.%${searchTerm}%`);
       }
 
       if (category && category !== 'all') {
         query = query.eq('category', category);
-      }
-
-      if (location && location !== 'all') {
-        query = query.eq('vendor_profiles.location', location);
       }
 
       const { data, error } = await query;
@@ -53,7 +49,23 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
         throw error;
       }
 
-      return data as Product[];
+      // Filter by location if specified
+      let filteredData = data || [];
+      if (location && location !== 'all') {
+        filteredData = filteredData.filter(product => 
+          product.vendor_profiles?.location === location
+        );
+      }
+
+      // Filter by search term in vendor farm name if specified
+      if (searchTerm) {
+        filteredData = filteredData.filter(product => 
+          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          product.vendor_profiles?.farm_name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+
+      return filteredData as Product[];
     },
   });
 };

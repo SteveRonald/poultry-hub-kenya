@@ -1,12 +1,52 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { supabase } from '@/integrations/supabase/client';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    activeOrders: 0,
+    totalSpent: 0,
+  });
+
+  useEffect(() => {
+    if (user) {
+      fetchUserStats();
+    }
+  }, [user]);
+
+  const fetchUserStats = async () => {
+    try {
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('total_amount, status')
+        .eq('customer_id', user?.id);
+
+      if (error) {
+        console.error('Error fetching orders:', error);
+        return;
+      }
+
+      const totalOrders = orders?.length || 0;
+      const activeOrders = orders?.filter(order => 
+        ['pending', 'confirmed', 'processing', 'shipped'].includes(order.status)
+      ).length || 0;
+      const totalSpent = orders?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
+
+      setStats({
+        totalOrders,
+        activeOrders,
+        totalSpent,
+      });
+    } catch (error) {
+      console.error('Error in fetchUserStats:', error);
+    }
+  };
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -36,15 +76,15 @@ const Dashboard = () => {
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h3 className="text-lg font-semibold text-primary mb-2">My Orders</h3>
               <p className="text-gray-600 mb-4">Track your recent purchases</p>
-              <div className="text-2xl font-bold text-accent">0</div>
+              <div className="text-2xl font-bold text-accent">{stats.activeOrders}</div>
               <p className="text-sm text-gray-500">Active orders</p>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h3 className="text-lg font-semibold text-primary mb-2">Favorites</h3>
-              <p className="text-gray-600 mb-4">Your saved products</p>
-              <div className="text-2xl font-bold text-accent">0</div>
-              <p className="text-sm text-gray-500">Saved items</p>
+              <h3 className="text-lg font-semibold text-primary mb-2">Total Orders</h3>
+              <p className="text-gray-600 mb-4">All your purchases</p>
+              <div className="text-2xl font-bold text-accent">{stats.totalOrders}</div>
+              <p className="text-sm text-gray-500">Completed orders</p>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-md">
@@ -59,10 +99,24 @@ const Dashboard = () => {
           </div>
 
           <div className="mt-8 bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-primary mb-4">Recent Activity</h2>
-            <div className="text-center py-8 text-gray-500">
-              <p>No recent activity to display</p>
-              <p className="text-sm mt-2">Start by browsing our products!</p>
+            <h2 className="text-xl font-semibold text-primary mb-4">Account Details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">Email</label>
+                <p className="text-gray-900">{user.email}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Role</label>
+                <p className="text-gray-900 capitalize">{user.role}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Total Spent</label>
+                <p className="text-gray-900">KSH {stats.totalSpent.toLocaleString()}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Member Since</label>
+                <p className="text-gray-900">Recently joined</p>
+              </div>
             </div>
           </div>
         </div>

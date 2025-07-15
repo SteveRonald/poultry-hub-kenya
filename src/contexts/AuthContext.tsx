@@ -1,5 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -32,71 +34,125 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored auth token and validate
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      // In a real app, you'd validate the token with your backend
-      // For now, we'll simulate with localStorage data
-      const userData = localStorage.getItem('userData');
-      if (userData) {
-        setUser(JSON.parse(userData));
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchUserProfile(session.user);
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await fetchUserProfile(session.user);
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching profile:', error);
+        return;
+      }
+
+      if (profile) {
+        // Check if user is a vendor and get approval status
+        let isApproved = true;
+        if (profile.role === 'vendor') {
+          const { data: vendorProfile } = await supabase
+            .from('vendor_profiles')
+            .select('status')
+            .eq('user_id', supabaseUser.id)
+            .single();
+          
+          isApproved = vendorProfile?.status === 'approved';
+        }
+
+        setUser({
+          id: profile.id,
+          email: profile.email,
+          name: profile.full_name,
+          role: profile.role,
+          isApproved,
+        });
+      }
+    } catch (error) {
+      console.error('Error in fetchUserProfile:', error);
+    }
+  };
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Simulate API call - replace with actual backend integration
-      const mockUsers = [
-        { id: '1', email: 'admin@poultryconnect.ke', password: 'admin123', name: 'Admin User', role: 'admin' as const, isApproved: true },
-        { id: '2', email: 'vendor@test.com', password: 'vendor123', name: 'Test Vendor', role: 'vendor' as const, isApproved: true },
-        { id: '3', email: 'customer@test.com', password: 'customer123', name: 'Test Customer', role: 'customer' as const, isApproved: true },
-      ];
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       
-      const foundUser = mockUsers.find(u => u.email === email && u.password === password);
-      if (foundUser) {
-        const { password: _, ...userWithoutPassword } = foundUser;
-        setUser(userWithoutPassword);
-        localStorage.setItem('authToken', 'mock-jwt-token');
-        localStorage.setItem('userData', JSON.stringify(userWithoutPassword));
-      } else {
-        throw new Error('Invalid credentials');
-      }
+      if (error) throw error;
     } catch (error) {
-      throw error;
-    } finally {
       setIsLoading(false);
+      throw error;
     }
   };
 
   const register = async (userData: any) => {
     setIsLoading(true);
     try {
-      // Simulate API call - replace with actual backend integration
-      const newUser = {
-        id: Date.now().toString(),
+      const { error } = await supabase.auth.signUp({
         email: userData.email,
-        name: userData.name,
-        role: userData.role || 'customer',
-        isApproved: userData.role === 'customer' ? true : false,
-      };
+        password: userData.password,
+        options: {
+          data: {
+            full_name: userData.name,
+            role: userData.role || 'customer',
+          },
+        },
+      });
       
-      setUser(newUser);
-      localStorage.setItem('authToken', 'mock-jwt-token');
-      localStorage.setItem('userData', JSON.stringify(newUser));
+      if (error) throw error;
+
+      // If registering as vendor, create vendor profile
+      if (userData.role === 'vendor' && userData.farmName) {
+        // Wait a bit for the profile to be created by the trigger
+        setTimeout(async () => {
+          try {
+            await supabase.from('vendor_profiles').insert({
+              user_id: (await supabase.auth.getUser()).data.user?.id,
+              farm_name: userData.farmName,
+              farm_description: userData.farmDescription || '',
+              location: userData.location || '',
+              id_number: userData.idNumber || '',
+            });
+          } catch (vendorError) {
+            console.error('Error creating vendor profile:', vendorError);
+          }
+        }, 1000);
+      }
     } catch (error) {
-      throw error;
-    } finally {
       setIsLoading(false);
+      throw error;
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
   };
 
   return (

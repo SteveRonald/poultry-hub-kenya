@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
       const { data: profile, error } = await supabase
-        .from('profiles')
+        .from('profiles' as any)
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let isApproved = true;
         if (profile.role === 'vendor') {
           const { data: vendorProfile } = await supabase
-            .from('vendor_profiles')
+            .from('vendor_profiles' as any)
             .select('status')
             .eq('user_id', supabaseUser.id)
             .single();
@@ -132,13 +132,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Wait a bit for the profile to be created by the trigger
         setTimeout(async () => {
           try {
-            await supabase.from('vendor_profiles').insert({
-              user_id: (await supabase.auth.getUser()).data.user?.id,
-              farm_name: userData.farmName,
-              farm_description: userData.farmDescription || '',
-              location: userData.location || '',
-              id_number: userData.idNumber || '',
-            });
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (authUser) {
+              await supabase.from('vendor_profiles' as any).insert({
+                user_id: authUser.id,
+                farm_name: userData.farmName,
+                farm_description: userData.farmDescription || '',
+                location: userData.location || '',
+                id_number: userData.idNumber || '',
+              });
+            }
           } catch (vendorError) {
             console.error('Error creating vendor profile:', vendorError);
           }

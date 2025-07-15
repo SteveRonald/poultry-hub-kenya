@@ -23,7 +23,7 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
     queryKey: ['products', searchTerm, category, location],
     queryFn: async () => {
       let query = supabase
-        .from('products')
+        .from('products' as any)
         .select(`
           *,
           vendor_profiles (
@@ -52,14 +52,14 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
       // Filter by location if specified
       let filteredData = data || [];
       if (location && location !== 'all') {
-        filteredData = filteredData.filter(product => 
+        filteredData = filteredData.filter((product: any) => 
           product.vendor_profiles?.location === location
         );
       }
 
       // Filter by search term in vendor farm name if specified
       if (searchTerm) {
-        filteredData = filteredData.filter(product => 
+        filteredData = filteredData.filter((product: any) => 
           product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           product.vendor_profiles?.farm_name.toLowerCase().includes(searchTerm.toLowerCase())
         );

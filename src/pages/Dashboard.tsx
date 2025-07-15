@@ -23,7 +23,7 @@ const Dashboard = () => {
   const fetchUserStats = async () => {
     try {
       const { data: orders, error } = await supabase
-        .from('orders')
+        .from('orders' as any)
         .select('total_amount, status')
         .eq('customer_id', user?.id);
 
@@ -33,10 +33,10 @@ const Dashboard = () => {
       }
 
       const totalOrders = orders?.length || 0;
-      const activeOrders = orders?.filter(order => 
+      const activeOrders = orders?.filter((order: any) => 
         ['pending', 'confirmed', 'processing', 'shipped'].includes(order.status)
       ).length || 0;
-      const totalSpent = orders?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
+      const totalSpent = orders?.reduce((sum: number, order: any) => sum + Number(order.total_amount), 0) || 0;
 
       setStats({
         totalOrders,

@@ -22,8 +22,8 @@ const Dashboard = () => {
 
   const fetchUserStats = async () => {
     try {
-      const { data: orders, error } = await supabase
-        .from('orders' as any)
+      const { data: orders, error } = await (supabase as any)
+        .from('orders')
         .select('total_amount, status')
         .eq('customer_id', user?.id);
 

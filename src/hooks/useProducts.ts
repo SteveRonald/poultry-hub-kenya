@@ -22,8 +22,8 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
   return useQuery({
     queryKey: ['products', searchTerm, category, location],
     queryFn: async () => {
-      let query = supabase
-        .from('products' as any)
+      let query = (supabase as any)
+        .from('products')
         .select(`
           *,
           vendor_profiles (
@@ -65,7 +65,7 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
         );
       }
 
-      return filteredData as Product[];
+      return filteredData as any[];
     },
   });
 };

@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
       const { data: profile, error } = await supabase
-        .from('profiles' as any)
+        .from('user_profiles')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
@@ -74,8 +74,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check if user is a vendor and get approval status
         let isApproved = true;
         if (profile.role === 'vendor') {
-          const { data: vendorProfile } = await supabase
-            .from('vendor_profiles' as any)
+          const { data: vendorProfile } = await (supabase as any)
+            .from('vendor_profiles')
             .select('status')
             .eq('user_id', supabaseUser.id)
             .single();
@@ -87,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: profile.id,
           email: profile.email,
           name: profile.full_name,
-          role: profile.role,
+          role: profile.role as 'customer' | 'vendor' | 'admin',
           isApproved,
         });
       }
@@ -134,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
             if (authUser) {
-              await supabase.from('vendor_profiles' as any).insert({
+              await (supabase as any).from('vendor_profiles').insert({
                 user_id: authUser.id,
                 farm_name: userData.farmName,
                 farm_description: userData.farmDescription || '',

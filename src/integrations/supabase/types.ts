@@ -46,6 +46,155 @@ export type Database = {
           },
         ]
       }
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          product_id: string
+          quantity: number
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          product_id: string
+          quantity: number
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          product_id?: string
+          quantity?: number
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          buyer_id: string
+          created_at: string
+          delivery_address: string | null
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          total_amount: number
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          buyer_id: string
+          created_at?: string
+          delivery_address?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          total_amount: number
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          buyer_id?: string
+          created_at?: string
+          delivery_address?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["order_status"]
+          total_amount?: number
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          category: Database["public"]["Enums"]["product_category"]
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          is_available: boolean
+          name: string
+          price: number
+          stock_quantity: number
+          unit: string
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["product_category"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name: string
+          price: number
+          stock_quantity?: number
+          unit?: string
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["product_category"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name?: string
+          price?: number
+          stock_quantity?: number
+          unit?: string
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           created_at: string | null
@@ -73,6 +222,53 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_profiles: {
+        Row: {
+          created_at: string
+          farm_description: string | null
+          farm_name: string
+          id: string
+          id_number: string | null
+          location: string | null
+          phone: string | null
+          status: Database["public"]["Enums"]["vendor_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          farm_description?: string | null
+          farm_name: string
+          id?: string
+          id_number?: string | null
+          location?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["vendor_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          farm_description?: string | null
+          farm_name?: string
+          id?: string
+          id_number?: string | null
+          location?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["vendor_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -95,7 +291,16 @@ export type Database = {
         | "delivered"
         | "cancelled"
       payment_method: "mpesa" | "bank_transfer"
-      product_category: "eggs" | "meat" | "chicks"
+      product_category:
+        | "vegetables"
+        | "fruits"
+        | "grains"
+        | "dairy"
+        | "meat"
+        | "herbs"
+        | "eggs"
+        | "chicks"
+        | "other"
       user_role: "admin" | "buyer" | "seller" | "customer" | "vendor"
       vendor_status: "pending" | "approved" | "rejected"
     }
@@ -233,7 +438,17 @@ export const Constants = {
         "cancelled",
       ],
       payment_method: ["mpesa", "bank_transfer"],
-      product_category: ["eggs", "meat", "chicks"],
+      product_category: [
+        "vegetables",
+        "fruits",
+        "grains",
+        "dairy",
+        "meat",
+        "herbs",
+        "eggs",
+        "chicks",
+        "other",
+      ],
       user_role: ["admin", "buyer", "seller", "customer", "vendor"],
       vendor_status: ["pending", "approved", "rejected"],
     },

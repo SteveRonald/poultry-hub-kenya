@@ -29,17 +29,17 @@ const Index = () => {
   const categories = [
     {
       name: "Chicks",
-      image: "https://images.unsplash.com/photo-1498936178812-4b2e558d2937",
+      image: "https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc=",
       description: "Quality day-old chicks from certified hatcheries"
     },
     {
       name: "Eggs",
-      image: "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9",
+      image: "https://media.istockphoto.com/id/2187046189/photo/group-of-fresh-brown-chicken-eggs-in-stack-in-wicker-basket-isolated-on-white-background-with.jpg?s=612x612&w=0&k=20&c=64XDmOVpFPnfeyehQ9iQ1mOBymFs2QE5yR-neC7QKfY=",
       description: "Fresh eggs from free-range and battery cage systems"
     },
     {
       name: "Poultry Meat",
-      image: "https://images.unsplash.com/photo-1466721591366-2d5fba72006d",
+      image: "https://media.istockphoto.com/id/164660922/photo/raw-turkey-meats-and-cuts.jpg?s=612x612&w=0&k=20&c=eGx-H4HC4rUM5illAZvhSXfanZZVZ5LOoYVFxW1jGMg=",
       description: "Premium chicken meat from trusted suppliers"
     }
   ];
@@ -52,7 +52,7 @@ const Index = () => {
       rating: 5
     },
     {
-      name: "John Mwangi",
+      name: "Steve Ronald",
       role: "Customer",
       content: "I always find quality chicks here. The farmers are reliable and the prices are fair.",
       rating: 5
@@ -90,7 +90,7 @@ const Index = () => {
                   </Button>
                 </Link>
                 <Link to="/register">
-                  <Button variant="outline" className="border-white text-white hover:bg-white hover:text-primary px-8 py-3 text-lg">
+                  <Button variant="outline" className="border-white text-primary hover:bg-white hover:text-black px-8 py-3 text-lg">
                     Become a Vendor
                   </Button>
                 </Link>
@@ -99,7 +99,7 @@ const Index = () => {
             
             <div className="relative">
               <img 
-                src="https://images.unsplash.com/photo-1498936178812-4b2e558d2937" 
+                src="https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8ZWdnfGVufDB8fDB8fHww" 
                 alt="Poultry farming in Kenya" 
                 className="rounded-lg shadow-2xl"
               />
@@ -227,7 +227,7 @@ const Index = () => {
               </Button>
             </Link>
             <Link to="/products">
-              <Button variant="outline" className="border-white text-white hover:bg-white hover:text-primary px-8 py-3 text-lg">
+              <Button variant="outline" className="border-white text-black hover:bg-white hover:text-primary px-8 py-3 text-lg">
                 Start Shopping
               </Button>
             </Link>

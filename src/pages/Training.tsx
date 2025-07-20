@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Play, Download, BookOpen, Users, Clock, Filter } from 'lucide-react';
 import Navbar from '../components/Navbar';
@@ -10,15 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 const Training = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
 
   const categories = [
-    { id: 'all', name: 'All Categories', count: 24 },
-    { id: 'health', name: 'Poultry Health', count: 6 },
-    { id: 'nutrition', name: 'Feeding & Nutrition', count: 5 },
-    { id: 'housing', name: 'Housing & Farm Setup', count: 4 },
-    { id: 'marketing', name: 'Marketing Strategies', count: 3 },
-    { id: 'finance', name: 'Finance & Record Keeping', count: 4 },
-    { id: 'breeding', name: 'Breeding & Hatching', count: 2 }
+    { id: 'all', name: 'All Categories', count: 6 },
+    { id: 'health', name: 'Poultry Health', count: 2 },
+    { id: 'nutrition', name: 'Feeding & Nutrition', count: 1 },
+    { id: 'housing', name: 'Housing & Farm Setup', count: 1 },
+    { id: 'marketing', name: 'Marketing Strategies', count: 1 },
+    { id: 'finance', name: 'Finance & Record Keeping', count: 1 },
+    { id: 'breeding', name: 'Breeding & Hatching', count: 0 }
   ];
 
   const trainingContent = [
@@ -31,8 +31,9 @@ const Training = () => {
       duration: "45 min",
       instructor: "Dr. Jane Wanjiru",
       difficulty: "Intermediate",
-      thumbnail: "https://images.unsplash.com/photo-1498936178812-4b2e558d2937",
-      source: "University of Nairobi Veterinary Extension"
+      thumbnail: "https://media.istockphoto.com/id/2169150321/photo/disease-prevention-in-chickens-pullets-vaccination-in-close-farm-temperature-and-light.webp?a=1&b=1&s=612x612&w=0&k=20&c=sAzg-Zwj51WivYKYZzKS64SYiVHcMKDgnVuOD_nIEeA=",
+      source: "University of Nairobi Veterinary Extension",
+      videoUrl: "https://www.youtube.com/watch?v=nV7lk3lht60"
     },
     {
       id: 2,
@@ -43,8 +44,9 @@ const Training = () => {
       duration: "30 min read",
       instructor: "Prof. Samuel Kiprotich",
       difficulty: "Beginner",
-      thumbnail: "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9",
-      source: "KALRO Poultry Research Institute"
+      thumbnail: "https://media.istockphoto.com/id/481909605/photo/hen-house-business-in-thailand.webp?a=1&b=1&s=612x612&w=0&k=20&c=uOpPqkweI3u8JXtpoV-gn4rJFWhXS3ZuZsqj3hCvijg=",
+      source: "KALRO Poultry Research Institute",
+      videoUrl: "https://youtu.be/-77EhvZhi38?si=2iU1AU9wIUm6kxpX"
     },
     {
       id: 3,
@@ -55,7 +57,7 @@ const Training = () => {
       duration: "60 min",
       instructor: "Eng. Peter Mwangi",
       difficulty: "Advanced",
-      thumbnail: "https://images.unsplash.com/photo-1466721591366-2d5fba72006d",
+      thumbnail: "https://images.unsplash.com/photo-1697545698404-46828377ae9d?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8JTIyTW9kZXJuJTIwUG91bHRyeSUyMEhvdXNpbmclMjBEZXNpZ258ZW58MHx8MHx8fDA%3D",
       source: "ILRI Agricultural Engineering"
     },
     {
@@ -67,7 +69,7 @@ const Training = () => {
       duration: "55 min",
       instructor: "Dr. Grace Akinyi",
       difficulty: "Intermediate",
-      thumbnail: "https://images.unsplash.com/photo-1498936178812-4b2e558d2937",
+      thumbnail: "https://media.istockphoto.com/id/2182763763/photo/poultry-farm.webp?a=1&b=1&s=612x612&w=0&k=20&c=zm4KBTMnn1pWqZKvb2GBd2GB7efHTKD39uOY5D1bNk0=",
       source: "FAO Kenya Office"
     },
     {
@@ -79,7 +81,7 @@ const Training = () => {
       duration: "40 min read",
       instructor: "Mary Njeri",
       difficulty: "Beginner",
-      thumbnail: "https://images.unsplash.com/photo-1535268647677-300dbf3d78d1",
+      thumbnail: "https://media.istockphoto.com/id/2196792624/photo/portrait-of-a-farmer-using-digital-tablet-in-a-chicken-coop.jpg?s=612x612&w=0&k=20&c=RTAJTqWmzAOzwnbRjy-hwFcmw061h2WfkkpjCeZS5wk=",
       source: "Kenya Poultry Farmers Association"
     },
     {
@@ -91,7 +93,7 @@ const Training = () => {
       duration: "35 min",
       instructor: "CPA John Maina",
       difficulty: "Beginner",
-      thumbnail: "https://images.unsplash.com/photo-1721322800607-8c38375eef04",
+      thumbnail: "https://media.istockphoto.com/id/2165613271/photo/new-born-chicken-weight-uniformity-quality-control-work-in-hatchery-industrial-production.webp?a=1&b=1&s=612x612&w=0&k=20&c=KQX9_1jczDKFvD1oG09vkBI3-gM4a6ZFXm_zQZX2pMw=",
       source: "Agricultural Finance Corporation"
     }
   ];
@@ -295,11 +297,9 @@ const Training = () => {
                         </div>
                       </div>
                       
-                      <Button className="w-full btn-primary flex items-center justify-center">
+                      <Button className="w-full btn-primary flex items-center justify-center" onClick={() => setSelectedVideo(content.videoUrl)}>
                         {getTypeIcon(content.type)}
-                        <span className="ml-2">
-                          {content.type === 'video' ? 'Watch Now' : 'Download'}
-                        </span>
+                        <span className="ml-2">Watch Now</span>
                       </Button>
                     </CardContent>
                   </Card>
@@ -307,6 +307,21 @@ const Training = () => {
               </div>
             </div>
           </div>
+
+          {selectedVideo && (
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center">
+              <div className="relative w-full max-w-3xl">
+                <button className="absolute top-2 right-2 text-white" onClick={() => setSelectedVideo(null)}>Close</button>
+                <iframe
+                  src={selectedVideo}
+                  className="w-full h-96"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

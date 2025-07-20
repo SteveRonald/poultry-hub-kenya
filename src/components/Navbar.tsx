@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, ShoppingCart, User, LogOut } from 'lucide-react';
+import { Menu, X, Egg, User, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 
@@ -33,7 +32,7 @@ const Navbar = () => {
           <div className="flex items-center">
             <Link to="/" className="flex items-center space-x-2">
               <div className="bg-primary text-white p-2 rounded-lg">
-                <ShoppingCart className="h-6 w-6" />
+                <Egg className="h-6 w-6" />
               </div>
               <span className="text-xl font-bold text-primary">PoultryConnect KE</span>
             </Link>

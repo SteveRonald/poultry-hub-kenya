@@ -56,26 +56,26 @@ const Contact = () => {
     {
       icon: <Phone className="h-6 w-6 text-accent" />,
       title: "Phone",
-      details: ["+254 700 000 000", "+254 701 000 000"],
-      description: "Mon-Fri 8AM-6PM"
+      details: ["+254 799 422 635", "+254 794 437 135"],
+      description: "Call Us Now 24/7 Availability"
     },
     {
       icon: <Mail className="h-6 w-6 text-accent" />,
       title: "Email",
-      details: ["info@poultryconnect.ke", "support@poultryconnect.ke"],
+      details: ["info@poultryconnect.ke", "support@poultryconnect.com"],
       description: "We'll respond within 24 hours"
     },
     {
       icon: <MapPin className="h-6 w-6 text-accent" />,
       title: "Office",
-      details: ["Nairobi, Kenya", "CBD, Kimathi Street"],
+      details: ["Eldoret, Kenya", "CBD, Eldoret Street"],
       description: "Visit us by appointment"
     },
     {
       icon: <Clock className="h-6 w-6 text-accent" />,
       title: "Business Hours",
       details: ["Monday - Friday: 8AM - 6PM", "Saturday: 9AM - 4PM"],
-      description: "Sunday: Closed"
+      description: "Sunday: Closed (We operate fully online)"
     }
   ];
 

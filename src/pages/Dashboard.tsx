@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -15,38 +14,40 @@ const Dashboard = () => {
   });
 
   useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select('total_amount, status')
+          .eq('buyer_id', user?.id);
+
+        if (error) {
+          console.error('Error fetching orders:', error);
+          return;
+        }
+
+        const typedOrders: Array<{ total_amount: number; status: string }> = orders || [];
+
+        const totalOrders = typedOrders.length;
+        const activeOrders = typedOrders.filter((order) => 
+          ['pending', 'confirmed', 'processing', 'shipped'].includes(order.status)
+        ).length;
+        const totalSpent = typedOrders.reduce((sum, order) => sum + Number(order.total_amount), 0);
+
+        setStats({
+          totalOrders,
+          activeOrders,
+          totalSpent,
+        });
+      } catch (error) {
+        console.error('Error in fetchUserStats:', error);
+      }
+    };
+
     if (user) {
       fetchUserStats();
     }
   }, [user]);
-
-  const fetchUserStats = async () => {
-    try {
-      const { data: orders, error } = await (supabase as any)
-        .from('orders')
-        .select('total_amount, status')
-        .eq('customer_id', user?.id);
-
-      if (error) {
-        console.error('Error fetching orders:', error);
-        return;
-      }
-
-      const totalOrders = orders?.length || 0;
-      const activeOrders = orders?.filter((order: any) => 
-        ['pending', 'confirmed', 'processing', 'shipped'].includes(order.status)
-      ).length || 0;
-      const totalSpent = orders?.reduce((sum: number, order: any) => sum + Number(order.total_amount), 0) || 0;
-
-      setStats({
-        totalOrders,
-        activeOrders,
-        totalSpent,
-      });
-    } catch (error) {
-      console.error('Error in fetchUserStats:', error);
-    }
-  };
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -100,22 +101,50 @@ const Dashboard = () => {
 
           <div className="mt-8 bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-primary mb-4">Account Details</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-500">Email</label>
-                <p className="text-gray-900">{user.email}</p>
+                <label className="text-sm font-medium text-gray-500" htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
+                  id="email"
+                  autoComplete="email"
+                  value={user.email}
+                  readOnly
+                />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Role</label>
-                <p className="text-gray-900 capitalize">{user.role}</p>
+                <label className="text-sm font-medium text-gray-500" htmlFor="role">Role</label>
+                <input
+                  type="text"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
+                  id="role"
+                  autoComplete="role"
+                  value={user.role}
+                  readOnly
+                />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Total Spent</label>
-                <p className="text-gray-900">KSH {stats.totalSpent.toLocaleString()}</p>
+                <label className="text-sm font-medium text-gray-500" htmlFor="totalSpent">Total Spent</label>
+                <input
+                  type="text"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
+                  id="totalSpent"
+                  autoComplete="off"
+                  value={`KSH ${stats.totalSpent.toLocaleString()}`}
+                  readOnly
+                />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-500">Member Since</label>
-                <p className="text-gray-900">Recently joined</p>
+                <label className="text-sm font-medium text-gray-500" htmlFor="memberSince">Member Since</label>
+                <input
+                  type="text"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
+                  id="memberSince"
+                  autoComplete="off"
+                  value="Recently joined"
+                  readOnly
+                />
               </div>
             </div>
           </div>

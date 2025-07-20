@@ -16,11 +16,19 @@ const Footer = () => {
               Quality poultry products from trusted sources across the country.
             </p>
             <div className="flex space-x-4">
-              <Facebook className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
-              <Twitter className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
-              <Instagram className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
-            </div>
+  <a href="https://www.facebook.com/profile.php?id=100085312746341" target="_blank" rel="noopener noreferrer">
+    <Facebook className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
+  </a>
+  <a href="https://x.com/Stevegmail98" target="_blank" rel="noopener noreferrer">
+    <Twitter className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
+  </a>
+  <a href="https://www.instagram.com/steve_ronald54?igsh=YzljYTk1ODg3Zg==" target="_blank" rel="noopener noreferrer">
+    <Instagram className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
+  </a>
+</div>
           </div>
+
+          {/* Navigation Links */}
 
           {/* Quick Links */}
           <div>
@@ -40,7 +48,7 @@ const Footer = () => {
             <ul className="space-y-2">
               <li className="flex items-center space-x-2">
                 <Phone className="h-4 w-4" />
-                <span className="text-gray-200">+254 700 000 000</span>
+                <span className="text-gray-200">+254 799 422 635</span>
               </li>
               <li className="flex items-center space-x-2">
                 <Mail className="h-4 w-4" />
@@ -48,7 +56,7 @@ const Footer = () => {
               </li>
               <li className="flex items-center space-x-2">
                 <MapPin className="h-4 w-4" />
-                <span className="text-gray-200">Nairobi, Kenya</span>
+                <span className="text-gray-200">Eldoret, Kenya</span>
               </li>
             </ul>
           </div>
@@ -56,7 +64,7 @@ const Footer = () => {
 
         <div className="border-t border-gray-600 mt-8 pt-8 text-center">
           <p className="text-gray-200">
-            &copy; 2024 PoultryConnect KE. All rights reserved. Empowering Kenya's poultry industry.
+            &copy; 2025 PoultryConnect KE. All rights reserved. Empowering Kenya's poultry industry.
           </p>
         </div>
       </div>

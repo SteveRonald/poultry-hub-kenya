@@ -123,7 +123,7 @@ const Products = () => {
                 <Card key={product.id} className="card-hover overflow-hidden">
                   <div className="relative h-48">
                     <img 
-                      src={product.image_urls[0] || 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=800'} 
+                      src={product.image_url || 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=800'} 
                       alt={product.name}
                       className="w-full h-full object-cover"
                     />

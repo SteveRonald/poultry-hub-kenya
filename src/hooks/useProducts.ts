@@ -10,8 +10,8 @@ export interface Product {
   price: number;
   stock_quantity: number;
   unit: string;
-  image_urls: string[];
-  is_active: boolean;
+  image_url: string;
+  is_available: boolean;
   vendor_profiles: {
     farm_name: string;
     location: string;
@@ -31,7 +31,7 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
             location
           )
         `)
-        .eq('is_active', true);
+        .eq('is_available', true);
 
       // Apply filters
       if (searchTerm) {

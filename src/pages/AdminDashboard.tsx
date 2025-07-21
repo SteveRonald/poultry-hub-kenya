@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
@@ -11,96 +11,82 @@ import { Badge } from '../components/ui/badge';
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
+  const [stats, setStats] = useState<any>(null);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<any[]>([]);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [userForm, setUserForm] = useState<any>({});
 
-  // Mock data - replace with real API calls
-  const stats = {
-    totalVendors: 45,
-    pendingVendors: 5,
-    totalProducts: 234,
-    pendingProducts: 12,
-    totalOrders: 1250,
-    totalRevenue: 2500000
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setLoading(true);
+    Promise.all([
+      fetch('http://localhost:5000/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('http://localhost:5000/api/admin/vendors', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('http://localhost:5000/api/admin/products', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('http://localhost:5000/api/admin/orders', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([stats, vendors, products, orders]) => {
+      setStats(stats);
+      setVendors(vendors);
+      setProducts(products);
+      setOrders(orders);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleApproveVendor = async (vendorId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/admin/vendors/${vendorId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: 'approved' }),
+    });
+    // Refresh vendors
+    fetchVendors();
   };
 
-  const pendingVendors = [
-    {
-      id: 1,
-      name: "John Kamau",
-      farmName: "Sunrise Poultry Farm",
-      location: "Nakuru",
-      email: "john@sunrise.com",
-      phone: "+254701234567",
-      registrationDate: "2024-01-15"
-    },
-    {
-      id: 2,
-      name: "Mary Wanjiku",
-      farmName: "Green Valley Layers",
-      location: "Kiambu",
-      email: "mary@greenvalley.com",
-      phone: "+254709876543",
-      registrationDate: "2024-01-14"
-    }
-  ];
-
-  const pendingProducts = [
-    {
-      id: 1,
-      name: "Premium Layer Chicks",
-      vendor: "Sunrise Poultry Farm",
-      price: 180,
-      category: "chicks",
-      submissionDate: "2024-01-15"
-    },
-    {
-      id: 2,
-      name: "Organic Farm Eggs",
-      vendor: "Green Valley Layers",
-      price: 500,
-      category: "eggs",
-      submissionDate: "2024-01-14"
-    }
-  ];
-
-  const recentOrders = [
-    {
-      id: 1,
-      customer: "Sarah Wilson",
-      vendor: "Sunny Farm",
-      product: "Day-Old Chicks",
-      amount: 4000,
-      status: "completed",
-      date: "2024-01-15"
-    },
-    {
-      id: 2,
-      customer: "Peter Mwangi",
-      vendor: "Fresh Poultry Co",
-      product: "Whole Chicken",
-      amount: 1600,
-      status: "pending",
-      date: "2024-01-15"
-    }
-  ];
-
-  const handleApproveVendor = (vendorId: number) => {
-    console.log('Approving vendor:', vendorId);
-    // Implement approval logic
+  const handleRejectVendor = async (vendorId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/admin/vendors/${vendorId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    fetchVendors();
   };
 
-  const handleRejectVendor = (vendorId: number) => {
-    console.log('Rejecting vendor:', vendorId);
-    // Implement rejection logic
+  const handleSuspendVendor = async (vendorId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/admin/vendors/${vendorId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: 'suspended' }),
+    });
+    fetchVendors();
   };
 
-  const handleApproveProduct = (productId: number) => {
-    console.log('Approving product:', productId);
-    // Implement approval logic
+  const handleApproveProduct = async (productId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/admin/products/${productId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: 'approved' }),
+    });
+    fetchProducts();
   };
 
-  const handleRejectProduct = (productId: number) => {
-    console.log('Rejecting product:', productId);
-    // Implement rejection logic
+  const handleRejectProduct = async (productId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/admin/products/${productId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    fetchProducts();
   };
 
   const getStatusColor = (status: string) => {
@@ -111,6 +97,57 @@ const AdminDashboard = () => {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const fetchVendors = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('http://localhost:5000/api/admin/vendors', { headers: { Authorization: `Bearer ${token}` } });
+    setVendors(await res.json());
+  };
+
+  // Fetch users
+  const fetchUsers = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('http://localhost:5000/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
+    setUsers(await res.json());
+  };
+
+  const fetchProducts = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('http://localhost:5000/api/admin/products', { headers: { Authorization: `Bearer ${token}` } });
+    setProducts(await res.json());
+  };
+
+  // Edit user
+  const handleEditUser = (user: any) => {
+    setEditingUser(user);
+    setUserForm({ ...user });
+  };
+  const handleUserFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUserForm({ ...userForm, [e.target.name]: e.target.value });
+  };
+  const handleSaveUser = async () => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/admin/users/${editingUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(userForm),
+    });
+    setEditingUser(null);
+    fetchUsers();
+  };
+  const handleDeleteUser = async (userId: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    fetchUsers();
+  };
+
+  // Fetch all on mount
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -131,7 +168,7 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <Users className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Total Vendors</p>
-                  <p className="text-xl font-bold text-primary">{stats.totalVendors}</p>
+                  <p className="text-xl font-bold text-primary">{stats?.totalVendors || 'Loading...'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -140,10 +177,10 @@ const AdminDashboard = () => {
               <CardContent className="p-4">
                 <div className="text-center">
                   <div className="h-6 w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <span className="text-xs text-yellow-800 font-bold">{stats.pendingVendors}</span>
+                    <span className="text-xs text-yellow-800 font-bold">{stats?.pendingVendors || '0'}</span>
                   </div>
                   <p className="text-sm text-gray-600">Pending Vendors</p>
-                  <p className="text-xl font-bold text-primary">{stats.pendingVendors}</p>
+                  <p className="text-xl font-bold text-primary">{stats?.pendingVendors || '0'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -153,7 +190,7 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <Package className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Total Products</p>
-                  <p className="text-xl font-bold text-primary">{stats.totalProducts}</p>
+                  <p className="text-xl font-bold text-primary">{stats?.totalProducts || 'Loading...'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -162,10 +199,10 @@ const AdminDashboard = () => {
               <CardContent className="p-4">
                 <div className="text-center">
                   <div className="h-6 w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                    <span className="text-xs text-yellow-800 font-bold">{stats.pendingProducts}</span>
+                    <span className="text-xs text-yellow-800 font-bold">{stats?.pendingProducts || '0'}</span>
                   </div>
                   <p className="text-sm text-gray-600">Pending Products</p>
-                  <p className="text-xl font-bold text-primary">{stats.pendingProducts}</p>
+                  <p className="text-xl font-bold text-primary">{stats?.pendingProducts || '0'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -175,7 +212,7 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <ShoppingCart className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Total Orders</p>
-                  <p className="text-xl font-bold text-primary">{stats.totalOrders}</p>
+                  <p className="text-xl font-bold text-primary">{stats?.totalOrders || 'Loading...'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -185,7 +222,7 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <TrendingUp className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Total Revenue</p>
-                  <p className="text-lg font-bold text-primary">KSH {(stats.totalRevenue / 1000000).toFixed(1)}M</p>
+                  <p className="text-lg font-bold text-primary">KSH {(stats?.totalRevenue / 1000000).toFixed(1) || '0.0'}M</p>
                 </div>
               </CardContent>
             </Card>
@@ -212,14 +249,14 @@ const AdminDashboard = () => {
                     }`}
                   >
                     {tab.label}
-                    {(tab.id === 'vendors' && stats.pendingVendors > 0) && (
+                    {(tab.id === 'vendors' && stats?.pendingVendors > 0) && (
                       <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                        {stats.pendingVendors}
+                        {stats?.pendingVendors}
                       </span>
                     )}
-                    {(tab.id === 'products' && stats.pendingProducts > 0) && (
+                    {(tab.id === 'products' && stats?.pendingProducts > 0) && (
                       <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                        {stats.pendingProducts}
+                        {stats?.pendingProducts}
                       </span>
                     )}
                   </button>
@@ -240,7 +277,7 @@ const AdminDashboard = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {recentOrders.map(order => (
+                          {orders.map(order => (
                             <div key={order.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <div>
                                 <p className="font-medium text-sm">{order.customer}</p>
@@ -267,13 +304,13 @@ const AdminDashboard = () => {
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-gray-600">Vendor Applications</span>
                             <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium">
-                              {stats.pendingVendors} pending
+                              {stats?.pendingVendors || 0} pending
                             </span>
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-gray-600">Product Listings</span>
                             <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium">
-                              {stats.pendingProducts} pending
+                              {stats?.pendingProducts || 0} pending
                             </span>
                           </div>
                         </div>
@@ -289,7 +326,7 @@ const AdminDashboard = () => {
                   <h2 className="text-xl font-semibold text-primary">Vendor Approvals</h2>
 
                   <div className="space-y-4">
-                    {pendingVendors.map(vendor => (
+                    {vendors.map(vendor => (
                       <Card key={vendor.id}>
                         <CardContent className="p-6">
                           <div className="flex justify-between items-start">
@@ -359,7 +396,7 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {pendingProducts.map(product => (
+                        {products.map(product => (
                           <tr key={product.id} className="border-b border-gray-100">
                             <td className="py-3 px-4 font-medium">{product.name}</td>
                             <td className="py-3 px-4">{product.vendor}</td>
@@ -415,7 +452,7 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {recentOrders.map(order => (
+                        {orders.map(order => (
                           <tr key={order.id} className="border-b border-gray-100">
                             <td className="py-3 px-4">#{order.id}</td>
                             <td className="py-3 px-4">{order.customer}</td>

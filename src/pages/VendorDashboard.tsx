@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
@@ -11,62 +11,32 @@ import { Badge } from '../components/ui/badge';
 const VendorDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
+  const [stats, setStats] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [productForm, setProductForm] = useState<any>({ image_urls: [] });
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
 
-  // Mock data - replace with real API calls
-  const stats = {
-    totalProducts: 12,
-    totalOrders: 45,
-    monthlyRevenue: 85000,
-    pendingOrders: 3
-  };
-
-  const mockProducts = [
-    {
-      id: 1,
-      name: "Day-Old Chicks - Kienyeji",
-      price: 80,
-      stock: 150,
-      status: "approved",
-      orders: 24
-    },
-    {
-      id: 2,
-      name: "Fresh Farm Eggs - Tray of 30",
-      price: 450,
-      stock: 50,
-      status: "pending",
-      orders: 12
-    },
-    {
-      id: 3,
-      name: "Broiler Chicks - Cobb 500",
-      price: 120,
-      stock: 200,
-      status: "approved",
-      orders: 31
-    }
-  ];
-
-  const mockOrders = [
-    {
-      id: 1,
-      customer: "John Doe",
-      product: "Day-Old Chicks - Kienyeji",
-      quantity: 50,
-      total: 4000,
-      status: "pending",
-      date: "2024-01-15"
-    },
-    {
-      id: 2,
-      customer: "Sarah Wilson",
-      product: "Fresh Farm Eggs",
-      quantity: 10,
-      total: 4500,
-      status: "completed",
-      date: "2024-01-14"
-    }
-  ];
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setLoading(true);
+    Promise.all([
+      fetch('http://localhost:5000/api/vendor/stats', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('http://localhost:5000/api/vendor/products', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('http://localhost:5000/api/vendor/orders', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([stats, products, orders]) => {
+      setStats(stats);
+      setProducts(products);
+      setOrders(orders);
+      setLoading(false);
+    });
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -76,6 +46,111 @@ const VendorDashboard = () => {
       case 'completed': return 'bg-blue-100 text-blue-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const createProduct = async (product: any) => {
+    const token = localStorage.getItem('token');
+    await fetch('http://localhost:5000/api/vendor/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(product),
+    });
+    fetchProducts();
+  };
+
+  const editProduct = async (id: string, product: any) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/vendor/products/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(product),
+    });
+    fetchProducts();
+  };
+
+  const deleteProduct = async (id: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/vendor/products/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    fetchProducts();
+  };
+
+  const updateOrderStatus = async (orderId: string, status: string) => {
+    const token = localStorage.getItem('token');
+    await fetch(`http://localhost:5000/api/vendor/orders/${orderId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status }),
+    });
+    fetchOrders();
+  };
+
+  const fetchProducts = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('http://localhost:5000/api/vendor/products', { headers: { Authorization: `Bearer ${token}` } });
+    setProducts(await res.json());
+  };
+
+  const fetchOrders = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch('http://localhost:5000/api/vendor/orders', { headers: { Authorization: `Bearer ${token}` } });
+    setOrders(await res.json());
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Validate type
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setUploadError('Only JPG, PNG, WEBP, or GIF images are allowed.');
+      return;
+    }
+    // Validate size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError('Image size must be less than 2MB.');
+      return;
+    }
+    setUploading(true);
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await fetch('http://localhost:5000/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      setProductForm((prev: any) => ({ ...prev, image_urls: [...(prev.image_urls || []), data.url] }));
+    } catch (err) {
+      setUploadError('Upload failed. Please try again.');
+    }
+    setUploading(false);
+  };
+
+  const removeImage = (url: string) => {
+    setProductForm((prev: any) => ({ ...prev, image_urls: (prev.image_urls || []).filter((u: string) => u !== url) }));
+  };
+
+  // Drag-to-reorder logic
+  const handleDragStart = (index: number) => {
+    dragItem.current = index;
+  };
+  const handleDragEnterThumb = (index: number) => {
+    dragOverItem.current = index;
+  };
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOverItem.current === null) return;
+    const newList = [...(productForm.image_urls || [])];
+    const dragged = newList.splice(dragItem.current, 1)[0];
+    newList.splice(dragOverItem.current, 0, dragged);
+    setProductForm((prev: any) => ({ ...prev, image_urls: newList }));
+    dragItem.current = null;
+    dragOverItem.current = null;
   };
 
   return (
@@ -97,7 +172,7 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600">Total Products</p>
-                    <p className="text-2xl font-bold text-primary">{stats.totalProducts}</p>
+                    <p className="text-2xl font-bold text-primary">{stats?.totalProducts || 'Loading...'}</p>
                   </div>
                   <Package className="h-8 w-8 text-accent" />
                 </div>
@@ -109,7 +184,7 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600">Total Orders</p>
-                    <p className="text-2xl font-bold text-primary">{stats.totalOrders}</p>
+                    <p className="text-2xl font-bold text-primary">{stats?.totalOrders || 'Loading...'}</p>
                   </div>
                   <Users className="h-8 w-8 text-accent" />
                 </div>
@@ -121,7 +196,7 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600">Monthly Revenue</p>
-                    <p className="text-2xl font-bold text-primary">KSH {stats.monthlyRevenue.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-primary">KSH {stats?.monthlyRevenue || 'Loading...'}</p>
                   </div>
                   <BarChart3 className="h-8 w-8 text-accent" />
                 </div>
@@ -133,10 +208,10 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600">Pending Orders</p>
-                    <p className="text-2xl font-bold text-primary">{stats.pendingOrders}</p>
+                    <p className="text-2xl font-bold text-primary">{stats?.pendingOrders || 'Loading...'}</p>
                   </div>
                   <div className="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <span className="text-yellow-800 font-bold">{stats.pendingOrders}</span>
+                    <span className="text-yellow-800 font-bold">{stats?.pendingOrders || 'Loading...'}</span>
                   </div>
                 </div>
               </CardContent>
@@ -187,7 +262,7 @@ const VendorDashboard = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {mockOrders.slice(0, 3).map(order => (
+                          {orders.slice(0, 3).map(order => (
                             <div key={order.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <div>
                                 <p className="font-medium text-sm">{order.customer}</p>
@@ -211,7 +286,7 @@ const VendorDashboard = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {mockProducts.slice(0, 3).map(product => (
+                          {products.slice(0, 3).map(product => (
                             <div key={product.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <div>
                                 <p className="font-medium text-sm">{product.name}</p>
@@ -256,7 +331,7 @@ const VendorDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {mockProducts.map(product => (
+                        {products.map(product => (
                           <tr key={product.id} className="border-b border-gray-100">
                             <td className="py-3 px-4">{product.name}</td>
                             <td className="py-3 px-4">KSH {product.price}</td>
@@ -308,7 +383,7 @@ const VendorDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {mockOrders.map(order => (
+                        {orders.map(order => (
                           <tr key={order.id} className="border-b border-gray-100">
                             <td className="py-3 px-4">#{order.id}</td>
                             <td className="py-3 px-4">{order.customer}</td>

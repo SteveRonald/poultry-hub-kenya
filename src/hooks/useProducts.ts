@@ -1,6 +1,6 @@
 
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+// Removed: import { supabase } from '@/integrations/supabase/client';
 
 export interface Product {
   id: string;
@@ -22,50 +22,19 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
   return useQuery({
     queryKey: ['products', searchTerm, category, location],
     queryFn: async () => {
-      let query = (supabase as any)
-        .from('products')
-        .select(`
-          *,
-          vendor_profiles (
-            farm_name,
-            location
-          )
-        `)
-        .eq('is_available', true);
-
-      // Apply filters
-      if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%`);
-      }
-
-      if (category && category !== 'all') {
-        query = query.eq('category', category);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error fetching products:', error);
-        throw error;
-      }
-
-      // Filter by location if specified
-      let filteredData = data || [];
-      if (location && location !== 'all') {
-        filteredData = filteredData.filter((product: any) => 
-          product.vendor_profiles?.location === location
-        );
-      }
-
-      // Filter by search term in vendor farm name if specified
-      if (searchTerm) {
-        filteredData = filteredData.filter((product: any) => 
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.vendor_profiles?.farm_name.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      }
-
-      return filteredData as any[];
+      const token = localStorage.getItem('token');
+      let url = 'http://localhost:5000/api/products';
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (category && category !== 'all') params.append('category', category);
+      if (location && location !== 'all') params.append('location', location);
+      if ([...params].length) url += `?${params.toString()}`;
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to fetch products');
+      const data = await res.json();
+      return data;
     },
   });
 };

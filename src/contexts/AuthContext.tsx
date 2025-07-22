@@ -1,13 +1,14 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { User as SupabaseUser } from '@supabase/supabase-js';
+// Removed: import { supabase } from '@/integrations/supabase/client';
+// Removed: import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
   id: string;
   email: string;
   name: string;
   role: 'customer' | 'vendor' | 'admin';
+  phone?: string;
   isApproved?: boolean;
 }
 
@@ -19,142 +20,104 @@ interface AuthContextType {
   isLoading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  login: async () => {},
+  register: async () => {},
+  logout: () => {},
+  isLoading: false,
+});
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchUserProfile(session.user);
-      }
-      setIsLoading(false);
-    });
+  // Helper to get token
+  const getToken = () => localStorage.getItem('token');
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await fetchUserProfile(session.user);
-      } else {
+  // Fetch user profile from backend
+  const fetchUser = async () => {
+    const token = getToken();
+    if (!token) {
         setUser(null);
-      }
       setIsLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchUserProfile = async (supabaseUser: SupabaseUser) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', supabaseUser.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
-        return;
-      }
-
-      if (profile) {
-        // Check if user is a vendor and get approval status
-        let isApproved = true;
-        if (profile.role === 'vendor') {
-          const { data: vendorProfile } = await (supabase as any)
-            .from('vendor_profiles')
-            .select('status')
-            .eq('user_id', supabaseUser.id)
-            .single();
-          
-          isApproved = vendorProfile?.status === 'approved';
-        }
-
-        setUser({
-          id: profile.id,
-          email: profile.email,
-          name: profile.full_name,
-          role: profile.role as 'customer' | 'vendor' | 'admin',
-          isApproved,
-        });
-      }
-    } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
+      return;
     }
+    try {
+      const res = await fetch('http://localhost:5000/api/users/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch user');
+      const data = await res.json();
+        setUser({
+        id: data.id,
+        email: data.email,
+        name: data.full_name,
+        role: data.role,
+        phone: data.phone,
+      });
+    } catch (err) {
+      setUser(null);
+      localStorage.removeItem('token');
+    }
+    setIsLoading(false);
   };
+
+  useEffect(() => {
+    fetchUser();
+    // eslint-disable-next-line
+  }, []);
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch('http://localhost:5000/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
-      
-      if (error) throw error;
-    } catch (error) {
+      if (!res.ok) throw new Error('Invalid credentials');
+      const data = await res.json();
+      localStorage.setItem('token', data.token);
+      setUser({
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.full_name,
+        role: data.user.role,
+        phone: data.user.phone,
+      });
+    } finally {
       setIsLoading(false);
-      throw error;
     }
   };
 
   const register = async (userData: any) => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
-        email: userData.email,
-        password: userData.password,
-        options: {
-          data: {
-            full_name: userData.name,
-            role: userData.role || 'customer',
-          },
-        },
+      // Map name to full_name for backend compatibility
+      const payload = {
+        ...userData,
+        full_name: userData.name,
+        phone: userData.phone,
+      };
+      delete payload.name;
+      const res = await fetch('http://localhost:5000/api/users/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      
-      if (error) throw error;
-
-      // If registering as vendor, create vendor profile
-      if (userData.role === 'vendor' && userData.farmName) {
-        // Wait a bit for the profile to be created by the trigger
-        setTimeout(async () => {
-          try {
-            const { data: { user: authUser } } = await supabase.auth.getUser();
-            if (authUser) {
-              await (supabase as any).from('vendor_profiles').insert({
-                user_id: authUser.id,
-                farm_name: userData.farmName,
-                farm_description: userData.farmDescription || '',
-                location: userData.location || '',
-                id_number: userData.idNumber || '',
-              });
-            }
-          } catch (vendorError) {
-            console.error('Error creating vendor profile:', vendorError);
-          }
-        }, 1000);
-      }
-    } catch (error) {
+      if (!res.ok) throw new Error('Registration failed');
+      // Optionally auto-login after registration
+      await login(userData.email, userData.password);
+    } finally {
       setIsLoading(false);
-      throw error;
     }
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
+  const logout = () => {
+    localStorage.removeItem('token');
     setUser(null);
   };
 

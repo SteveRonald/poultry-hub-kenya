@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, Egg, User, LogOut } from 'lucide-react';
+import NotificationsMenu from './NotificationsMenu';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 
@@ -92,6 +93,12 @@ const Navbar = () => {
           </div>
         </div>
       </div>
+
+      {user && (
+        <div className="ml-4">
+          <NotificationsMenu />
+        </div>
+      )}
 
       {/* Mobile Navigation */}
       {isOpen && (

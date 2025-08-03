@@ -7,9 +7,11 @@ import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { useNavigate } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<any>(null);
   const [vendors, setVendors] = useState<any[]>([]);
@@ -21,7 +23,7 @@ const AdminDashboard = () => {
   const [userForm, setUserForm] = useState<any>({});
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     if (!token) return;
     setLoading(true);
     Promise.all([
@@ -33,13 +35,13 @@ const AdminDashboard = () => {
       setStats(stats);
       setVendors(vendors);
       setProducts(products);
-      setOrders(orders);
+      setOrders(Array.isArray(orders) ? orders : []);
       setLoading(false);
     });
   }, []);
 
   const handleApproveVendor = async (vendorId: string) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     await fetch(`http://localhost:5000/api/admin/vendors/${vendorId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -50,7 +52,7 @@ const AdminDashboard = () => {
   };
 
   const handleRejectVendor = async (vendorId: string) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     await fetch(`http://localhost:5000/api/admin/vendors/${vendorId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -60,7 +62,7 @@ const AdminDashboard = () => {
   };
 
   const handleSuspendVendor = async (vendorId: string) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     await fetch(`http://localhost:5000/api/admin/vendors/${vendorId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -70,7 +72,7 @@ const AdminDashboard = () => {
   };
 
   const handleApproveProduct = async (productId: string) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     await fetch(`http://localhost:5000/api/admin/products/${productId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -80,7 +82,7 @@ const AdminDashboard = () => {
   };
 
   const handleRejectProduct = async (productId: string) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     await fetch(`http://localhost:5000/api/admin/products/${productId}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -99,20 +101,22 @@ const AdminDashboard = () => {
   };
 
   const fetchVendors = async () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     const res = await fetch('http://localhost:5000/api/admin/vendors', { headers: { Authorization: `Bearer ${token}` } });
-    setVendors(await res.json());
+    const data = await res.json();
+    console.log('Vendors API response:', data);
+    setVendors(Array.isArray(data) ? data : []);
   };
 
   // Fetch users
   const fetchUsers = async () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     const res = await fetch('http://localhost:5000/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
     setUsers(await res.json());
   };
 
   const fetchProducts = async () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     const res = await fetch('http://localhost:5000/api/admin/products', { headers: { Authorization: `Bearer ${token}` } });
     setProducts(await res.json());
   };
@@ -126,7 +130,7 @@ const AdminDashboard = () => {
     setUserForm({ ...userForm, [e.target.name]: e.target.value });
   };
   const handleSaveUser = async () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     await fetch(`http://localhost:5000/api/admin/users/${editingUser.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -136,7 +140,7 @@ const AdminDashboard = () => {
     fetchUsers();
   };
   const handleDeleteUser = async (userId: string) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('admin_session_token');
     await fetch(`http://localhost:5000/api/admin/users/${userId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -149,16 +153,23 @@ const AdminDashboard = () => {
     fetchUsers();
   }, []);
 
+  const handleAdminLogout = () => {
+    localStorage.removeItem('admin_session_token');
+    localStorage.removeItem('admin_info');
+    navigate('/admin-login');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-primary">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-2">Welcome back, {user?.name}! Manage your marketplace.</p>
+          <div className="mb-8 flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-primary">
+              Welcome back, {JSON.parse(localStorage.getItem('admin_info') || '{}').full_name || 'Admin'}! Manage your marketplace.
+            </h1>
+            <Button onClick={handleAdminLogout} variant="destructive">Logout</Button>
           </div>
 
           {/* Stats Cards */}
@@ -277,7 +288,7 @@ const AdminDashboard = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {orders.map(order => (
+                          {Array.isArray(orders) && orders.map(order => (
                             <div key={order.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <div>
                                 <p className="font-medium text-sm">{order.customer}</p>
@@ -326,7 +337,7 @@ const AdminDashboard = () => {
                   <h2 className="text-xl font-semibold text-primary">Vendor Approvals</h2>
 
                   <div className="space-y-4">
-                    {vendors.map(vendor => (
+                    {Array.isArray(vendors) && vendors.map(vendor => (
                       <Card key={vendor.id}>
                         <CardContent className="p-6">
                           <div className="flex justify-between items-start">
@@ -396,7 +407,7 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {products.map(product => (
+                        {Array.isArray(products) && products.map(product => (
                           <tr key={product.id} className="border-b border-gray-100">
                             <td className="py-3 px-4 font-medium">{product.name}</td>
                             <td className="py-3 px-4">{product.vendor}</td>
@@ -452,7 +463,7 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.map(order => (
+                        {Array.isArray(orders) && orders.map(order => (
                           <tr key={order.id} className="border-b border-gray-100">
                             <td className="py-3 px-4">#{order.id}</td>
                             <td className="py-3 px-4">{order.customer}</td>

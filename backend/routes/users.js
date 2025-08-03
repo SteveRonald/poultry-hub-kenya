@@ -3,6 +3,7 @@ import pool from '../db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticateToken } from './authMiddleware.js';
+import crypto from 'crypto';
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.get('/', async (req, res) => {
 
 // POST /register
 router.post('/register', async (req, res) => {
-  const { email, password, full_name, phone, role } = req.body;
+  const { email, password, full_name, phone, role, farm_name, farm_description, location, id_number } = req.body;
   if (!email || !password || !full_name) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -33,6 +34,14 @@ router.post('/register', async (req, res) => {
       'INSERT INTO user_profiles (id, email, password, full_name, phone, role) VALUES (?, ?, ?, ?, ?, ?)',
       [id, email, hashed, full_name, phone || null, role || 'customer']
     );
+    // If vendor, insert into vendors table
+    if (role === 'vendor') {
+      const vendorId = crypto.randomUUID();
+      await pool.query(
+        'INSERT INTO vendors (id, user_id, farm_name, farm_description, location, id_number) VALUES (?, ?, ?, ?, ?, ?)',
+        [vendorId, id, farm_name, farm_description || '', location, id_number || null]
+      );
+    }
     res.status(201).json({ message: 'User registered', id });
   } catch (err) {
     res.status(500).json({ error: 'Registration failed', details: err.message });

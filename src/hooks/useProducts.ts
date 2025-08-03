@@ -19,7 +19,7 @@ export interface Product {
 }
 
 export const useProducts = (searchTerm?: string, category?: string, location?: string) => {
-  return useQuery({
+  return useQuery<Product[]>({
     queryKey: ['products', searchTerm, category, location],
     queryFn: async () => {
       const token = localStorage.getItem('token');

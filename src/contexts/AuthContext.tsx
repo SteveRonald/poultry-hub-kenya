@@ -101,8 +101,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...userData,
         full_name: userData.name,
         phone: userData.phone,
+        // Always send vendor fields for backend compatibility
+        farm_name: userData.farmName || '',
+        farm_description: userData.farmDescription || '',
+        location: userData.location || '',
+        id_number: userData.idNumber || '',
       };
       delete payload.name;
+      delete payload.farmName;
+      delete payload.farmDescription;
+      delete payload.idNumber;
       const res = await fetch('http://localhost:5000/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

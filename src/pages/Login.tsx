@@ -110,16 +110,7 @@ const Login = () => {
                 </p>
               </div>
 
-              {/* Demo Credentials */}
-              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-gray-700 mb-2">Demo Credentials:</h4>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p><strong>Admin:</strong> admin@poultryconnect.ke / admin123</p>
-                  <p><strong>Vendor:</strong> vendor@test.com / vendor123</p>
-                  <p><strong>Customer:</strong> customer@test.com / customer123</p>
-                </div>
-              </div>
-            </CardContent>
+                         </CardContent>
           </Card>
         </div>
       </div>

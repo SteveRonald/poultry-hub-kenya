@@ -23,7 +23,7 @@ const Products = () => {
   );
 
   // Get unique locations from products
-  const locations = ['all', ...new Set(products.map(p => p.vendor_profiles.location))];
+  const locations: string[] = ['all', ...Array.from(new Set(products.map(p => p.vendor_profiles.location)))];
 
   const handleOrder = (productName: string) => {
     toast({

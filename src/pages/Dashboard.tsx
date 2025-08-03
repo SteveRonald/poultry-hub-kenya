@@ -131,13 +131,13 @@ const Dashboard = () => {
           <div className="mt-8 bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-primary mb-4">Account Details</h2>
             {editingProfile ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500" htmlFor="email">Email</label>
-                  <input
-                    type="email"
-                    className="text-gray-900 border border-gray-300 rounded-md p-2"
-                    id="email"
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500" htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
+                  id="email"
                     name="email"
                     value={profileForm.email}
                     onChange={handleProfileChange}
@@ -152,13 +152,13 @@ const Dashboard = () => {
                     name="name"
                     value={profileForm.name}
                     onChange={handleProfileChange}
-                  />
-                </div>
-                <div>
+                />
+              </div>
+              <div>
                   <label className="text-sm font-medium text-gray-500" htmlFor="phone">Phone</label>
-                  <input
-                    type="text"
-                    className="text-gray-900 border border-gray-300 rounded-md p-2"
+                <input
+                  type="text"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
                     id="phone"
                     name="phone"
                     value={profileForm.phone}
@@ -179,28 +179,28 @@ const Dashboard = () => {
                     className="text-gray-900 border border-gray-300 rounded-md p-2"
                     id="email"
                     value={user.email}
-                    readOnly
-                  />
-                </div>
-                <div>
+                  readOnly
+                />
+              </div>
+              <div>
                   <label className="text-sm font-medium text-gray-500" htmlFor="name">Name</label>
-                  <input
-                    type="text"
-                    className="text-gray-900 border border-gray-300 rounded-md p-2"
+                <input
+                  type="text"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
                     id="name"
                     value={user.name}
-                    readOnly
-                  />
-                </div>
-                <div>
+                  readOnly
+                />
+              </div>
+              <div>
                   <label className="text-sm font-medium text-gray-500" htmlFor="phone">Phone</label>
-                  <input
-                    type="text"
-                    className="text-gray-900 border border-gray-300 rounded-md p-2"
+                <input
+                  type="text"
+                  className="text-gray-900 border border-gray-300 rounded-md p-2"
                     id="phone"
                     value={user.phone}
-                    readOnly
-                  />
+                  readOnly
+                />
                 </div>
                 <div className="col-span-3 flex gap-2 mt-4">
                   <button className="bg-primary text-white px-4 py-2 rounded" onClick={() => setEditingProfile(true)}>Edit</button>

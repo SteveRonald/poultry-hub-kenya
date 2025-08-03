@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Mail, Phone, MapPin, Clock, Send, MessageCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, MessageCircle, AlignCenter } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
@@ -62,7 +62,7 @@ const Contact = () => {
     {
       icon: <Mail className="h-6 w-6 text-accent" />,
       title: "Email",
-      details: ["info@poultryconnect.ke", "support@poultryconnect.com"],
+      details: ["info@poultryconnect.ke", <h6>or</h6> ,"support@poultryconnect.com"],
       description: "We'll respond within 24 hours"
     },
     {

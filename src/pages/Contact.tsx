@@ -62,7 +62,7 @@ const Contact = () => {
     {
       icon: <Mail className="h-6 w-6 text-accent" />,
       title: "Email",
-      details: ["info@poultryconnect.ke", <h6>or</h6> ,"support@poultryconnect.com"],
+      details: ["okothroni863@gmail.com", <h6>or</h6> ,"kothroni863@gmail.com"],
       description: "We'll respond within 24 hours"
     },
     {

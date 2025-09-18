@@ -34,17 +34,15 @@ router.post('/products', authenticateToken, requireVendor, async (req, res) => {
   const { name, description, category, price, stock_quantity, unit, image_urls, is_active } = req.body;
   if (!name || !category || !price) return res.status(400).json({ error: 'Missing required fields' });
   try {
-    const [vendors] = await pool.query('SELECT id, status FROM vendors WHERE user_id = ?', [req.user.id]);
+    const [vendors] = await pool.query('SELECT id FROM vendors WHERE user_id = ?', [req.user.id]);
     if (vendors.length === 0) return res.status(400).json({ error: 'Vendor profile not found' });
-    const vendor = vendors[0];
-    if (vendor.status !== 'approved') return res.status(403).json({ error: 'Your vendor account is not approved yet.' });
-    const vendor_id = vendor.id;
+    const vendor_id = vendors[0].id;
     const id = crypto.randomUUID();
     await pool.query(
-      'INSERT INTO products (id, vendor_id, name, description, category, price, stock_quantity, unit, image_urls, is_active, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, vendor_id, name, description || '', category, price, stock_quantity || 0, unit || 'piece', JSON.stringify(image_urls || []), is_active !== undefined ? is_active : true, 'pending']
+      'INSERT INTO products (id, vendor_id, name, description, category, price, stock_quantity, unit, image_urls, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, vendor_id, name, description || '', category, price, stock_quantity || 0, unit || 'piece', JSON.stringify(image_urls || []), is_active !== undefined ? is_active : true]
     );
-    res.status(201).json({ message: 'Product created and pending admin approval', id });
+    res.status(201).json({ message: 'Product created', id });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create product', details: err.message });
   }

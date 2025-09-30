@@ -1,0 +1,5 @@
+# Allow access to uploaded files
+<Files "*">
+    Order allow,deny
+    Allow from all
+</Files>

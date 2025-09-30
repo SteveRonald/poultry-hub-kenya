@@ -1,19 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, Egg, User, LogOut } from 'lucide-react';
-import NotificationsMenu from './NotificationsMenu';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [adminInfo, setAdminInfo] = useState<any>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
+  // Check for admin session
+  useEffect(() => {
+    const adminToken = localStorage.getItem('admin_session_token');
+    const adminData = localStorage.getItem('admin_info');
+    if (adminToken && adminData) {
+      try {
+        setAdminInfo(JSON.parse(adminData));
+      } catch (e) {
+        // Invalid admin data, clear it
+        localStorage.removeItem('admin_session_token');
+        localStorage.removeItem('admin_info');
+      }
+    }
+  }, [location.pathname]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleAdminLogout = async () => {
+    const token = localStorage.getItem('admin_session_token');
+    if (token) {
+      try {
+        await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } catch (error) {
+        console.error('Admin logout API call failed:', error);
+      }
+    }
+    localStorage.removeItem('admin_session_token');
+    localStorage.removeItem('admin_info');
+    setAdminInfo(null);
+    navigate('/admin-login');
   };
 
   const isActive = (path: string) => location.pathname === path;
@@ -58,7 +91,20 @@ const Navbar = () => {
 
           {/* User Menu */}
           <div className="hidden md:flex items-center space-x-4">
-            {user ? (
+            {adminInfo ? (
+              <div className="flex items-center space-x-4">
+                <Link to="/admin-dashboard">
+                  <Button variant="outline" size="sm" className="flex items-center space-x-2">
+                    <User className="h-4 w-4" />
+                    <span>Admin: {adminInfo.full_name}</span>
+                  </Button>
+                </Link>
+                <Button onClick={handleAdminLogout} variant="destructive" size="sm" className="flex items-center space-x-2">
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </Button>
+              </div>
+            ) : user ? (
               <div className="flex items-center space-x-4">
                 <Link to="/dashboard">
                   <Button variant="outline" size="sm" className="flex items-center space-x-2">
@@ -66,8 +112,9 @@ const Navbar = () => {
                     <span>{user.name}</span>
                   </Button>
                 </Link>
-                <Button onClick={handleLogout} variant="ghost" size="sm">
+                <Button onClick={handleLogout} variant="destructive" size="sm" className="flex items-center space-x-2">
                   <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
                 </Button>
               </div>
             ) : (
@@ -94,11 +141,6 @@ const Navbar = () => {
         </div>
       </div>
 
-      {user && (
-        <div className="ml-4">
-          <NotificationsMenu />
-        </div>
-      )}
 
       {/* Mobile Navigation */}
       {isOpen && (
@@ -118,7 +160,27 @@ const Navbar = () => {
                 {label}
               </Link>
             ))}
-            {user ? (
+            {adminInfo ? (
+              <>
+                <Link
+                  to="/admin-dashboard"
+                  className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Admin Dashboard
+                </Link>
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  Admin: {adminInfo.full_name}
+                </div>
+                <button
+                  onClick={handleAdminLogout}
+                  className="w-full text-left px-3 py-2 text-base font-medium text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center space-x-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </button>
+              </>
+            ) : user ? (
               <>
                 <Link
                   to="/dashboard"
@@ -129,9 +191,10 @@ const Navbar = () => {
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="block w-full text-left px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50"
+                  className="w-full text-left px-3 py-2 text-base font-medium text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center space-x-2"
                 >
-                  Logout
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
                 </button>
               </>
             ) : (

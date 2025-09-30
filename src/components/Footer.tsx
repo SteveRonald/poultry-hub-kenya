@@ -16,16 +16,34 @@ const Footer = () => {
               Quality poultry products from trusted sources across the country.
             </p>
             <div className="flex space-x-4">
-  <a href="https://www.facebook.com/profile.php?id=100085312746341" target="_blank" rel="noopener noreferrer">
-    <Facebook className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
-  </a>
-  <a href="https://x.com/Stevegmail98" target="_blank" rel="noopener noreferrer">
-    <Twitter className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
-  </a>
-  <a href="https://www.instagram.com/steve_ronald54?igsh=YzljYTk1ODg3Zg==" target="_blank" rel="noopener noreferrer">
-    <Instagram className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
-  </a>
-</div>
+              <a 
+                href="https://www.facebook.com/profile.php?id=100085312746341" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                title="Follow us on Facebook"
+                aria-label="Follow us on Facebook"
+              >
+                <Facebook className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
+              </a>
+              <a 
+                href="https://x.com/Stevegmail98" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                title="Follow us on Twitter"
+                aria-label="Follow us on Twitter"
+              >
+                <Twitter className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
+              </a>
+              <a 
+                href="https://www.instagram.com/steve_ronald54?igsh=YzljYTk1ODg3Zg==" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                title="Follow us on Instagram"
+                aria-label="Follow us on Instagram"
+              >
+                <Instagram className="h-6 w-6 text-gray-200 hover:text-accent cursor-pointer transition-colors" />
+              </a>
+            </div>
           </div>
 
           {/* Navigation Links */}

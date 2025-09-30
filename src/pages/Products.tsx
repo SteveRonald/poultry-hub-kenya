@@ -123,7 +123,18 @@ const Products = () => {
                 <Card key={product.id} className="card-hover overflow-hidden">
                   <div className="relative h-48">
                     <img 
-                      src={product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800'} 
+                      src={(() => {
+                        // Handle both old single image_url and new image_urls array
+                        if (product.image_urls) {
+                          try {
+                            const images = JSON.parse(product.image_urls);
+                            return images.length > 0 ? images[0].replace(/\\/g, '/') : 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                          } catch (e) {
+                            return product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                          }
+                        }
+                        return product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                      })()} 
                       alt={product.name}
                       className="w-full h-full object-cover"
                     />

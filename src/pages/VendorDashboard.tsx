@@ -310,9 +310,9 @@ const VendorDashboard = () => {
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
               <div>
-                <h1 className="text-3xl font-bold text-primary">Vendor Dashboard</h1>
+                <h1 className="text-2xl lg:text-3xl font-bold text-primary">Vendor Dashboard</h1>
                 <p className="text-gray-600 mt-2">Welcome back, {user?.name}!</p>
               </div>
               <div className="flex items-center space-x-4">

@@ -147,7 +147,7 @@ php -S localhost:8000
 - `GET /api/vendor/stats` - Get vendor dashboard statistics
 - `GET /api/vendor/orders` - Get vendor's orders
 
-## Project Structure
+### Project Structure
 
 ```
 poultry-hub-kenya/

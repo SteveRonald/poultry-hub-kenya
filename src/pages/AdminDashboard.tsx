@@ -404,8 +404,8 @@ const AdminDashboard = () => {
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <div className="flex justify-between items-center">
-              <h1 className="text-3xl font-bold text-primary">
+            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
+              <h1 className="text-2xl lg:text-3xl font-bold text-primary">
                 Welcome back, {JSON.parse(localStorage.getItem('admin_info') || '{}').full_name || 'Admin'}! Manage your marketplace.
               </h1>
               <div className="flex items-center space-x-4">

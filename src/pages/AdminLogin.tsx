@@ -17,7 +17,7 @@ const AdminLogin = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/login', {
+      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/adminlogin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

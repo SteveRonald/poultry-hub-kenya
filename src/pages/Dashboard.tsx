@@ -24,7 +24,7 @@ const Dashboard = () => {
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
     if (!user || !token) return;
-    const res = await fetch(`http://localhost:5000/api/orders?user_id=${user.id}`, {
+    const res = await fetch(`http://localhost/poultry-hub-kenya/backend/api/orders?user_id=${user.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
@@ -43,7 +43,7 @@ const Dashboard = () => {
   const handleProfileSave = async () => {
     const token = localStorage.getItem('token');
     if (!user || !token) return;
-    await fetch(`http://localhost:5000/api/admin/users/${user.id}`, {
+    await fetch(`http://localhost/poultry-hub-kenya/backend/api/admin/users/${user.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({

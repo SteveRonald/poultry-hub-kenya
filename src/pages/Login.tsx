@@ -22,9 +22,18 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      const user = await login(email, password);
       toast.success('Login successful!');
-      navigate('/dashboard');
+      
+      // Navigate based on user role
+      if (user.role === 'vendor') {
+        navigate('/vendor-dashboard');
+      } else if (user.role === 'admin') {
+        // Redirect admins to admin login page
+        navigate('/admin-login');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       toast.error('Login failed. Please check your credentials.');
     } finally {

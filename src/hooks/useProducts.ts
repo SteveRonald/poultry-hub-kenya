@@ -23,7 +23,7 @@ export const useProducts = (searchTerm?: string, category?: string, location?: s
     queryKey: ['products', searchTerm, category, location],
     queryFn: async () => {
       const token = localStorage.getItem('token');
-      let url = 'http://localhost:5000/api/products';
+      let url = 'http://localhost/poultry-hub-kenya/backend/api/products';
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
       if (category && category !== 'all') params.append('category', category);

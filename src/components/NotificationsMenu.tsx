@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
 
-const NotificationsMenu = () => {
+interface NotificationsMenuProps {
+  isAdmin?: boolean;
+}
+
+const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -10,27 +14,42 @@ const NotificationsMenu = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     setLoading(true);
-    const res = await fetch('http://localhost:5000/api/notifications', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    setNotifications(await res.json());
+    try {
+      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/notifications', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      // Ensure we always have an array
+      setNotifications(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+      setNotifications([]);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchNotifications();
-    // Optionally poll for new notifications
-    // const interval = setInterval(fetchNotifications, 60000);
-    // return () => clearInterval(interval);
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const markAsRead = async (id: number) => {
     const token = localStorage.getItem('token');
-    await fetch(`http://localhost:5000/api/notifications/${id}/read`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    fetchNotifications();
+    try {
+      await fetch('http://localhost/poultry-hub-kenya/backend/api/notifications/read', {
+        method: 'PUT',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id })
+      });
+      fetchNotifications();
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -49,7 +68,17 @@ const NotificationsMenu = () => {
         <div className="origin-top-right absolute right-0 mt-2 w-80 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
           <div className="py-2 px-4 border-b font-semibold text-primary">Notifications</div>
           <div className="max-h-80 overflow-y-auto">
-            {loading ? (
+            {isAdmin ? (
+              <div className="p-4 text-center text-gray-500">
+                <div className="mb-2">
+                  <Bell className="h-8 w-8 text-gray-400 mx-auto" />
+                </div>
+                <p className="text-sm">Admin notifications</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  System notifications will appear here
+                </p>
+              </div>
+            ) : loading ? (
               <div className="p-4 text-center text-gray-500">Loading...</div>
             ) : notifications.length === 0 ? (
               <div className="p-4 text-center text-gray-500">No notifications</div>

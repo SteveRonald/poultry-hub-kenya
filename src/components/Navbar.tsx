@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Egg, User, LogOut } from 'lucide-react';
+import { Menu, X, Egg, User, LogOut, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
 import { Button } from './ui/button';
+import { getApiUrl } from '../config/api';
+import Cart from './Cart';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [adminInfo, setAdminInfo] = useState<any>(null);
+  const [showCart, setShowCart] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { cartSummary } = useCart();
 
   // Check for admin session
   useEffect(() => {
@@ -35,7 +40,7 @@ const Navbar = () => {
     const token = localStorage.getItem('admin_session_token');
     if (token) {
       try {
-        await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/logout', {
+        await fetch(getApiUrl('/api/admin/logout'), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -60,6 +65,7 @@ const Navbar = () => {
   ];
 
   return (
+    <>
     <nav className="bg-white shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
@@ -106,6 +112,22 @@ const Navbar = () => {
               </div>
             ) : user ? (
               <div className="flex items-center space-x-4">
+                {/* Cart Icon */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCart(true)}
+                  className="relative flex items-center space-x-2"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Cart</span>
+                  {cartSummary.total_items > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {cartSummary.total_items}
+                    </span>
+                  )}
+                </Button>
+                
                 <Link to="/dashboard">
                   <Button variant="outline" size="sm" className="flex items-center space-x-2">
                     <User className="h-4 w-4" />
@@ -219,6 +241,10 @@ const Navbar = () => {
         </div>
       )}
     </nav>
+    
+    {/* Cart Modal */}
+    <Cart isOpen={showCart} onClose={() => setShowCart(false)} />
+    </>
   );
 };
 

@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getApiUrl } from '../config/api';
 // Removed: import { supabase } from '@/integrations/supabase/client';
 // Removed: import { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -46,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/users/me', {
+      const res = await fetch(getApiUrl('/api/users/me'), {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to fetch user');
@@ -74,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/users/login', {
+      const res = await fetch(getApiUrl('/api/users/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -116,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       delete payload.farmName;
       delete payload.farmDescription;
       delete payload.idNumber;
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/users/register', {
+      const res = await fetch(getApiUrl('/api/users/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

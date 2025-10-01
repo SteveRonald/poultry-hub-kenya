@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { getApiUrl } from '../config/api';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -17,7 +18,7 @@ const AdminLogin = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/adminlogin', {
+      const res = await fetch(getApiUrl('/api/adminlogin'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

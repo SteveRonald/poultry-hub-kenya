@@ -225,11 +225,24 @@ function handleAdminOrders() {
     
     try {
         $stmt = $pdo->query("
-            SELECT o.*, p.name as product_name, p.price as product_price, u.full_name as customer_name, v.farm_name
+            SELECT 
+                o.*, 
+                p.name as product_name, 
+                p.price as product_price, 
+                p.image_urls,
+                p.description as product_description,
+                u.full_name as customer_name, 
+                u.email as customer_email,
+                u.phone as customer_phone,
+                v.farm_name as vendor_name,
+                v.location as vendor_location,
+                up.email as vendor_email,
+                up.phone as vendor_phone
             FROM orders o 
             JOIN products p ON o.product_id = p.id 
             JOIN user_profiles u ON o.user_id = u.id
             JOIN vendors v ON p.vendor_id = v.id
+            JOIN user_profiles up ON v.user_id = up.id
             ORDER BY o.created_at DESC
         ");
         $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -238,12 +251,30 @@ function handleAdminOrders() {
         $formattedOrders = array_map(function($order) {
             return [
                 'id' => $order['id'],
+                'order_number' => $order['order_number'],
                 'customer' => $order['customer_name'],
-                'vendor' => $order['farm_name'],
+                'customer_email' => $order['customer_email'],
+                'customer_phone' => $order['customer_phone'],
+                'vendor' => $order['vendor_name'],
+                'vendor_email' => $order['vendor_email'],
+                'vendor_phone' => $order['vendor_phone'],
+                'vendor_location' => $order['vendor_location'],
                 'product' => $order['product_name'],
-                'amount' => floatval($order['quantity'] * $order['product_price']),
+                'product_description' => $order['product_description'],
+                'product_images' => $order['image_urls'],
+                'quantity' => $order['quantity'],
+                'unit_price' => floatval($order['product_price']),
+                'amount' => floatval($order['total_amount']),
                 'status' => $order['status'],
-                'date' => $order['created_at']
+                'status_notes' => $order['status_notes'],
+                'payment_method' => $order['payment_method'],
+                'payment_status' => $order['payment_status'],
+                'shipping_address' => $order['shipping_address'],
+                'contact_phone' => $order['contact_phone'],
+                'notes' => $order['notes'],
+                'order_type' => $order['order_type'],
+                'date' => $order['created_at'],
+                'updated_at' => $order['updated_at']
             ];
         }, $orders);
         
@@ -252,6 +283,65 @@ function handleAdminOrders() {
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Failed to fetch orders: ' . $e->getMessage()]);
+    }
+}
+
+function handleUpdateOrderStatus() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    $orderId = $_GET['id'] ?? null;
+    
+    if (!$orderId || !isset($input['status'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Order ID and new status are required']);
+        return;
+    }
+    
+    $newStatus = $input['status'];
+    $statusNotes = $input['status_notes'] ?? null;
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // Update order status
+        $stmt = $pdo->prepare("
+            UPDATE orders
+            SET status = ?, status_notes = ?, updated_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$newStatus, $statusNotes, $orderId]);
+        
+        // Update payment status based on order status
+        $paymentStatus = 'pending';
+        if (in_array($newStatus, ['confirmed', 'processing', 'shipped', 'delivered'])) {
+            $paymentStatus = 'paid';
+        } elseif ($newStatus === 'cancelled') {
+            $paymentStatus = 'cancelled';
+        }
+        
+        $stmt = $pdo->prepare("
+            UPDATE orders
+            SET payment_status = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$paymentStatus, $orderId]);
+        
+        $pdo->commit();
+        echo json_encode(['success' => true, 'message' => 'Order status updated successfully']);
+        
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        http_response_code(500);
+        error_log("Error updating order status: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
     }
 }
 

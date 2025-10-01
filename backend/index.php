@@ -14,10 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once 'config/database.php';
 
 // Get the request method and path
-$method = $_SERVER['REQUEST_METHOD'];
-$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$requestUri = $_SERVER['REQUEST_URI'] ?? '/api/admin/analytics';
+$path = parse_url($requestUri, PHP_URL_PATH);
 $path = str_replace('/poultry-hub-kenya/backend/', '', $path);
 $path = str_replace('/backend/', '', $path);
+$path = ltrim($path, '/'); // Remove leading slash
 
 // Route the request
 switch ($path) {
@@ -53,16 +55,6 @@ switch ($path) {
         }
         break;
         
-    case 'api/orders':
-        if ($method === 'GET') {
-            include 'routes/orders.php';
-            handleGetOrders();
-        } elseif ($method === 'POST') {
-            include 'routes/orders.php';
-            handleCreateOrder();
-        }
-        break;
-        
     case 'api/vendors':
         if ($method === 'GET') {
             include 'routes/vendors.php';
@@ -84,6 +76,13 @@ switch ($path) {
         if ($method === 'PUT') {
             include 'routes/notifications.php';
             handleMarkAsRead();
+        }
+        break;
+        
+    case 'api/admin/login':
+        if ($method === 'POST') {
+            include 'routes/admin.php';
+            handleAdminLogin();
         }
         break;
         
@@ -119,6 +118,63 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/admin.php';
             handleAdminOrders();
+        }
+        break;
+        
+    case 'api/admin/orders/status':
+        if ($method === 'PUT') {
+            include 'routes/admin.php';
+            handleUpdateOrderStatus();
+        }
+        break;
+        
+    case 'api/admin/analytics':
+        if ($method === 'GET') {
+            include 'routes/analytics.php';
+            handleAdminAnalytics();
+        }
+        break;
+        
+    case 'api/vendor/analytics':
+        if ($method === 'GET') {
+            include 'routes/analytics.php';
+            handleVendorAnalytics();
+        }
+        break;
+        
+    // AI Services Routes
+    case 'api/ai/analyze-image':
+        if ($method === 'POST') {
+            include 'routes/ai_services.php';
+            handleImageAnalysis();
+        }
+        break;
+        
+    case 'api/ai/generate-description':
+        if ($method === 'POST') {
+            include 'routes/ai_services.php';
+            handleDescriptionGeneration();
+        }
+        break;
+        
+    case 'api/ai/moderate-content':
+        if ($method === 'POST') {
+            include 'routes/ai_services.php';
+            handleContentModeration();
+        }
+        break;
+        
+    case 'api/ai/product-suggestions':
+        if ($method === 'POST') {
+            include 'routes/ai_services.php';
+            handleProductSuggestions();
+        }
+        break;
+        
+    case 'api/ai/config':
+        if ($method === 'GET') {
+            include 'routes/ai_services.php';
+            handleAIConfig();
         }
         break;
         
@@ -188,6 +244,13 @@ switch ($path) {
         }
         break;
         
+    case 'api/vendor/orders/status':
+        if ($method === 'PUT') {
+            include 'routes/vendors.php';
+            handleUpdateVendorOrderStatus();
+        }
+        break;
+        
     case 'api/upload':
         if ($method === 'POST') {
             include 'routes/upload.php';
@@ -199,6 +262,90 @@ switch ($path) {
         if ($method === 'POST') {
             include 'routes/upload.php';
             handleMultipleImageUpload();
+        }
+        break;
+        
+    case 'api/contact':
+        if ($method === 'POST') {
+            include 'routes/contact.php';
+            handleContactForm();
+        } elseif ($method === 'GET') {
+            include 'routes/contact.php';
+            handleGetContactMessages();
+        } elseif ($method === 'PUT') {
+            include 'routes/contact.php';
+            handleReplyToContact();
+        }
+        break;
+        
+    case 'api/cart':
+        if ($method === 'GET') {
+            include 'routes/cart.php';
+            handleGetCart();
+        } elseif ($method === 'POST') {
+            include 'routes/cart.php';
+            handleAddToCart();
+        } elseif ($method === 'PUT') {
+            include 'routes/cart.php';
+            handleUpdateCartItem();
+        } elseif ($method === 'DELETE') {
+            include 'routes/cart.php';
+            handleRemoveFromCart();
+        }
+        break;
+        
+    case 'api/cart/clear':
+        if ($method === 'DELETE') {
+            include 'routes/cart.php';
+            handleClearCart();
+        }
+        break;
+        
+    case 'api/orders':
+        if ($method === 'GET') {
+            include 'routes/orders.php';
+            handleGetOrders();
+        } elseif ($method === 'POST') {
+            include 'routes/orders.php';
+            handleCreateOrder();
+        } elseif ($method === 'PUT') {
+            include 'routes/orders.php';
+            handleUpdateOrderStatus();
+        }
+        break;
+        
+    case 'api/orders/shipping':
+        if ($method === 'PUT') {
+            include 'routes/orders.php';
+            handleUpdateCustomerShippingAddress();
+        }
+        break;
+        
+    case 'api/forgot-password':
+        if ($method === 'POST') {
+            include 'routes/password_reset.php';
+            handleForgotPassword();
+        }
+        break;
+        
+    case 'api/verify-otp':
+        if ($method === 'POST') {
+            include 'routes/password_reset.php';
+            handleVerifyOTP();
+        }
+        break;
+        
+    case 'api/reset-password':
+        if ($method === 'POST') {
+            include 'routes/password_reset.php';
+            handleResetPassword();
+        }
+        break;
+        
+    case 'api/resend-otp':
+        if ($method === 'POST') {
+            include 'routes/password_reset.php';
+            handleResendOTP();
         }
         break;
         

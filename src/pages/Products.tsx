@@ -1,20 +1,35 @@
 
 import React, { useState } from 'react';
-import { Search, Filter, ShoppingCart, Star, MapPin } from 'lucide-react';
+import { Search, Filter, ShoppingCart, Star, MapPin, Plus, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Card, CardContent } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Textarea } from '../components/ui/textarea';
 import { useProducts } from '../hooks/useProducts';
-import { useToast } from '../components/ui/use-toast';
+import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'sonner';
+import { getApiUrl } from '../config/api';
 
 const Products = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
-  const { toast } = useToast();
+  const [showQuickOrderModal, setShowQuickOrderModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [quickOrderData, setQuickOrderData] = useState({
+    quantity: 1,
+    shipping_address: '',
+    contact_phone: '',
+    payment_method: 'mpesa',
+    notes: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const { addToCart, loading: cartLoading } = useCart();
+  const { user } = useAuth();
 
   const { data: products = [], isLoading, error } = useProducts(
     searchTerm || undefined,
@@ -22,14 +37,94 @@ const Products = () => {
     selectedLocation
   );
 
+  const handleAddToCart = async (productId: string) => {
+    if (!user) {
+      toast.error('Please login to add items to cart');
+      return;
+    }
+    
+    const success = await addToCart(productId, 1);
+    if (success) {
+      toast.success('Item added to cart!');
+    }
+  };
+
   // Get unique locations from products
   const locations: string[] = ['all', ...Array.from(new Set(products.map(p => p.vendor_profiles.location)))];
 
-  const handleOrder = (productName: string) => {
-    toast({
-      title: "Order Placed",
-      description: `Your order for ${productName} has been received. Please log in to complete your purchase.`,
+  const handleQuickOrder = (product: any) => {
+    if (!user) {
+      toast.error('Please login to place an order');
+      return;
+    }
+
+    setSelectedProduct(product);
+    setQuickOrderData({
+      quantity: 1,
+      shipping_address: '',
+      contact_phone: '',
+      payment_method: 'mpesa',
+      notes: ''
     });
+    setShowQuickOrderModal(true);
+  };
+
+  const handleQuickOrderSubmit = async () => {
+    if (!selectedProduct) return;
+
+    // Validate form data
+    if (!quickOrderData.shipping_address.trim()) {
+      toast.error('Shipping address is required');
+      return;
+    }
+
+    if (!quickOrderData.contact_phone.trim()) {
+      toast.error('Contact phone is required');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/orders'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          product_id: selectedProduct.id,
+          quantity: quickOrderData.quantity,
+          shipping_address: quickOrderData.shipping_address.trim(),
+          contact_phone: quickOrderData.contact_phone.trim(),
+          payment_method: quickOrderData.payment_method,
+          notes: quickOrderData.notes.trim() || 'Quick order from products page'
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(`Order placed successfully! Order Number: ${data.order_number}`);
+        setShowQuickOrderModal(false);
+        setSelectedProduct(null);
+        setQuickOrderData({
+          quantity: 1,
+          shipping_address: '',
+          contact_phone: '',
+          payment_method: 'mpesa',
+          notes: ''
+        });
+      } else {
+        toast.error(data.error || 'Failed to place order');
+      }
+    } catch (error) {
+      console.error('Error placing order:', error);
+      toast.error('Failed to place order');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (error) {
@@ -167,13 +262,24 @@ const Products = () => {
                         </p>
                         <p className="text-xs text-gray-500">Stock: {product.stock_quantity} {product.unit}s</p>
                       </div>
-                      <Button 
-                        className="btn-primary flex items-center"
-                        onClick={() => handleOrder(product.name)}
-                      >
-                        <ShoppingCart className="h-4 w-4 mr-2" />
-                        Order
-                      </Button>
+                      <div className="flex flex-col space-y-2">
+                        <Button 
+                          className="btn-primary flex items-center w-full"
+                          onClick={() => handleAddToCart(product.id)}
+                          disabled={cartLoading || product.stock_quantity <= 0}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add to Cart
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="flex items-center w-full"
+                          onClick={() => handleQuickOrder(product)}
+                        >
+                          <ShoppingCart className="h-4 w-4 mr-2" />
+                          Quick Order
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -191,6 +297,155 @@ const Products = () => {
       </div>
 
       <Footer />
+
+      {/* Quick Order Modal */}
+      {showQuickOrderModal && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Quick Order</h2>
+                <button
+                  onClick={() => setShowQuickOrderModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                  title="Close modal"
+                  aria-label="Close modal"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Product Info */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h3 className="font-medium text-gray-900">{selectedProduct.name}</h3>
+                <p className="text-sm text-gray-600 mt-1">KSH {selectedProduct.price}</p>
+                <p className="text-sm text-gray-500 mt-1">Vendor: {selectedProduct.vendor_profiles?.farm_name || 'Unknown'}</p>
+                
+                {/* Quantity Controls */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quantity
+                  </label>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setQuickOrderData(prev => ({ 
+                        ...prev, 
+                        quantity: Math.max(1, prev.quantity - 1) 
+                      }))}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50"
+                      disabled={quickOrderData.quantity <= 1}
+                    >
+                      <span className="text-gray-600">-</span>
+                    </button>
+                    <span className="w-12 text-center font-medium">{quickOrderData.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuickOrderData(prev => ({ 
+                        ...prev, 
+                        quantity: prev.quantity + 1 
+                      }))}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50"
+                    >
+                      <span className="text-gray-600">+</span>
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Total: KSH {(parseFloat(selectedProduct.price) * quickOrderData.quantity).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Order Form */}
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="shipping_address" className="block text-sm font-medium text-gray-700 mb-1">
+                    Shipping Address *
+                  </label>
+                  <Textarea
+                    id="shipping_address"
+                    value={quickOrderData.shipping_address}
+                    onChange={(e) => setQuickOrderData(prev => ({ ...prev, shipping_address: e.target.value }))}
+                    placeholder="Enter your complete shipping address..."
+                    rows={3}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Phone *
+                  </label>
+                  <Input
+                    id="contact_phone"
+                    type="tel"
+                    value={quickOrderData.contact_phone}
+                    onChange={(e) => setQuickOrderData(prev => ({ ...prev, contact_phone: e.target.value }))}
+                    placeholder="Enter your phone number..."
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Method *
+                  </label>
+                  <select
+                    id="payment_method"
+                    value={quickOrderData.payment_method}
+                    onChange={(e) => setQuickOrderData(prev => ({ ...prev, payment_method: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    required
+                  >
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="bank">Bank Transfer</option>
+                    <option value="paypal">PayPal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Order Notes (Optional)
+                  </label>
+                  <Textarea
+                    id="notes"
+                    value={quickOrderData.notes}
+                    onChange={(e) => setQuickOrderData(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Any special instructions or notes..."
+                    rows={2}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowQuickOrderModal(false)}
+                  className="flex-1"
+                  disabled={submitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleQuickOrderSubmit}
+                  className="flex-1"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Placing Order...
+                    </div>
+                  ) : (
+                    'Place Order'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
+import { getApiUrl } from '../config/api';
 
 interface NotificationsMenuProps {
   isAdmin?: boolean;
@@ -15,7 +16,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/notifications', {
+      const res = await fetch(getApiUrl('/api/notifications'), {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -38,7 +39,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
   const markAsRead = async (id: number) => {
     const token = localStorage.getItem('token');
     try {
-      await fetch('http://localhost/poultry-hub-kenya/backend/api/notifications/read', {
+      await fetch(getApiUrl('/api/notifications/read'), {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,

@@ -9,6 +9,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
+import { getApiUrl } from '../config/api';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -30,22 +31,33 @@ const Contact = () => {
     setIsSubmitting(true);
 
     try {
-      // Simulate API call - replace with actual backend integration
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Contact form submitted:', formData);
-      toast.success('Message sent successfully! We\'ll get back to you soon.');
-      
-      // Reset form
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        subject: '',
-        category: '',
-        message: ''
+      const response = await fetch(getApiUrl('/api/contact'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || 'Message sent successfully! We\'ll get back to you soon.');
+        
+        // Reset form
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          subject: '',
+          category: '',
+          message: ''
+        });
+      } else {
+        toast.error(data.error || 'Failed to send message. Please try again.');
+      }
     } catch (error) {
+      console.error('Contact form error:', error);
       toast.error('Failed to send message. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -62,7 +74,7 @@ const Contact = () => {
     {
       icon: <Mail className="h-6 w-6 text-accent" />,
       title: "Email",
-      details: ["okothroni863@gmail.com", <h6>or</h6> ,"kothroni863@gmail.com"],
+      details: ["okothroni863@gmail.com", "or", "kothroni863@gmail.com"],
       description: "We'll respond within 24 hours"
     },
     {

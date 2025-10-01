@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell } from 'lucide-react';
+import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -8,6 +8,9 @@ import NotificationsMenu from '../components/NotificationsMenu';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { getApiUrl } from '../config/api';
+import VendorAnalytics from '../components/VendorAnalytics';
+import AIProductAssistant from '../components/AIProductAssistant';
 
 const VendorDashboard = () => {
   const { user } = useAuth();
@@ -32,6 +35,13 @@ const VendorDashboard = () => {
   const [showViewProductModal, setShowViewProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [showViewOrderModal, setShowViewOrderModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  
+  // AI Assistant states
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
@@ -41,9 +51,9 @@ const VendorDashboard = () => {
     if (!token) return;
     setLoading(true);
     Promise.all([
-      fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/stats', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/products', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/orders', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
     ]).then(([stats, products, orders]) => {
       setStats(stats);
       setProducts(products);
@@ -54,17 +64,21 @@ const VendorDashboard = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'confirmed': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'processing': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'shipped': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      case 'delivered': return 'bg-green-100 text-green-800 border-green-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
+      case 'approved': return 'bg-green-100 text-green-800 border-green-200';
+      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const createProduct = async (product: any) => {
     const token = localStorage.getItem('token');
-    await fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/products', {
+    await fetch(getApiUrl('/api/vendor/products'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(product),
@@ -76,7 +90,7 @@ const VendorDashboard = () => {
   const deleteProduct = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       const token = localStorage.getItem('token');
-      await fetch(`http://localhost/poultry-hub-kenya/backend/api/vendor/products/${id}`, {
+      await fetch(getApiUrl(`/api/vendor/products/${id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -87,6 +101,41 @@ const VendorDashboard = () => {
   const viewProduct = (product: any) => {
     setSelectedProduct(product);
     setShowViewProductModal(true);
+  };
+
+  const viewOrder = (order: any) => {
+    setSelectedOrder(order);
+    setShowViewOrderModal(true);
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string, statusNotes?: string) => {
+    const token = localStorage.getItem('token');
+    setSubmitting(true);
+    try {
+      const response = await fetch(getApiUrl(`/api/vendor/orders/status?id=${orderId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus, status_notes: statusNotes }),
+      });
+      
+      if (response.ok) {
+        // Refresh orders data
+        const res = await fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setOrders(Array.isArray(data) ? data : []);
+        }
+        setShowViewOrderModal(false);
+        setSelectedOrder(null);
+      } else {
+        const error = await response.json();
+        console.error('Failed to update order status:', error);
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const editProduct = (product: any) => {
@@ -109,7 +158,7 @@ const VendorDashboard = () => {
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost/poultry-hub-kenya/backend/api/vendor/products/${editingProduct.id}`, {
+      const response = await fetch(getApiUrl(`/api/vendor/products/${editingProduct.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -144,7 +193,7 @@ const VendorDashboard = () => {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     const token = localStorage.getItem('token');
-    await fetch(`http://localhost/poultry-hub-kenya/backend/api/vendor/orders/${orderId}/status`, {
+    await fetch(getApiUrl(`/api/vendor/orders/${orderId}/status`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ status }),
@@ -154,13 +203,13 @@ const VendorDashboard = () => {
 
   const fetchProducts = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/products', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } });
     setProducts(await res.json());
   };
 
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/orders', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } });
     setOrders(await res.json());
   };
 
@@ -197,7 +246,7 @@ const VendorDashboard = () => {
     });
     
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/upload/multiple', {
+      const res = await fetch(getApiUrl('/api/upload/multiple'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -212,6 +261,11 @@ const VendorDashboard = () => {
           ...prev, 
           image_urls: [...(prev.image_urls || []), ...newUrls] 
         }));
+        
+        // Auto-analyze the first uploaded image with AI
+        if (newUrls.length > 0 && !aiAnalysis) {
+          await analyzeImageWithAI(newUrls[0]);
+        }
       } else {
         setUploadError(data.errors ? data.errors.join(', ') : 'Upload failed');
       }
@@ -220,6 +274,71 @@ const VendorDashboard = () => {
     }
     
     setUploading(false);
+  };
+
+  // AI Image Analysis function
+  const analyzeImageWithAI = async (imageUrl: string) => {
+    setAiLoading(true);
+    try {
+      const response = await fetch(getApiUrl('/api/ai/analyze-image'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: imageUrl })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setAiAnalysis(data.analysis);
+        
+        // Auto-fill form based on AI analysis
+        if (data.analysis.category_suggestion && !productForm.category) {
+          setProductForm(prev => ({
+            ...prev,
+            category: data.analysis.category_suggestion
+          }));
+        }
+        
+        // Generate description if we have a product name
+        if (productForm.name && productForm.category) {
+          await generateDescriptionWithAI();
+        }
+      }
+    } catch (error) {
+      console.error('AI analysis error:', error);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // AI Description Generation function
+  const generateDescriptionWithAI = async () => {
+    if (!productForm.name || !productForm.category) return;
+    
+    setAiLoading(true);
+    try {
+      const response = await fetch(getApiUrl('/api/ai/generate-description'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_name: productForm.name,
+          category: productForm.category,
+          image_analysis: aiAnalysis,
+          additional_info: []
+        })
+      });
+
+      const data = await response.json();
+      if (data.success && !productForm.description) {
+        setProductForm(prev => ({
+          ...prev,
+          description: data.description
+        }));
+      }
+    } catch (error) {
+      console.error('AI description generation error:', error);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const removeImage = (url: string) => {
@@ -254,7 +373,7 @@ const VendorDashboard = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/products', {
+      const response = await fetch(getApiUrl('/api/vendor/products'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -284,7 +403,7 @@ const VendorDashboard = () => {
         
         // Refresh products list
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/vendor/products', { 
+        const res = await fetch(getApiUrl('/api/vendor/products'), { 
           headers: { Authorization: `Bearer ${token}` } 
         });
         const data = await res.json();
@@ -356,8 +475,8 @@ const VendorDashboard = () => {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Monthly Revenue</p>
-                    <p className="text-2xl font-bold text-primary">KSH {stats?.monthlyRevenue || 'Loading...'}</p>
+                    <p className="text-sm text-gray-600">Total Revenue</p>
+                    <p className="text-2xl font-bold text-primary">KSH {stats?.totalRevenue || 'Loading...'}</p>
                   </div>
                   <BarChart3 className="h-8 w-8 text-accent" />
                 </div>
@@ -387,7 +506,8 @@ const VendorDashboard = () => {
                   { id: 'overview', label: 'Overview' },
                   { id: 'products', label: 'My Products' },
                   { id: 'orders', label: 'Orders' },
-                  { id: 'analytics', label: 'Analytics' }
+                  { id: 'analytics', label: 'Analytics' },
+                  { id: 'ai-assistant', label: 'AI Assistant' }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -601,7 +721,11 @@ const VendorDashboard = () => {
                             </td>
                             <td className="py-3 px-4">{order.date}</td>
                             <td className="py-3 px-4">
-                              <Button size="sm" variant="outline">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => viewOrder(order)}
+                              >
                                 View Details
                               </Button>
                             </td>
@@ -615,13 +739,26 @@ const VendorDashboard = () => {
 
               {/* Analytics Tab */}
               {activeTab === 'analytics' && (
+                <VendorAnalytics />
+              )}
+
+              {/* AI Assistant Tab */}
+              {activeTab === 'ai-assistant' && (
                 <div className="space-y-6">
-                  <h2 className="text-xl font-semibold text-primary">Analytics & Reports</h2>
-                  <div className="text-center py-12 text-gray-500">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Analytics dashboard coming soon...</p>
-                    <p className="text-sm mt-2">Track your sales performance and growth metrics</p>
-                  </div>
+                  <AIProductAssistant 
+                    onImageAnalysis={(analysis) => {
+                      console.log('Image analysis:', analysis);
+                    }}
+                    onDescriptionGenerated={(description) => {
+                      console.log('Generated description:', description);
+                    }}
+                    onContentModerated={(moderation) => {
+                      console.log('Content moderation:', moderation);
+                    }}
+                    onSuggestionsGenerated={(suggestions) => {
+                      console.log('Product suggestions:', suggestions);
+                    }}
+                  />
                 </div>
               )}
             </div>
@@ -645,6 +782,65 @@ const VendorDashboard = () => {
                   <X className="h-6 w-6" />
                 </button>
               </div>
+
+              {/* AI Assistant Section */}
+              {aiAnalysis && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Sparkles className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-blue-800">AI Assistant</h3>
+                    {aiLoading && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium text-blue-800 mb-2">Image Analysis</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Badge className={aiAnalysis.quality_score >= 7 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                            Quality: {aiAnalysis.quality_score.toFixed(1)}/10
+                          </Badge>
+                        </div>
+                        {aiAnalysis.detected_objects.length > 0 && (
+                          <div>
+                            <span className="text-sm text-blue-700">Detected: </span>
+                            <span className="text-sm text-blue-600">{aiAnalysis.detected_objects.join(', ')}</span>
+                          </div>
+                        )}
+                        {aiAnalysis.category_suggestion && (
+                          <div>
+                            <span className="text-sm text-blue-700">Suggested Category: </span>
+                            <Badge variant="outline" className="text-blue-600">{aiAnalysis.category_suggestion}</Badge>
+                          </div>
+                        )}
+                        {aiAnalysis.is_poultry_related === false && (
+                          <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded">
+                            <div className="flex items-center space-x-2 text-orange-800">
+                              <AlertTriangle className="h-4 w-4" />
+                              <span className="text-sm font-medium">Not Poultry-Related</span>
+                            </div>
+                            <p className="text-xs text-orange-700 mt-1">
+                              This image doesn't appear to contain poultry-related content. Please upload images of chickens, eggs, feed, or farming equipment.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-blue-800 mb-2">Suggestions</h4>
+                      <ul className="space-y-1">
+                        {aiAnalysis.suggestions.slice(0, 3).map((suggestion: string, index: number) => (
+                          <li key={index} className="text-sm text-blue-600 flex items-start space-x-1">
+                            <span className="text-blue-500">•</span>
+                            <span>{suggestion}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleSubmitProduct} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -716,7 +912,20 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="product-description" className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="product-description" className="block text-sm font-medium text-gray-700">Description *</label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={generateDescriptionWithAI}
+                      disabled={aiLoading || !productForm.name || !productForm.category}
+                      className="flex items-center space-x-1"
+                    >
+                      {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      <span>AI Generate</span>
+                    </Button>
+                  </div>
                   <textarea
                     id="product-description"
                     name="description"
@@ -725,7 +934,7 @@ const VendorDashboard = () => {
                     required
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="Describe your product..."
+                    placeholder="Describe your product or use AI to generate one..."
                   />
                 </div>
 
@@ -1102,6 +1311,203 @@ const VendorDashboard = () => {
                   </Button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Order Details Modal */}
+      {showViewOrderModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-primary">Order Details</h2>
+                <button
+                  onClick={() => setShowViewOrderModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                  title="Close modal"
+                  aria-label="Close modal"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Order Header */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                      <p className="text-lg font-semibold text-gray-900">{selectedOrder.order_number}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Order Date</label>
+                      <p className="text-lg text-gray-900">{new Date(selectedOrder.date).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Order Type</label>
+                      <Badge className={selectedOrder.order_type === 'direct' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
+                        {selectedOrder.order_type}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Product Images */}
+                {selectedOrder.product_images && JSON.parse(selectedOrder.product_images).length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Product Images</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {JSON.parse(selectedOrder.product_images).map((url: string, index: number) => (
+                        <div key={index} className="relative">
+                          <img
+                            src={url.replace(/\\/g, '/')}
+                            alt={`${selectedOrder.product} ${index + 1}`}
+                            className="w-full h-32 object-cover rounded-lg border"
+                            onError={(e) => {
+                              console.log('Image failed to load:', url);
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Customer Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-primary">Customer Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                      <p className="text-gray-900">{selectedOrder.customer}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <p className="text-gray-900">{selectedOrder.customer_email}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                      <p className="text-gray-900">{selectedOrder.customer_phone || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
+                      <p className="text-gray-900">{selectedOrder.contact_phone}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Address</label>
+                    <p className="text-gray-900">{selectedOrder.shipping_address}</p>
+                  </div>
+                </div>
+
+                {/* Product Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-primary">Product Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+                      <p className="text-lg font-semibold text-gray-900">{selectedOrder.product}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                      <p className="text-lg text-gray-900">{selectedOrder.quantity}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                      <p className="text-lg text-gray-900">KSH {selectedOrder.unit_price}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
+                      <p className="text-lg font-semibold text-green-600">KSH {selectedOrder.total}</p>
+                    </div>
+                  </div>
+                  {selectedOrder.product_description && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{selectedOrder.product_description}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payment & Status Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-primary">Payment Information</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                        <Badge className="bg-blue-100 text-blue-800 capitalize">{selectedOrder.payment_method}</Badge>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+                        <Badge className={selectedOrder.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                          {selectedOrder.payment_status || 'pending'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-primary">Order Status</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Current Status</label>
+                        <Badge className={getStatusColor(selectedOrder.status)}>
+                          {selectedOrder.status}
+                        </Badge>
+                      </div>
+                      {selectedOrder.status_notes && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Status Notes</label>
+                          <p className="text-gray-900">{selectedOrder.status_notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order Notes */}
+                {selectedOrder.notes && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Order Notes</label>
+                    <p className="text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded">{selectedOrder.notes}</p>
+                  </div>
+                )}
+
+                {/* Status Update Section */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold text-primary mb-4">Update Order Status</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
+                      <Button
+                        key={status}
+                        variant={selectedOrder.status === status ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleUpdateOrderStatus(selectedOrder.id, status)}
+                        disabled={submitting}
+                        className="capitalize"
+                      >
+                        {submitting ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        ) : null}
+                        {status}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowViewOrderModal(false)}
+                >
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         </div>

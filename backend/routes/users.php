@@ -50,6 +50,13 @@ function handleLogin() {
             return;
         }
         
+        // SECURITY CHECK: Prevent admins from logging in through regular user login
+        if ($user['role'] === 'admin') {
+            http_response_code(401);
+            echo json_encode(['error' => 'Admin accounts must use the admin login page. Please go to /admin-login']);
+            return;
+        }
+        
         $token = generateJWT($user['id'], $user['email'], $user['role']);
         
         // Get vendor approval status if user is a vendor
@@ -66,7 +73,7 @@ function handleLogin() {
             'user' => [
                 'id' => $user['id'],
                 'email' => $user['email'],
-                'full_name' => $user['full_name'],
+                'name' => $user['full_name'],
                 'role' => $user['role'],
                 'phone' => $user['phone'],
                 'isApproved' => $isApproved
@@ -103,6 +110,13 @@ function handleRegister() {
     $full_name = $input['full_name'];
     $phone = $input['phone'] ?? null;
     $role = $input['role'] ?? 'customer';
+    
+    // SECURITY CHECK: Prevent admin registration through regular registration
+    if ($role === 'admin') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Admin accounts cannot be registered through this form. Contact system administrator.']);
+        return;
+    }
     
     try {
         // Check if email already exists
@@ -172,6 +186,13 @@ function handleGetUser() {
         if (!$user) {
             http_response_code(404);
             echo json_encode(['error' => 'User not found']);
+            return;
+        }
+        
+        // SECURITY CHECK: Prevent admins from accessing user data through regular API
+        if ($user['role'] === 'admin') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Admin accounts must use the admin login page']);
             return;
         }
         

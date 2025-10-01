@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell } from 'lucide-react';
+import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { getApiUrl } from '../config/api';
+import Analytics from '../components/Analytics';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -26,6 +28,12 @@ const AdminDashboard = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showViewProductModal, setShowViewProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [showViewOrderModal, setShowViewOrderModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [contactMessages, setContactMessages] = useState<any[]>([]);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [replyText, setReplyText] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<{
     show: boolean;
     title: string;
@@ -45,21 +53,51 @@ const AdminDashboard = () => {
     if (!token) return;
     setLoading(true);
     Promise.all([
-      fetch('http://localhost/poultry-hub-kenya/backend/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('http://localhost/poultry-hub-kenya/backend/api/admin/vendors', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('http://localhost/poultry-hub-kenya/backend/api/admin/products', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('http://localhost/poultry-hub-kenya/backend/api/admin/orders', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([stats, vendors, products, orders]) => {
+      fetch(getApiUrl('/api/admin/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/admin/vendors'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/admin/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/admin/orders'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([stats, vendors, products, orders, contactMessages]) => {
       setStats(stats);
       setVendors(Array.isArray(vendors) ? vendors : []);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
+      setContactMessages(Array.isArray(contactMessages) ? contactMessages : []);
       setLoading(false);
     }).catch((error) => {
       toast.error('Failed to load dashboard data');
       setLoading(false);
     });
   }, []);
+
+  // Real-time notifications for contact messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const token = localStorage.getItem('admin_session_token');
+      if (token) {
+        fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(messages => {
+            const newMessages = Array.isArray(messages) ? messages : [];
+            const currentNewCount = contactMessages.filter(msg => msg.status === 'new').length;
+            const updatedNewCount = newMessages.filter(msg => msg.status === 'new').length;
+            
+            // Show notification if new messages arrived
+            if (updatedNewCount > currentNewCount) {
+              toast.success(`You have ${updatedNewCount - currentNewCount} new contact message(s)!`);
+            }
+            
+            setContactMessages(newMessages);
+          })
+          .catch(error => {
+            console.error('Failed to fetch contact messages:', error);
+          });
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [contactMessages]);
 
   const handleApproveVendor = async (vendorId: string) => {
     const vendor = vendors.find(v => v.id === vendorId);
@@ -72,7 +110,7 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('admin_session_token');
         setActionLoading(`approve-vendor-${vendorId}`);
         try {
-          const response = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/vendors/approve', {
+          const response = await fetch(getApiUrl('/api/admin/vendors/approve'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ vendor_id: vendorId }),
@@ -106,7 +144,7 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('admin_session_token');
         setActionLoading(`reject-vendor-${vendorId}`);
         try {
-          const response = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/vendors/reject', {
+          const response = await fetch(getApiUrl('/api/admin/vendors/reject'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ vendor_id: vendorId, reason: 'Application rejected by admin' }),
@@ -132,7 +170,7 @@ const AdminDashboard = () => {
   const handleSuspendVendor = async (vendorId: string) => {
     const token = localStorage.getItem('admin_session_token');
     try {
-      const response = await fetch(`http://localhost/poultry-hub-kenya/backend/api/admin/vendors/${vendorId}/status`, {
+      const response = await fetch(getApiUrl(`/api/admin/vendors/${vendorId}/status`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status: 'suspended' }),
@@ -161,7 +199,7 @@ const AdminDashboard = () => {
         const token = localStorage.getItem('admin_session_token');
         setActionLoading(`disapprove-vendor-${vendorId}`);
         try {
-          const response = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/vendors/reject', {
+          const response = await fetch(getApiUrl('/api/admin/vendors/reject'), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ vendor_id: vendorId, reason: 'Vendor disapproved by admin' }),
@@ -188,7 +226,7 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('admin_session_token');
     setActionLoading(`approve-product-${productId}`);
     try {
-      const response = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/products/approve', {
+      const response = await fetch(getApiUrl('/api/admin/products/approve'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ product_id: productId }),
@@ -212,7 +250,7 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('admin_session_token');
     setActionLoading(`reject-product-${productId}`);
     try {
-      const response = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/products/reject', {
+      const response = await fetch(getApiUrl('/api/admin/products/reject'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ product_id: productId, reason: 'Product rejected by admin' }),
@@ -243,7 +281,7 @@ const AdminDashboard = () => {
         const token = localStorage.getItem('admin_session_token');
         setActionLoading(`disapprove-product-${productId}`);
         try {
-          const response = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/products/reject', {
+          const response = await fetch(getApiUrl('/api/admin/products/reject'), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ product_id: productId, reason: 'Product disapproved by admin' }),
@@ -268,17 +306,21 @@ const AdminDashboard = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'confirmed': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'processing': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'shipped': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      case 'delivered': return 'bg-green-100 text-green-800 border-green-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
+      case 'completed': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const fetchVendors = async () => {
     const token = localStorage.getItem('admin_session_token');
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/vendors', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(getApiUrl('/api/admin/vendors'), { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
     const data = await res.json();
     setVendors(Array.isArray(data) ? data : []);
@@ -294,7 +336,7 @@ const AdminDashboard = () => {
   const fetchUsers = async () => {
     const token = localStorage.getItem('admin_session_token');
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(getApiUrl('/api/admin/users'), { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         setUsers(Array.isArray(data) ? data : []);
@@ -309,7 +351,7 @@ const AdminDashboard = () => {
   const fetchProducts = async () => {
     const token = localStorage.getItem('admin_session_token');
     try {
-      const res = await fetch('http://localhost/poultry-hub-kenya/backend/api/admin/products', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(getApiUrl('/api/admin/products'), { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : []);
@@ -321,9 +363,99 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchContactMessages = async () => {
+    const token = localStorage.getItem('admin_session_token');
+    try {
+      const res = await fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setContactMessages(Array.isArray(data) ? data : []);
+      } else {
+        toast.error('Failed to fetch contact messages');
+      }
+    } catch (error) {
+      toast.error('Failed to fetch contact messages');
+    }
+  };
+
   const viewProduct = (product: any) => {
     setSelectedProduct(product);
     setShowViewProductModal(true);
+  };
+
+  const viewOrder = (order: any) => {
+    setSelectedOrder(order);
+    setShowViewOrderModal(true);
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string, statusNotes?: string) => {
+    const token = localStorage.getItem('admin_session_token');
+    setActionLoading(`update-order-${orderId}`);
+    try {
+      const response = await fetch(getApiUrl(`/api/admin/orders/status?id=${orderId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus, status_notes: statusNotes }),
+      });
+      
+      if (response.ok) {
+        toast.success('Order status updated successfully!');
+        // Refresh orders data
+        const res = await fetch(getApiUrl('/api/admin/orders'), { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setOrders(Array.isArray(data) ? data : []);
+        }
+        setShowViewOrderModal(false);
+        setSelectedOrder(null);
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to update order status');
+      }
+    } catch (error) {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReplyToMessage = async () => {
+    if (!selectedMessage || !replyText.trim()) {
+      toast.error('Please enter a reply message');
+      return;
+    }
+
+    setActionLoading('replying');
+    const token = localStorage.getItem('admin_session_token');
+    
+    try {
+      const res = await fetch(getApiUrl('/api/contact'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message_id: selectedMessage.id,
+          reply: replyText
+        })
+      });
+
+      if (res.ok) {
+        toast.success('Reply sent successfully');
+        setShowReplyModal(false);
+        setReplyText('');
+        setSelectedMessage(null);
+        fetchContactMessages(); // Refresh messages
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to send reply');
+      }
+    } catch (error) {
+      toast.error('Failed to send reply');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // Edit user
@@ -338,7 +470,7 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('admin_session_token');
     setActionLoading(`save-user-${editingUser.id}`);
     try {
-      const response = await fetch(`http://localhost/poultry-hub-kenya/backend/api/admin/users/${editingUser.id}`, {
+      const response = await fetch(getApiUrl(`/api/admin/users/${editingUser.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(userForm),
@@ -369,7 +501,7 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('admin_session_token');
         setActionLoading(`delete-user-${userId}`);
         try {
-          const response = await fetch(`http://localhost/poultry-hub-kenya/backend/api/admin/users/${userId}`, {
+          const response = await fetch(getApiUrl(`/api/admin/users/${userId}`), {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -516,6 +648,7 @@ const AdminDashboard = () => {
                   { id: 'products', label: 'Product Approvals' },
                   { id: 'orders', label: 'All Orders' },
                   { id: 'users', label: 'User Management' },
+                  { id: 'messages', label: 'Contact Messages' },
                   { id: 'analytics', label: 'Analytics' }
                 ].map(tab => (
                   <button
@@ -538,6 +671,11 @@ const AdminDashboard = () => {
                         {stats?.pendingProducts}
                       </span>
                     )}
+                    {(tab.id === 'messages' && contactMessages.filter(msg => msg.status === 'new').length > 0) && (
+                      <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                        {contactMessages.filter(msg => msg.status === 'new').length}
+                      </span>
+                    )}
                   </button>
                 ))}
               </nav>
@@ -549,7 +687,7 @@ const AdminDashboard = () => {
                 <div className="space-y-6">
                   <h2 className="text-xl font-semibold text-primary">Platform Overview</h2>
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-lg">Recent Orders</CardTitle>
@@ -612,6 +750,41 @@ const AdminDashboard = () => {
                             <p className="text-sm text-gray-600">
                               Click the bell icon above to view all notifications
                             </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center">
+                          <Bell className="h-5 w-5 mr-2 text-primary" />
+                          Contact Messages
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Total Messages</span>
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+                              {contactMessages.length}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">New Messages</span>
+                            <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
+                              {contactMessages.filter(msg => msg.status === 'new').length}
+                            </span>
+                          </div>
+                          <div className="pt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setActiveTab('messages')}
+                              className="w-full"
+                            >
+                              View Messages
+                            </Button>
                           </div>
                         </div>
                       </CardContent>
@@ -799,7 +972,11 @@ const AdminDashboard = () => {
                             </td>
                             <td className="py-3 px-4">{order.date}</td>
                             <td className="py-3 px-4">
-                              <Button size="sm" variant="outline">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => viewOrder(order)}
+                              >
                                 View Details
                               </Button>
                             </td>
@@ -950,16 +1127,111 @@ const AdminDashboard = () => {
                 </div>
               )}
 
+              {/* Contact Messages Tab */}
+              {activeTab === 'messages' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold text-primary">Contact Messages</h2>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-500">
+                        {contactMessages.filter(msg => msg.status === 'new').length} new messages
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchContactMessages}
+                        disabled={actionLoading === 'fetch-messages'}
+                      >
+                        {actionLoading === 'fetch-messages' ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                        ) : null}
+                        Refresh
+                      </Button>
+                    </div>
+                  </div>
+
+                  {contactMessages.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Bell className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No contact messages yet</p>
+                      <p className="text-sm mt-2">Messages from the contact form will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {contactMessages.map((message) => (
+                        <Card key={message.id} className={`${message.status === 'new' ? 'border-l-4 border-l-blue-500 bg-blue-50' : ''}`}>
+                          <CardContent className="p-6">
+                            <div className="flex justify-between items-start mb-4">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-3 mb-2">
+                                  <h3 className="text-lg font-semibold text-gray-900">{message.subject}</h3>
+                                  <Badge className={message.status === 'new' ? 'bg-blue-100 text-blue-800' : 
+                                                   message.status === 'replied' ? 'bg-green-100 text-green-800' : 
+                                                   'bg-gray-100 text-gray-800'}>
+                                    {message.status}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
+                                  <div>
+                                    <span className="font-medium">From:</span> {message.name} ({message.email})
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Category:</span> {message.category || 'General'}
+                                  </div>
+                                  {message.phone && (
+                                    <div>
+                                      <span className="font-medium">Phone:</span> {message.phone}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <span className="font-medium">Date:</span> {new Date(message.created_at).toLocaleString()}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedMessage(message);
+                                    setShowReplyModal(true);
+                                  }}
+                                  disabled={message.status === 'replied'}
+                                >
+                                  {message.status === 'replied' ? 'Replied' : 'Reply'}
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            <div className="border-t pt-4">
+                              <h4 className="font-medium text-gray-900 mb-2">Message:</h4>
+                              <p className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">
+                                {message.message}
+                              </p>
+                            </div>
+
+                            {message.admin_reply && (
+                              <div className="border-t pt-4 mt-4">
+                                <h4 className="font-medium text-gray-900 mb-2">Admin Reply:</h4>
+                                <p className="text-gray-700 whitespace-pre-wrap bg-blue-50 p-3 rounded border-l-4 border-blue-200">
+                                  {message.admin_reply}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Replied on: {new Date(message.updated_at).toLocaleString()}
+                                </p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Analytics Tab */}
               {activeTab === 'analytics' && (
-                <div className="space-y-6">
-                  <h2 className="text-xl font-semibold text-primary">Platform Analytics</h2>
-                  <div className="text-center py-12 text-gray-500">
-                    <TrendingUp className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Advanced analytics dashboard coming soon...</p>
-                    <p className="text-sm mt-2">Track platform performance, user engagement, and revenue metrics</p>
-                  </div>
-                </div>
+                <Analytics />
               )}
             </div>
           </div>
@@ -1118,6 +1390,308 @@ const AdminDashboard = () => {
                     Approve Product
                   </Button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* Reply to Contact Message Modal */}
+        {showReplyModal && selectedMessage && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-primary">Reply to Message</h2>
+                  <button
+                    onClick={() => {
+                      setShowReplyModal(false);
+                      setSelectedMessage(null);
+                      setReplyText('');
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                    title="Close modal"
+                    aria-label="Close modal"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Original Message */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-900 mb-2">Original Message</h3>
+                    <div className="text-sm text-gray-600 mb-2">
+                      <strong>From:</strong> {selectedMessage.name} ({selectedMessage.email})
+                    </div>
+                    <div className="text-sm text-gray-600 mb-2">
+                      <strong>Subject:</strong> {selectedMessage.subject}
+                    </div>
+                    <div className="text-sm text-gray-600 mb-3">
+                      <strong>Date:</strong> {new Date(selectedMessage.created_at).toLocaleString()}
+                    </div>
+                    <p className="text-gray-700 whitespace-pre-wrap">{selectedMessage.message}</p>
+                  </div>
+
+                  {/* Reply Form */}
+                  <div>
+                    <label htmlFor="reply-text" className="block text-sm font-medium text-gray-700 mb-2">
+                      Your Reply
+                    </label>
+                    <textarea
+                      id="reply-text"
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="Type your reply here..."
+                      className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      title="Enter your reply message"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowReplyModal(false);
+                      setSelectedMessage(null);
+                      setReplyText('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleReplyToMessage}
+                    disabled={actionLoading === 'replying' || !replyText.trim()}
+                  >
+                    {actionLoading === 'replying' ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    ) : null}
+                    Send Reply
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* View Order Details Modal */}
+      {showViewOrderModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-primary">Order Details</h2>
+                <button
+                  onClick={() => setShowViewOrderModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                  title="Close modal"
+                  aria-label="Close modal"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Order Header */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                      <p className="text-lg font-semibold text-gray-900">{selectedOrder.order_number}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Order Date</label>
+                      <p className="text-lg text-gray-900">{new Date(selectedOrder.date).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Order Type</label>
+                      <Badge className={selectedOrder.order_type === 'direct' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
+                        {selectedOrder.order_type}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Product Images */}
+                {selectedOrder.product_images && JSON.parse(selectedOrder.product_images).length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Product Images</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {JSON.parse(selectedOrder.product_images).map((url: string, index: number) => (
+                        <div key={index} className="relative">
+                          <img
+                            src={url.replace(/\\/g, '/')}
+                            alt={`${selectedOrder.product} ${index + 1}`}
+                            className="w-full h-32 object-cover rounded-lg border"
+                            onError={(e) => {
+                              console.log('Image failed to load:', url);
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Order Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Customer Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-primary">Customer Information</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                        <p className="text-gray-900">{selectedOrder.customer}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <p className="text-gray-900">{selectedOrder.customer_email}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                        <p className="text-gray-900">{selectedOrder.customer_phone || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Address</label>
+                        <p className="text-gray-900">{selectedOrder.shipping_address}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
+                        <p className="text-gray-900">{selectedOrder.contact_phone}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vendor Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-primary">Vendor Information</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
+                        <p className="text-gray-900">{selectedOrder.vendor}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <p className="text-gray-900">{selectedOrder.vendor_email}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                        <p className="text-gray-900">{selectedOrder.vendor_phone || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <p className="text-gray-900">{selectedOrder.vendor_location}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Product Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-primary">Product Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+                      <p className="text-lg font-semibold text-gray-900">{selectedOrder.product}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                      <p className="text-lg text-gray-900">{selectedOrder.quantity}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                      <p className="text-lg text-gray-900">KSH {selectedOrder.unit_price}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
+                      <p className="text-lg font-semibold text-green-600">KSH {selectedOrder.amount}</p>
+                    </div>
+                  </div>
+                  {selectedOrder.product_description && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{selectedOrder.product_description}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payment & Status Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-primary">Payment Information</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                        <Badge className="bg-blue-100 text-blue-800 capitalize">{selectedOrder.payment_method}</Badge>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
+                        <Badge className={selectedOrder.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                          {selectedOrder.payment_status || 'pending'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-primary">Order Status</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Current Status</label>
+                        <Badge className={getStatusColor(selectedOrder.status)}>
+                          {selectedOrder.status}
+                        </Badge>
+                      </div>
+                      {selectedOrder.status_notes && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Status Notes</label>
+                          <p className="text-gray-900">{selectedOrder.status_notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Order Notes */}
+                {selectedOrder.notes && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Order Notes</label>
+                    <p className="text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded">{selectedOrder.notes}</p>
+                  </div>
+                )}
+
+                {/* Status Update Section */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold text-primary mb-4">Update Order Status</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
+                      <Button
+                        key={status}
+                        variant={selectedOrder.status === status ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleUpdateOrderStatus(selectedOrder.id, status)}
+                        disabled={actionLoading === `update-order-${selectedOrder.id}`}
+                        className="capitalize"
+                      >
+                        {actionLoading === `update-order-${selectedOrder.id}` ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        ) : null}
+                        {status}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowViewOrderModal(false)}
+                >
+                  Close
+                </Button>
               </div>
             </div>
           </div>

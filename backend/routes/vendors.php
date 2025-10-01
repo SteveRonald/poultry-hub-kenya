@@ -325,12 +325,22 @@ function handleGetVendorStats() {
         $stmt->execute([$vendorId]);
         $totalOrders = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         
-        // Get total revenue
+        // Get pending orders for this vendor's products
         $stmt = $pdo->prepare("
-            SELECT SUM(o.quantity * p.price) as total 
+            SELECT COUNT(*) as total 
             FROM orders o 
             JOIN products p ON o.product_id = p.id 
-            WHERE p.vendor_id = ?
+            WHERE p.vendor_id = ? AND o.status = 'pending'
+        ");
+        $stmt->execute([$vendorId]);
+        $pendingOrders = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        
+        // Get total revenue from confirmed orders only
+        $stmt = $pdo->prepare("
+            SELECT SUM(o.total_amount) as total 
+            FROM orders o 
+            JOIN products p ON o.product_id = p.id 
+            WHERE p.vendor_id = ? AND o.status IN ('confirmed', 'processing', 'shipped', 'delivered')
         ");
         $stmt->execute([$vendorId]);
         $totalRevenue = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
@@ -340,6 +350,7 @@ function handleGetVendorStats() {
             'activeProducts' => intval($activeProducts),
             'pendingProducts' => intval($pendingProducts),
             'totalOrders' => intval($totalOrders),
+            'pendingOrders' => intval($pendingOrders),
             'totalRevenue' => floatval($totalRevenue)
         ]);
         
@@ -382,7 +393,15 @@ function handleGetVendorOrders() {
         
         // Get orders for this vendor's products
         $stmt = $pdo->prepare("
-            SELECT o.*, p.name as product_name, u.full_name as customer_name, u.email as customer_email
+            SELECT 
+                o.*, 
+                p.name as product_name, 
+                p.price as product_price,
+                p.image_urls,
+                p.description as product_description,
+                u.full_name as customer_name, 
+                u.email as customer_email,
+                u.phone as customer_phone
             FROM orders o 
             JOIN products p ON o.product_id = p.id 
             JOIN user_profiles u ON o.user_id = u.id
@@ -396,12 +415,26 @@ function handleGetVendorOrders() {
         $formattedOrders = array_map(function($order) {
             return [
                 'id' => $order['id'],
+                'order_number' => $order['order_number'],
                 'customer' => $order['customer_name'],
-                'customerEmail' => $order['customer_email'],
+                'customer_email' => $order['customer_email'],
+                'customer_phone' => $order['customer_phone'],
                 'product' => $order['product_name'],
+                'product_description' => $order['product_description'],
+                'product_images' => $order['image_urls'],
                 'quantity' => intval($order['quantity']),
+                'unit_price' => floatval($order['product_price']),
+                'total' => floatval($order['total_amount']),
                 'status' => $order['status'],
-                'date' => $order['created_at']
+                'status_notes' => $order['status_notes'],
+                'payment_method' => $order['payment_method'],
+                'payment_status' => $order['payment_status'],
+                'shipping_address' => $order['shipping_address'],
+                'contact_phone' => $order['contact_phone'],
+                'notes' => $order['notes'],
+                'order_type' => $order['order_type'],
+                'date' => $order['created_at'],
+                'updated_at' => $order['updated_at']
             ];
         }, $orders);
         
@@ -410,6 +443,101 @@ function handleGetVendorOrders() {
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Failed to fetch vendor orders: ' . $e->getMessage()]);
+    }
+}
+
+function handleUpdateVendorOrderStatus() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+    
+    $payload = validateJWT($token);
+    if (!$payload || $payload['role'] !== 'vendor') {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid vendor token']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    $orderId = $_GET['id'] ?? null;
+    
+    if (!$orderId || !isset($input['status'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Order ID and new status are required']);
+        return;
+    }
+    
+    $newStatus = $input['status'];
+    $statusNotes = $input['status_notes'] ?? null;
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // Get vendor_id from vendors table using user_id
+        $stmt = $pdo->prepare("SELECT id FROM vendors WHERE user_id = ?");
+        $stmt->execute([$payload['user_id']]);
+        $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$vendor) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Vendor profile not found']);
+            return;
+        }
+        
+        $vendorId = $vendor['id'];
+        
+        // Verify that the order belongs to this vendor
+        $stmt = $pdo->prepare("
+            SELECT o.id, o.status 
+            FROM orders o 
+            JOIN products p ON o.product_id = p.id 
+            WHERE o.id = ? AND p.vendor_id = ?
+        ");
+        $stmt->execute([$orderId, $vendorId]);
+        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$order) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Order not found or you do not have permission to update this order']);
+            return;
+        }
+        
+        // Update order status
+        $stmt = $pdo->prepare("
+            UPDATE orders
+            SET status = ?, status_notes = ?, updated_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$newStatus, $statusNotes, $orderId]);
+        
+        // Update payment status based on order status
+        $paymentStatus = 'pending';
+        if (in_array($newStatus, ['confirmed', 'processing', 'shipped', 'delivered'])) {
+            $paymentStatus = 'paid';
+        } elseif ($newStatus === 'cancelled') {
+            $paymentStatus = 'cancelled';
+        }
+        
+        $stmt = $pdo->prepare("
+            UPDATE orders
+            SET payment_status = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$paymentStatus, $orderId]);
+        
+        $pdo->commit();
+        echo json_encode(['success' => true, 'message' => 'Order status updated successfully']);
+        
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        http_response_code(500);
+        error_log("Error updating vendor order status: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
     }
 }
 ?>

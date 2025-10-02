@@ -63,7 +63,7 @@ Your poultry marketplace will be deployed with:
 5. Configure:
    - **Name**: `poultry-hub-backend`
    - **Root Directory**: `backend`
-   - **Build Command**: `composer install`
+   - **Build Command**: `composer install --no-dev --optimize-autoloader`
    - **Start Command**: `php -S 0.0.0.0:$PORT -t .`
 
 6. Add Environment Variables:
@@ -71,6 +71,11 @@ Your poultry marketplace will be deployed with:
    - `NODE_ENV`: `production`
 
 7. Click **"Deploy"**
+
+**Note**: Railway will automatically detect PHP and use the configuration files we created:
+- `nixpacks.toml` - Tells Railway to use PHP + Composer
+- `Procfile` - Specifies how to start the server
+- `.railwayignore` - Prevents frontend files from being processed
 
 ### **2.4 Deploy Frontend (Render)**
 1. In Render dashboard, click **"New +"**

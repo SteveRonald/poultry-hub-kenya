@@ -19,7 +19,7 @@
     },
     "scripts": {
         "post-install-cmd": [
-            "php -r \"if (!file_exists('config/database.php')) { copy('config/database.php.example', 'config/database.php'); }\""
+            "echo 'Poultry Hub Kenya Backend installed successfully'"
         ]
     },
     "config": {

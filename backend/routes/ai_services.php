@@ -2,6 +2,10 @@
 // AI Services API endpoints
 // Non-intrusive AI features for product enhancement
 
+// Suppress warnings to prevent JSON corruption
+error_reporting(E_ERROR | E_PARSE);
+ini_set('display_errors', 0);
+
 require_once __DIR__ . '/../services/ai/ImageAnalyzer.php';
 require_once __DIR__ . '/../services/ai/DescriptionGenerator.php';
 require_once __DIR__ . '/../services/ai/ContentModerator.php';
@@ -10,19 +14,31 @@ require_once __DIR__ . '/../services/ai/ContentModerator.php';
  * Analyze uploaded image
  */
 function handleImageAnalysis() {
-    $input = json_decode(file_get_contents('php://input'), true);
-    
-    if (!isset($input['image_url']) && !isset($_FILES['image'])) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Image URL or file is required']);
-        return;
-    }
-    
     try {
+        // Handle both JSON and form data
+        $input = null;
+        $imageUrl = null;
+        
+        // Check if it's JSON data
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        if (strpos($contentType, 'application/json') !== false) {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $imageUrl = $input['image_url'] ?? null;
+        } else {
+            // Handle form data
+            $imageUrl = $_POST['image_url'] ?? null;
+        }
+        
+        if (!$imageUrl && !isset($_FILES['image'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Image URL or file is required']);
+            return;
+        }
+        
         $analyzer = new ImageAnalyzer();
         
-        if (isset($input['image_url'])) {
-            $analysis = $analyzer->analyzeImage('', $input['image_url']);
+        if ($imageUrl) {
+            $analysis = $analyzer->analyzeImage('', $imageUrl);
         } else {
             // Handle uploaded file
             $uploadedFile = $_FILES['image'];

@@ -74,7 +74,7 @@ const Navbar = () => {
               <div className="bg-primary text-white p-2 rounded-lg">
                 <Egg className="h-6 w-6" />
               </div>
-              <span className="text-xl font-bold text-primary">PoultryConnect KE</span>
+              <span className="text-xl font-bold text-primary">PoultryHubKenya (KE)</span>
             </Link>
           </div>
 

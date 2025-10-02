@@ -1,0 +1,16 @@
+# Ignore frontend files in backend deployment
+../src/
+../public/
+../dist/
+../node_modules/
+../package.json
+../package-lock.json
+../vite.config.ts
+../tsconfig.json
+../tailwind.config.js
+../postcss.config.js
+
+# Ignore development files
+*.log
+.env.local
+.env.development

@@ -24,6 +24,49 @@ return [
                 'text_classification' => 'distilbert-base-uncased-finetuned-sst-2-english',
                 'content_moderation' => 'unitary/toxic-bert'
             ]
+        ],
+        'roboflow' => [
+            'enabled' => false, // Disabled - using OpenAI instead
+            'api_key' => 'rf_Rk1J2jFOOeQkIAVxbYjbKMTQfTe2', // Get this from Roboflow dashboard
+            'project_id' => 'svb73', // Your custom poultry model project ID
+            'model_version' => '1', // Model version number
+            'free_tier_limit' => 1000, // predictions per month
+            'features' => [
+                'custom_poultry_detection' => true,
+                'object_detection' => true,
+                'confidence_scoring' => true,
+                'real_time_inference' => true
+            ]
+        ],
+        'openai_vision' => [
+            'enabled' => false, // Disabled - not free
+            'api_key' => '', // Get this from OpenAI dashboard
+            'model' => 'gpt-4o', // GPT-4 Vision model
+            'max_tokens' => 500,
+            'temperature' => 0.1,
+            'features' => [
+                'image_analysis' => true,
+                'object_detection' => true,
+                'content_moderation' => true,
+                'quality_assessment' => true,
+                'poultry_detection' => true
+            ]
+        ],
+        'hugging_face_vision' => [
+            'enabled' => true, // FREE - no API key needed
+            'api_key' => '', // Optional - works without API key
+            'models' => [
+                'image_classification' => 'microsoft/resnet-50',
+                'object_detection' => 'facebook/detr-resnet-50',
+                'poultry_detection' => 'google/vit-base-patch16-224'
+            ],
+            'features' => [
+                'image_analysis' => true,
+                'object_detection' => true,
+                'content_moderation' => true,
+                'quality_assessment' => true,
+                'poultry_detection' => true
+            ]
         ]
     ],
     'fallback' => [

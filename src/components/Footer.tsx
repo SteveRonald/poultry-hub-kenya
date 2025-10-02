@@ -10,7 +10,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="col-span-1 md:col-span-2">
-            <h3 className="text-2xl font-bold mb-4">PoultryConnect KE</h3>
+            <h3 className="text-2xl font-bold mb-4">PoultryHub KE</h3>
             <p className="text-gray-200 mb-4">
               Kenya's premier poultry marketplace connecting farmers, vendors, and customers. 
               Quality poultry products from trusted sources across the country.
@@ -70,7 +70,7 @@ const Footer = () => {
               </li>
               <li className="flex items-center space-x-2">
                 <Mail className="h-4 w-4" />
-                <span className="text-gray-200">info@poultryconnect.ke</span>
+                <span className="text-gray-200">support@poultryhubkenya.com</span>
               </li>
               <li className="flex items-center space-x-2">
                 <MapPin className="h-4 w-4" />
@@ -82,7 +82,7 @@ const Footer = () => {
 
         <div className="border-t border-gray-600 mt-8 pt-8 text-center">
           <p className="text-gray-200">
-            &copy; 2025 PoultryConnect KE. All rights reserved. Empowering Kenya's poultry industry.
+            &copy; 2025 Poultryhubkenya(KE) . All rights reserved. Empowering Kenya's poultry industry.
           </p>
         </div>
       </div>

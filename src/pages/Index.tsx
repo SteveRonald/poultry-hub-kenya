@@ -48,7 +48,7 @@ const Index = () => {
     {
       name: "Sarah Wanjiku",
       role: "Poultry Farmer",
-      content: "PoultryConnect has transformed my business. I can now reach customers directly without middlemen.",
+      content: "PoultryHubKenya (KE) has transformed my business. I can now reach customers directly without middlemen.",
       rating: 5
     },
     {
@@ -116,8 +116,8 @@ const Index = () => {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">
-              Why Choose PoultryConnect KE?
+            <h2 className="text-3xl md:text-3xl font-bold text-primary mb-4">
+              Why Choose PoultryHubKenya (KE)?
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               We're revolutionizing Kenya's poultry industry by connecting farmers directly with customers

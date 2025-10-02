@@ -2,6 +2,9 @@
 // AI Image Analysis Service
 // Uses Google Cloud Vision API (free tier) and fallback analysis
 
+require_once __DIR__ . '/RoboflowAnalyzer.php';
+require_once __DIR__ . '/OpenAIVisionAnalyzer.php';
+
 class ImageAnalyzer {
     private $config;
     private $cache;
@@ -33,8 +36,27 @@ class ImageAnalyzer {
         ];
         
         try {
-            // Try Google Vision API first
-            if ($this->config['services']['google_vision']['enabled'] && !empty($this->config['services']['google_vision']['api_key'])) {
+            // Try Hugging Face Vision first (FREE and works well)
+            if ($this->config['services']['hugging_face_vision']['enabled']) {
+                $huggingFaceAnalysis = $this->analyzeWithHuggingFaceVision($imageUrl ?? $imagePath);
+                if ($huggingFaceAnalysis) {
+                    $analysis = array_merge($analysis, $huggingFaceAnalysis);
+                    $analysis['analysis_method'] = 'hugging_face_vision';
+                }
+            }
+            
+            // Try Roboflow custom model as fallback
+            if ($analysis['analysis_method'] === 'fallback' && $this->config['services']['roboflow']['enabled'] && !empty($this->config['services']['roboflow']['api_key'])) {
+                $roboflowAnalyzer = new RoboflowAnalyzer();
+                $roboflowAnalysis = $roboflowAnalyzer->analyzeImage($imagePath, $imageUrl);
+                if ($roboflowAnalysis && $roboflowAnalysis['analysis_method'] === 'roboflow_custom') {
+                    $analysis = array_merge($analysis, $roboflowAnalysis);
+                    $analysis['analysis_method'] = 'roboflow_custom';
+                }
+            }
+            
+            // Try Google Vision API as fallback
+            if ($analysis['analysis_method'] === 'fallback' && $this->config['services']['google_vision']['enabled'] && !empty($this->config['services']['google_vision']['api_key'])) {
                 $googleAnalysis = $this->analyzeWithGoogleVision($imageUrl ?? $imagePath);
                 if ($googleAnalysis) {
                     $analysis = array_merge($analysis, $googleAnalysis);

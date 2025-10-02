@@ -74,7 +74,7 @@ const Contact = () => {
     {
       icon: <Mail className="h-6 w-6 text-accent" />,
       title: "Email",
-      details: ["okothroni863@gmail.com", "or", "kothroni863@gmail.com"],
+      details: ["okothroni863@gmail.com", "support@poultryhubkenya.com", "kothroni863@gmail.com"],
       description: "We'll respond within 24 hours"
     },
     {
@@ -93,7 +93,7 @@ const Contact = () => {
 
   const faqs = [
     {
-      question: "How do I become a vendor on PoultryConnect?",
+      question: "How do I become a vendor on PoultryHubKenya(KE)?",
       answer: "You can register as a vendor by clicking the 'Register' button and selecting 'Vendor/Farmer' as your account type. Your application will be reviewed by our admin team."
     },
     {
@@ -106,7 +106,7 @@ const Contact = () => {
     },
     {
       question: "What payment methods are accepted?",
-      answer: "Currently, we support M-Pesa and bank transfers. Customers enter payment references manually, and payments are verified by our team."
+      answer: "Currently, we support M-Pesa. Paypal and bank transfers. Customers enter payment references manually, and payments are verified by our team."
     },
     {
       question: "Do you provide training for new poultry farmers?",

@@ -814,14 +814,19 @@ const VendorDashboard = () => {
                           </div>
                         )}
                         {aiAnalysis.is_poultry_related === false && (
-                          <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded">
-                            <div className="flex items-center space-x-2 text-orange-800">
+                          <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <div className="flex items-center space-x-2 text-red-800">
                               <AlertTriangle className="h-4 w-4" />
-                              <span className="text-sm font-medium">Not Poultry-Related</span>
+                              <span className="text-sm font-medium">❌ REJECTED - Not Poultry Content</span>
                             </div>
-                            <p className="text-xs text-orange-700 mt-1">
-                              This image doesn't appear to contain poultry-related content. Please upload images of chickens, eggs, feed, or farming equipment.
+                            <p className="text-xs text-red-700 mt-1">
+                              <strong>This image has been rejected by our AI.</strong> Please upload only poultry-related images: chickens, hens, roosters, eggs, feed, grain, or poultry equipment. Other content is not allowed on this marketplace.
                             </p>
+                            {aiAnalysis.confidence && (
+                              <p className="text-xs text-red-600 mt-1">
+                                AI Confidence: {Math.round(aiAnalysis.confidence * 100)}% (Minimum required: 60%)
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>

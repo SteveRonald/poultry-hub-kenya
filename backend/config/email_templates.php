@@ -219,7 +219,7 @@ function getBaseTemplate($title, $content, $baseUrl) {
                 $content
             </div>
             <div class='footer'>
-                <p>© 2024 Poultry Hub Kenya. All rights reserved.</p>
+                <p>© 2025 Poultry Hub Kenya. All rights reserved.</p>
                 <p>Visit us at <a href='$baseUrl'>$baseUrl</a></p>
                 <p>For support, contact us at support@poultryhubkenya.com</p>
             </div>
@@ -230,8 +230,8 @@ function getBaseTemplate($title, $content, $baseUrl) {
 }
 
 function getOrderConfirmationTemplate($data, $baseUrl) {
-    $order = $data['order'];
-    $customer = $data['customer'];
+    $order = $data['order '];
+    $customer = $data['customer '];
     
     $statusClass = 'status-' . strtolower($order['status']);
     $statusBadge = "<span class='status-badge $statusClass'>" . ucfirst($order['status']) . "</span>";
@@ -242,12 +242,12 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
             $itemsHtml .= "
                 <div class='order-item'>
                     <div>
-                        <div class='item-name'>{$item['product_name']}</div>
-                        <div class='item-details'>Vendor: {$item['vendor_name']}</div>
+                        <div class='item-name'>{$item['product_name ']}</div>
+                        <div class='item-details'>Vendor: {$item['vendor_name ']}</div>
                     </div>
                     <div style='text-align: right;'>
                         <div>Qty: {$item['quantity']}</div>
-                        <div>KSH " . number_format($item['total_amount'], 2) . "</div>
+                        <div>KSH " . number_format($item['total_amount '], 2) . "</div>
                     </div>
                 </div>
             ";
@@ -262,15 +262,15 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
         <div class='order-details'>
             <h3 style='color: #2c5530; margin-top: 0;'>Order Details</h3>
             <div class='info-row'>
-                <span class='info-label'>Order Number:</span>
+                <span class='info-label'>Order Number: </span>
                 <span class='info-value'>#{$order['order_number']}</span>
             </div>
             <div class='info-row'>
-                <span class='info-label'>Order Date:</span>
+                <span class='info-label'>Order Date: </span>
                 <span class='info-value'>" . date('F j, Y \a\t g:i A', strtotime($order['created_at'])) . "</span>
             </div>
             <div class='info-row'>
-                <span class='info-label'>Status:</span>
+                <span class='info-label'>Status: </span>
                 <span class='info-value'>$statusBadge</span>
             </div>
         </div>
@@ -281,7 +281,7 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
         </div>
         
         <div class='total-section'>
-            <div>Total Amount</div>
+            <div>Total Amount </div>
             <div class='total-amount'>KSH " . number_format($order['total_amount'], 2) . "</div>
         </div>
         
@@ -296,8 +296,8 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
                 <span class='info-value'>{$order['contact_phone']}</span>
             </div>
             <div class='info-row'>
-                <span class='info-label'>Payment Method:</span>
-                <span class='info-value'>" . ucfirst($order['payment_method']) . "</span>
+                <span class='info-label'>Payment Method: </span>
+                <span class='info-value'>" . ucfirst($order[' payment_method']) . "</span>
             </div>
         </div>
         

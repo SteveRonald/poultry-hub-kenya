@@ -134,6 +134,11 @@ function handleCreateOrder() {
         // Generate order number
         $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
         
+        // Get customer details from database
+        $stmt = $pdo->prepare("SELECT full_name, email FROM user_profiles WHERE id = ?");
+        $stmt->execute([$payload['user_id']]);
+        $customer = $stmt->fetch(PDO::FETCH_ASSOC);
+        
         $createdOrders = [];
         
         // Create one order record for each product
@@ -180,10 +185,17 @@ function handleCreateOrder() {
                 'product_name' => $item['product_name'],
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['price'],
+                'product_price' => $item['price'], // Add this for email template
                 'total_amount' => $totalAmount,
                 'vendor_id' => $item['vendor_id'],
                 'vendor_name' => $item['vendor_name'],
-                'vendor_email' => $item['vendor_email']
+                'vendor_email' => $item['vendor_email'],
+                'customer_name' => $customer['full_name'] ?? 'Customer', // Add customer name
+                'customer_email' => $customer['email'] ?? '', // Add customer email
+                'created_at' => date('Y-m-d H:i:s'), // Add current timestamp
+                'shipping_address' => $input['shipping_address'],
+                'contact_phone' => $input['contact_phone'],
+                'payment_method' => $input['payment_method']
             ];
         }
         
@@ -239,6 +251,35 @@ function handleCreateOrder() {
             
             sendEmail($vendorData['email'], $vendorSubject, $vendorMessage);
         }
+        
+        // Send order confirmation email to customer
+        $customerEmailData = [
+            'order' => [
+                'order_number' => $orderNumber,
+                'status' => 'pending',
+                'total_amount' => array_sum(array_column($createdOrders, 'total_amount')),
+                'shipping_address' => $createdOrders[0]['shipping_address'],
+                'contact_phone' => $createdOrders[0]['contact_phone'],
+                'payment_method' => $createdOrders[0]['payment_method'],
+                'created_at' => $createdOrders[0]['created_at'],
+                'items' => []
+            ],
+            'customer' => [
+                'name' => $createdOrders[0]['customer_name']
+            ]
+        ];
+        
+        // Add items to customer email data
+        foreach ($createdOrders as $order) {
+            $customerEmailData['order']['items'][] = [
+                'product_name' => $order['product_name'],
+                'quantity' => $order['quantity'],
+                'total_amount' => $order['total_amount'],
+                'vendor_name' => $order['vendor_name']
+            ];
+        }
+        
+        sendStyledEmail($createdOrders[0]['customer_email'], 'order_confirmation', $customerEmailData);
         
         echo json_encode([
             'success' => true,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Download, BookOpen, Users, Clock, Filter } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -11,6 +11,7 @@ const Training = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [selectedVideoTitle, setSelectedVideoTitle] = useState<string>('');
+  const [showVideoMessage, setShowVideoMessage] = useState(false);
 
   const categories = [
     { id: 'all', name: 'All Categories', count: 6 },
@@ -34,7 +35,7 @@ const Training = () => {
       difficulty: "Intermediate",
       thumbnail: "https://media.istockphoto.com/id/2169150321/photo/disease-prevention-in-chickens-pullets-vaccination-in-close-farm-temperature-and-light.webp?a=1&b=1&s=612x612&w=0&k=20&c=sAzg-Zwj51WivYKYZzKS64SYiVHcMKDgnVuOD_nIEeA=",
       source: "University of Nairobi Veterinary Extension",
-      videoUrl: "https://www.youtube.com/watch?v=YQHsXMglC9A"
+      videoUrl: "https://youtu.be/y8u9dqFUyyI?si=-35tsES1rdVg2JO0"
     },
     {
       id: 2,
@@ -47,7 +48,7 @@ const Training = () => {
       difficulty: "Beginner",
       thumbnail: "https://media.istockphoto.com/id/481909605/photo/hen-house-business-in-thailand.webp?a=1&b=1&s=612x612&w=0&k=20&c=uOpPqkweI3u8JXtpoV-gn4rJFWhXS3ZuZsqj3hCvijg=",
       source: "KALRO Poultry Research Institute",
-      videoUrl: "https://www.youtube.com/watch?v=YQHsXMglC9A"
+      videoUrl: "https://youtu.be/cKDoJHtb9Jo?si=3Dn78DdmYFM9gNmR"
     },
     {
       id: 3,
@@ -60,7 +61,7 @@ const Training = () => {
       difficulty: "Advanced",
       thumbnail: "https://images.unsplash.com/photo-1697545698404-46828377ae9d?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8JTIyTW9kZXJuJTIwUG91bHRyeSUyMEhvdXNpbmclMjBEZXNpZ258ZW58MHx8MHx8fDA%3D",
       source: "ILRI Agricultural Engineering",
-      videoUrl: "https://www.youtube.com/watch?v=YQHsXMglC9A"
+      videoUrl: "https://youtu.be/87y6sd5P8zc?si=C8Td_ONB2A4-FhiR"
     },
     {
       id: 4,
@@ -73,7 +74,7 @@ const Training = () => {
       difficulty: "Intermediate",
       thumbnail: "https://media.istockphoto.com/id/2182763763/photo/poultry-farm.webp?a=1&b=1&s=612x612&w=0&k=20&c=zm4KBTMnn1pWqZKvb2GBd2GB7efHTKD39uOY5D1bNk0=",
       source: "FAO Kenya Office",
-      videoUrl: "https://www.youtube.com/watch?v=YQHsXMglC9A"
+      videoUrl: "https://youtu.be/c38AAEPFQFU?si=dEZAh7DTujy7HHgJ"
     },
     {
       id: 5,
@@ -86,7 +87,7 @@ const Training = () => {
       difficulty: "Beginner",
       thumbnail: "https://media.istockphoto.com/id/2196792624/photo/portrait-of-a-farmer-using-digital-tablet-in-a-chicken-coop.jpg?s=612x612&w=0&k=20&c=RTAJTqWmzAOzwnbRjy-hwFcmw061h2WfkkpjCeZS5wk=",
       source: "Kenya Poultry Farmers Association",
-      videoUrl: "https://www.youtube.com/watch?v=YQHsXMglC9A"
+      videoUrl: "https://youtu.be/XI4JGdvxS44?si=2Elazz3d4a8Klpw-"
     },
     {
       id: 6,
@@ -99,7 +100,7 @@ const Training = () => {
       difficulty: "Beginner",
       thumbnail: "https://media.istockphoto.com/id/2165613271/photo/new-born-chicken-weight-uniformity-quality-control-work-in-hatchery-industrial-production.webp?a=1&b=1&s=612x612&w=0&k=20&c=KQX9_1jczDKFvD1oG09vkBI3-gM4a6ZFXm_zQZX2pMw=",
       source: "Agricultural Finance Corporation",
-      videoUrl: "https://www.youtube.com/watch?v=YQHsXMglC9A"
+      videoUrl: "https://youtu.be/E1J2_u8P84k?si=NZPjVkwXX09S34Si"
     }
   ];
 
@@ -143,7 +144,19 @@ const Training = () => {
     const embedUrl = convertToEmbedUrl(videoUrl);
     setSelectedVideo(embedUrl);
     setSelectedVideoTitle(title);
+    setShowVideoMessage(true);
   };
+
+  // Hide video message after 2 seconds
+  useEffect(() => {
+    if (showVideoMessage) {
+      const timer = setTimeout(() => {
+        setShowVideoMessage(false);
+      }, 6000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [showVideoMessage]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -349,6 +362,7 @@ const Training = () => {
                     onClick={() => {
                       setSelectedVideo(null);
                       setSelectedVideoTitle('');
+                      setShowVideoMessage(false);
                     }}
                   >
                     ×
@@ -367,9 +381,11 @@ const Training = () => {
                       console.log('Video failed to load:', selectedVideo);
                     }}
                   ></iframe>
-                  <div className="absolute bottom-4 left-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded text-sm">
-                    <p>If the video doesn't load, it may be temporarily unavailable. Please try again later or contact support.</p>
-                  </div>
+                  {showVideoMessage && (
+                    <div className="absolute bottom-4 left-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded text-sm">
+                      <p>If the video doesn't load, it may be temporarily unavailable. Please try again later or contact support.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

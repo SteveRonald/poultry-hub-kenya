@@ -367,6 +367,184 @@ function handleAdminUsers() {
     }
 }
 
+function handleUpdateUser() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+    
+    // Extract user ID from the URL path
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    $path = parse_url($requestUri, PHP_URL_PATH);
+    $path = str_replace('/poultry-hub-kenya/backend/', '', $path);
+    $path = str_replace('/backend/', '', $path);
+    $path = ltrim($path, '/');
+    
+    // Extract user ID from path like "api/admin/users/{user_id}"
+    $pathParts = explode('/', $path);
+    $userId = end($pathParts);
+    
+    if (!$userId || !is_string($userId)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid user ID']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid JSON data']);
+        return;
+    }
+    
+    // Validate required fields
+    $allowedFields = ['email', 'full_name', 'phone', 'role'];
+    $updateFields = [];
+    $updateValues = [];
+    
+    foreach ($allowedFields as $field) {
+        if (isset($input[$field])) {
+            $updateFields[] = "$field = ?";
+            $updateValues[] = $input[$field];
+        }
+    }
+    
+    if (empty($updateFields)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No valid fields to update']);
+        return;
+    }
+    
+    // Check if user exists
+    try {
+        $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE id = ?");
+        $stmt->execute([$userId]);
+        if (!$stmt->fetch()) {
+            http_response_code(404);
+            echo json_encode(['error' => 'User not found']);
+            return;
+        }
+        
+        // Check if email is already taken by another user
+        if (isset($input['email'])) {
+            $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE email = ? AND id != ?");
+            $stmt->execute([$input['email'], $userId]);
+            if ($stmt->fetch()) {
+                http_response_code(409);
+                echo json_encode(['error' => 'Email already taken by another user']);
+                return;
+            }
+        }
+        
+        // Update user
+        $updateValues[] = $userId; // Add user ID for WHERE clause
+        $sql = "UPDATE user_profiles SET " . implode(', ', $updateFields) . " WHERE id = ?";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($updateValues);
+        
+        // Get updated user data
+        $stmt = $pdo->prepare("SELECT id, email, full_name, phone, role, created_at FROM user_profiles WHERE id = ?");
+        $stmt->execute([$userId]);
+        $updatedUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        echo json_encode([
+            'message' => 'User updated successfully',
+            'user' => $updatedUser
+        ]);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to update user: ' . $e->getMessage()]);
+    }
+}
+
+function handleDeleteUser() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+    
+    // Extract user ID from the URL path
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    $path = parse_url($requestUri, PHP_URL_PATH);
+    $path = str_replace('/poultry-hub-kenya/backend/', '', $path);
+    $path = str_replace('/backend/', '', $path);
+    $path = ltrim($path, '/');
+    
+    // Extract user ID from path like "api/admin/users/{user_id}"
+    $pathParts = explode('/', $path);
+    $userId = end($pathParts);
+    
+    if (!$userId || !is_string($userId)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid user ID']);
+        return;
+    }
+    
+    try {
+        // Check if user exists
+        $stmt = $pdo->prepare("SELECT id, role FROM user_profiles WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            http_response_code(404);
+            echo json_encode(['error' => 'User not found']);
+            return;
+        }
+        
+        // Prevent deletion of admin users
+        if ($user['role'] === 'admin') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Cannot delete admin users']);
+            return;
+        }
+        
+        // Start transaction
+        $pdo->beginTransaction();
+        
+        // If user is a vendor, delete vendor profile first
+        if ($user['role'] === 'vendor') {
+            $stmt = $pdo->prepare("DELETE FROM vendors WHERE user_id = ?");
+            $stmt->execute([$userId]);
+        }
+        
+        // Delete user's orders
+        $stmt = $pdo->prepare("DELETE FROM orders WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        
+        // Delete user's cart items
+        $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        
+        // Delete user's notifications
+        $stmt = $pdo->prepare("DELETE FROM notifications WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        
+        // Finally, delete the user
+        $stmt = $pdo->prepare("DELETE FROM user_profiles WHERE id = ?");
+        $stmt->execute([$userId]);
+        
+        $pdo->commit();
+        
+        echo json_encode(['message' => 'User deleted successfully']);
+        
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to delete user: ' . $e->getMessage()]);
+    }
+}
+
 function handleAdminLogout() {
     global $pdo;
     

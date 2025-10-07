@@ -65,8 +65,10 @@ function handleImageUpload() {
     
     // Move uploaded file
     if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
-        // Return the URL path (relative to the web root)
-        $url = 'http://localhost/poultry-hub-kenya/uploads/products/' . $filename;
+        // Return the URL path (dynamic based on the request host)
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'];
+        $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $filename;
         
         echo json_encode([
             'success' => true,
@@ -142,7 +144,10 @@ function handleMultipleImageUpload() {
         
         // Move uploaded file
         if (move_uploaded_file($files['tmp_name'][$i], $uploadPath)) {
-            $url = 'http://localhost/poultry-hub-kenya/uploads/products/' . $filename;
+            // Return the URL path (dynamic based on the request host)
+            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'];
+            $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $filename;
             $uploadedFiles[] = [
                 'url' => $url,
                 'filename' => $filename

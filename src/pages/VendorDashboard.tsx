@@ -8,12 +8,24 @@ import NotificationsMenu from '../components/NotificationsMenu';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getImageUrl } from '../config/api';
 import VendorAnalytics from '../components/VendorAnalytics';
 import AIProductAssistant from '../components/AIProductAssistant';
+import { useToast } from '../hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 const VendorDashboard = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -37,6 +49,8 @@ const VendorDashboard = () => {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [showViewOrderModal, setShowViewOrderModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
   
   // AI Assistant states
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
@@ -56,8 +70,13 @@ const VendorDashboard = () => {
       fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
     ]).then(([stats, products, orders]) => {
       setStats(stats);
-      setProducts(products);
-      setOrders(orders);
+      setProducts(Array.isArray(products) ? products : []);
+      setOrders(Array.isArray(orders) ? orders : []);
+      setLoading(false);
+    }).catch((error) => {
+      console.error('Failed to fetch vendor data:', error);
+      setProducts([]);
+      setOrders([]);
       setLoading(false);
     });
   }, []);
@@ -87,14 +106,45 @@ const VendorDashboard = () => {
   };
 
 
-  const deleteProduct = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      const token = localStorage.getItem('token');
-      await fetch(getApiUrl(`/api/vendor/products/${id}`), {
+  const confirmDeleteProduct = (id: string) => {
+    setProductToDelete(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const deleteProduct = async () => {
+    if (!productToDelete) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(getApiUrl(`/api/vendor/products/${productToDelete}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchProducts();
+
+      if (response.ok) {
+        toast({
+          title: "Product Deleted",
+          description: "Product has been successfully deleted.",
+          variant: "success",
+        });
+        fetchProducts();
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Delete Failed",
+          description: error.error || "Failed to delete product. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Delete Failed",
+        description: "Network error. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setShowDeleteConfirm(false);
+      setProductToDelete(null);
     }
   };
 
@@ -119,6 +169,11 @@ const VendorDashboard = () => {
       });
       
       if (response.ok) {
+        toast({
+          title: "Order Status Updated",
+          description: `Order status has been updated to ${newStatus}.`,
+          variant: "success",
+        });
         // Refresh orders data
         const res = await fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
@@ -129,9 +184,19 @@ const VendorDashboard = () => {
         setSelectedOrder(null);
       } else {
         const error = await response.json();
+        toast({
+          title: "Update Failed",
+          description: error.error || "Failed to update order status. Please try again.",
+          variant: "destructive",
+        });
         console.error('Failed to update order status:', error);
       }
     } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Network error. Please try again.",
+        variant: "destructive",
+      });
       console.error('Network error:', error);
     } finally {
       setSubmitting(false);
@@ -175,17 +240,29 @@ const VendorDashboard = () => {
       });
 
       if (response.ok) {
-        alert('Product updated successfully!');
+        toast({
+          title: "Product Updated",
+          description: "Product has been successfully updated.",
+          variant: "success",
+        });
         setShowEditProductModal(false);
         setEditingProduct(null);
         setProductForm({ name: '', description: '', price: '', category: '', stock_quantity: '', image_urls: [] });
         fetchProducts();
       } else {
         const error = await response.json();
-        alert('Failed to update product: ' + (error.error || 'Unknown error'));
+        toast({
+          title: "Update Failed",
+          description: error.error || "Failed to update product. Please try again.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      alert('Failed to update product. Please try again.');
+      toast({
+        title: "Update Failed",
+        description: "Network error. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -203,14 +280,26 @@ const VendorDashboard = () => {
 
   const fetchProducts = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } });
-    setProducts(await res.json());
+    try {
+      const res = await fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setProducts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+      setProducts([]);
+    }
   };
 
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } });
-    setOrders(await res.json());
+    try {
+      const res = await fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setOrders(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to fetch orders:', error);
+      setOrders([]);
+    }
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -409,13 +498,25 @@ const VendorDashboard = () => {
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : []);
         
-        alert('Product submitted successfully! It will be reviewed by admin before going live.');
+        toast({
+          title: "Product Submitted",
+          description: "Product has been submitted successfully! It will be reviewed by admin before going live.",
+          variant: "success",
+        });
       } else {
         const error = await response.json();
-        alert('Failed to submit product: ' + (error.error || 'Unknown error'));
+        toast({
+          title: "Submission Failed",
+          description: error.error || "Failed to submit product. Please try again.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      alert('Network error. Please try again.');
+      toast({
+        title: "Submission Failed",
+        description: "Network error. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -501,7 +602,7 @@ const VendorDashboard = () => {
           {/* Tab Navigation */}
           <div className="bg-white rounded-lg shadow-md mb-6">
             <div className="border-b border-gray-200">
-              <nav className="flex space-x-8 px-6">
+              <nav className="flex flex-wrap space-x-2 sm:space-x-8 px-4 sm:px-6 overflow-x-auto">
                 {[
                   { id: 'overview', label: 'Overview' },
                   { id: 'products', label: 'My Products' },
@@ -512,7 +613,7 @@ const VendorDashboard = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
                       activeTab === tab.id
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -570,16 +671,16 @@ const VendorDashboard = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {products.slice(0, 3).map(product => (
+                          {(products || []).slice(0, 3).map(product => (
                             <div key={product.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <div>
                                 <p className="font-medium text-sm">{product.name}</p>
-                                <p className="text-xs text-gray-500">{product.orders} orders</p>
+                                <p className="text-xs text-gray-500">{product.order_count || 0} orders</p>
                               </div>
                               <div className="text-right">
                                 <p className="font-medium text-sm">KSH {product.price}</p>
-                                <Badge className={`text-xs ${getStatusColor(product.status)}`}>
-                                  {product.status}
+                                <Badge className={`text-xs ${product.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}`}>
+                                  {product.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
                               </div>
                             </div>
@@ -639,17 +740,17 @@ const VendorDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {products.map(product => (
+                        {(products || []).map(product => (
                           <tr key={product.id} className="border-b border-gray-100">
                             <td className="py-3 px-4">{product.name}</td>
                             <td className="py-3 px-4">KSH {product.price}</td>
-                            <td className="py-3 px-4">{product.stock}</td>
+                            <td className="py-3 px-4">{product.stock_quantity || 0}</td>
                             <td className="py-3 px-4">
-                              <Badge className={getStatusColor(product.status)}>
-                                {product.status}
+                              <Badge className={product.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}>
+                                {product.is_active ? 'Active' : 'Inactive'}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4">{product.orders}</td>
+                            <td className="py-3 px-4">{product.order_count || 0}</td>
                             <td className="py-3 px-4">
                               <div className="flex space-x-2">
                                 <Button 
@@ -671,7 +772,7 @@ const VendorDashboard = () => {
                                 <Button 
                                   size="sm" 
                                   variant="outline"
-                                  onClick={() => deleteProduct(product.id)}
+                                  onClick={() => confirmDeleteProduct(product.id)}
                                   title="Delete product"
                                   className="text-red-600 hover:text-red-700 hover:border-red-300"
                                 >
@@ -707,7 +808,7 @@ const VendorDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.map(order => (
+                        {(orders || []).map(order => (
                           <tr key={order.id} className="border-b border-gray-100">
                             <td className="py-3 px-4">#{order.id}</td>
                             <td className="py-3 px-4">{order.customer}</td>
@@ -984,7 +1085,7 @@ const VendorDashboard = () => {
                         {productForm.image_urls.map((url: string, index: number) => (
                           <div key={index} className="relative group">
                             <img
-                              src={url.replace(/\\/g, '/')}
+                              src={getImageUrl(url.replace(/\\/g, '/'))}
                               alt={`Product ${index + 1}`}
                               className="w-full h-24 object-cover rounded-lg border"
                               draggable
@@ -1059,7 +1160,7 @@ const VendorDashboard = () => {
                       {JSON.parse(selectedProduct.image_urls).map((url: string, index: number) => (
                         <div key={index} className="relative">
                           <img
-                            src={url.replace(/\\/g, '/')}
+                            src={getImageUrl(url.replace(/\\/g, '/'))}
                             alt={`${selectedProduct.name} ${index + 1}`}
                             className="w-full h-32 object-cover rounded-lg border"
                             onError={(e) => {
@@ -1272,7 +1373,7 @@ const VendorDashboard = () => {
                         {productForm.image_urls.map((url: string, index: number) => (
                           <div key={index} className="relative group">
                             <img
-                              src={url.replace(/\\/g, '/')}
+                              src={getImageUrl(url.replace(/\\/g, '/'))}
                               alt={`Product ${index + 1}`}
                               className="w-full h-24 object-cover rounded-lg border"
                               draggable
@@ -1517,6 +1618,28 @@ const VendorDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this product? This action cannot be undone.
+              The product will be permanently removed from your inventory.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={deleteProduct}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete Product
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Footer />
     </div>

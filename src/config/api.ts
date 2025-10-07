@@ -12,7 +12,15 @@ const getApiBaseUrl = () => {
     }
     
     // If accessing from network (e.g., 192.168.x.x), use the same host
-    return `http://${host}${port ? ':' + port : ''}/poultry-hub-kenya/backend`;
+    // For XAMPP, we need to include the project folder in the path
+    // Also handle the case where we're using the built-in PHP server
+    if (host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.')) {
+      // Try XAMPP first, then fallback to built-in server
+      return `http://${host}/poultry-hub-kenya/backend`;
+    }
+    
+    // Default fallback
+    return `http://${host}/poultry-hub-kenya/backend`;
   }
   
   // Production mode - you can set your production URL here
@@ -28,6 +36,29 @@ export const getApiUrl = (endpoint: string) => {
 
 // Log the API base URL for debugging
 console.log('API Base URL:', API_BASE_URL);
+
+// Helper function to convert localhost URLs to network URLs for images
+export const getImageUrl = (imageUrl: string) => {
+  if (!imageUrl) return '';
+  
+  // If it's already a network URL or external URL, return as is
+  if (imageUrl.startsWith('http://192.168.') || 
+      imageUrl.startsWith('http://10.') || 
+      imageUrl.startsWith('http://172.') ||
+      imageUrl.startsWith('https://')) {
+    return imageUrl;
+  }
+  
+  // If it's a localhost URL, convert to network URL
+  if (imageUrl.includes('localhost')) {
+    const host = window.location.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return imageUrl.replace('localhost', host);
+    }
+  }
+  
+  return imageUrl;
+};
 
 
 

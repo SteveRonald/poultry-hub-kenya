@@ -7,7 +7,7 @@ import { Textarea } from './ui/textarea';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getImageUrl } from '../config/api';
 
 interface CartProps {
   isOpen: boolean;
@@ -116,7 +116,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                           <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
                             {item.image_url ? (
                               <img
-                                src={item.image_url.replace(/\\/g, '/')}
+                                src={getImageUrl(item.image_url.replace(/\\/g, '/'))}
                                 alt={item.product_name}
                                 className="w-full h-full object-cover rounded-lg"
                                 onError={(e) => {

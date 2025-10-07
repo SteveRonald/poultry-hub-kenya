@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getImageUrl } from '../config/api';
 import Analytics from '../components/Analytics';
 
 const AdminDashboard = () => {
@@ -641,7 +641,7 @@ const AdminDashboard = () => {
           {/* Tab Navigation */}
           <div className="bg-white rounded-lg shadow-md mb-6">
             <div className="border-b border-gray-200">
-              <nav className="flex space-x-8 px-6">
+              <nav className="flex flex-wrap space-x-2 sm:space-x-8 px-4 sm:px-6 overflow-x-auto">
                 {[
                   { id: 'overview', label: 'Overview' },
                   { id: 'vendors', label: 'Vendor Approvals' },
@@ -654,7 +654,7 @@ const AdminDashboard = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
                       activeTab === tab.id
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -1304,7 +1304,7 @@ const AdminDashboard = () => {
                       {JSON.parse(selectedProduct.image_urls).map((url: string, index: number) => (
                         <div key={index} className="relative">
                           <img
-                            src={url.replace(/\\/g, '/')}
+                            src={getImageUrl(url.replace(/\\/g, '/'))}
                             alt={`${selectedProduct.name} ${index + 1}`}
                             className="w-full h-32 object-cover rounded-lg border"
                             onError={(e) => {

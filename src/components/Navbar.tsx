@@ -16,6 +16,12 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const { cartSummary } = useCart();
 
+  // Debug logging for mobile
+  useEffect(() => {
+    console.log('Navbar - User:', user);
+    console.log('Navbar - Cart Summary:', cartSummary);
+  }, [user, cartSummary]);
+
   // Check for admin session
   useEffect(() => {
     const adminToken = localStorage.getItem('admin_session_token');
@@ -151,8 +157,23 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden flex items-center">
+          {/* Mobile menu button and cart */}
+          <div className="md:hidden flex items-center space-x-2">
+            {/* Cart button for mobile header */}
+            {user && (
+              <button
+                onClick={() => setShowCart(true)}
+                className="relative text-gray-700 hover:text-primary"
+              >
+                <ShoppingCart className="h-6 w-6" />
+                {cartSummary.total_items > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {cartSummary.total_items}
+                  </span>
+                )}
+              </button>
+            )}
+            
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="text-gray-700 hover:text-primary"
@@ -204,6 +225,23 @@ const Navbar = () => {
               </>
             ) : user ? (
               <>
+                {/* Cart Button for Mobile */}
+                <button
+                  onClick={() => {
+                    setShowCart(true);
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 flex items-center space-x-2"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Cart</span>
+                  {cartSummary.total_items > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {cartSummary.total_items}
+                    </span>
+                  )}
+                </button>
+                
                 <Link
                   to="/dashboard"
                   className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50"

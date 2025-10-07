@@ -12,7 +12,7 @@ import { useProducts } from '../hooks/useProducts';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getImageUrl } from '../config/api';
 
 const Products = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -223,12 +223,15 @@ const Products = () => {
                         if (product.image_urls) {
                           try {
                             const images = JSON.parse(product.image_urls);
-                            return images.length > 0 ? images[0].replace(/\\/g, '/') : 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                            const imageUrl = images.length > 0 ? images[0].replace(/\\/g, '/') : 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                            return getImageUrl(imageUrl);
                           } catch (e) {
-                            return product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                            const imageUrl = product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                            return getImageUrl(imageUrl);
                           }
                         }
-                        return product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                        const imageUrl = product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
+                        return getImageUrl(imageUrl);
                       })()} 
                       alt={product.name}
                       className="w-full h-full object-cover"

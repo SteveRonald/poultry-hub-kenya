@@ -60,6 +60,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
   const fetchCart = async () => {
     const token = localStorage.getItem('token');
+    console.log('CartContext - Token:', token ? 'Present' : 'Missing');
     if (!token) {
       setCartItems([]);
       setCartSummary({ total_items: 0, total_amount: 0, items_count: 0 });
@@ -75,10 +76,11 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('CartContext - Cart data:', data);
         setCartItems(data.items || []);
         setCartSummary(data.summary || { total_items: 0, total_amount: 0, items_count: 0 });
       } else {
-        console.error('Failed to fetch cart');
+        console.error('Failed to fetch cart:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error fetching cart:', error);

@@ -216,7 +216,7 @@ const Dashboard = () => {
           {/* Tab Navigation */}
           <div className="bg-white rounded-lg shadow-md mb-6">
             <div className="border-b border-gray-200">
-              <nav className="flex space-x-8 px-6">
+              <nav className="flex flex-wrap space-x-2 sm:space-x-8 px-4 sm:px-6">
                 {[
                   { id: 'overview', label: 'Overview' },
                   { id: 'orders', label: 'My Orders' },
@@ -225,7 +225,7 @@ const Dashboard = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
                       activeTab === tab.id
                         ? 'border-primary text-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -237,7 +237,7 @@ const Dashboard = () => {
               </nav>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
@@ -307,9 +307,48 @@ const Dashboard = () => {
                 <div className="space-y-6">
                   <h2 className="text-xl font-semibold text-primary">My Orders</h2>
 
-                  <div className="overflow-x-auto">
+                  {/* Mobile-friendly orders display */}
+                  <div className="block sm:hidden space-y-4">
+                    {orders.map(order => (
+                      <Card key={order.order_number} className="p-4">
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium text-sm">#{order.order_number}</p>
+                              <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <Badge className={getStatusColor(order.status)}>
+                              {order.status}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-sm text-gray-600">Quantity</p>
+                              <p className="font-medium">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-gray-600">Total</p>
+                              <p className="font-medium">KSH {order.total_amount}</p>
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => viewOrder(order)}
+                            className="w-full"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full">
-              <thead>
+                      <thead>
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Order Number</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Quantity</th>
@@ -317,9 +356,9 @@ const Dashboard = () => {
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                        </tr>
+                      </thead>
+                      <tbody>
                         {orders.map(order => (
                           <tr key={order.order_number} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-3 px-4 font-medium">#{order.order_number}</td>
@@ -341,10 +380,10 @@ const Dashboard = () => {
                                 View Details
                               </Button>
                             </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                     {orders.length === 0 && (
                       <div className="text-center py-12 text-gray-500">
                         <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -364,7 +403,7 @@ const Dashboard = () => {
                   <Card>
                     <CardContent className="p-6">
             {editingProfile ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-4">
               <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">Email</label>
                 <input
@@ -398,9 +437,9 @@ const Dashboard = () => {
                     onChange={handleProfileChange}
                   />
                 </div>
-                <div className="col-span-3 flex gap-2 mt-4">
-                            <Button onClick={handleProfileSave}>Save Changes</Button>
-                            <Button variant="outline" onClick={() => setEditingProfile(false)}>Cancel</Button>
+                <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                            <Button onClick={handleProfileSave} className="w-full sm:w-auto">Save Changes</Button>
+                            <Button variant="outline" onClick={() => setEditingProfile(false)} className="w-full sm:w-auto">Cancel</Button>
                 </div>
               </div>
             ) : (
@@ -432,9 +471,9 @@ const Dashboard = () => {
 
         {/* View Order Details Modal */}
         {showViewOrderModal && selectedOrder && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+              <div className="p-4 sm:p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-2xl font-bold text-primary">Order Details</h2>
                   <button

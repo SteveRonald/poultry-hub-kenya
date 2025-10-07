@@ -51,7 +51,20 @@ function handleGetVendorProducts() {
             return;
         }
         
-        $stmt = $pdo->prepare("SELECT * FROM products WHERE vendor_id = ? ORDER BY created_at DESC");
+        // Get products with order counts
+        $stmt = $pdo->prepare("
+            SELECT p.*, 
+                   COALESCE(order_counts.order_count, 0) as order_count
+            FROM products p
+            LEFT JOIN (
+                SELECT product_id, COUNT(DISTINCT id) as order_count
+                FROM orders
+                WHERE status != 'cancelled'
+                GROUP BY product_id
+            ) order_counts ON p.id = order_counts.product_id
+            WHERE p.vendor_id = ? 
+            ORDER BY p.created_at DESC
+        ");
         $stmt->execute([$vendor['id']]);
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         

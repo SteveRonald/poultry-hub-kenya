@@ -230,8 +230,8 @@ function getBaseTemplate($title, $content, $baseUrl) {
 }
 
 function getOrderConfirmationTemplate($data, $baseUrl) {
-    $order = $data['order '];
-    $customer = $data['customer '];
+    $order = $data['order'];
+    $customer = $data['customer'];
     
     $statusClass = 'status-' . strtolower($order['status']);
     $statusBadge = "<span class='status-badge $statusClass'>" . ucfirst($order['status']) . "</span>";
@@ -242,12 +242,12 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
             $itemsHtml .= "
                 <div class='order-item'>
                     <div>
-                        <div class='item-name'>{$item['product_name ']}</div>
-                        <div class='item-details'>Vendor: {$item['vendor_name ']}</div>
+                        <div class='item-name'>{$item['product_name']}</div>
+                        <div class='item-details'>Vendor: {$item['vendor_name']}</div>
                     </div>
                     <div style='text-align: right;'>
                         <div>Qty: {$item['quantity']}</div>
-                        <div>KSH " . number_format($item['total_amount '], 2) . "</div>
+                        <div>KSH " . number_format($item['total_amount'], 2) . "</div>
                     </div>
                 </div>
             ";
@@ -297,7 +297,7 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
             </div>
             <div class='info-row'>
                 <span class='info-label'>Payment Method: </span>
-                <span class='info-value'>" . ucfirst($order[' payment_method']) . "</span>
+                <span class='info-value'>" . ucfirst($order['payment_method']) . "</span>
             </div>
         </div>
         

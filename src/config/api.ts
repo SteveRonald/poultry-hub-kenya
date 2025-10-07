@@ -11,6 +11,11 @@ const getApiBaseUrl = () => {
       return 'http://localhost/poultry-hub-kenya/backend';
     }
     
+    // If accessing from ngrok, use the same host
+    if (host.includes('ngrok')) {
+      return `https://${host}/poultry-hub-kenya/backend`;
+    }
+    
     // If accessing from network (e.g., 192.168.x.x), use the same host
     // For XAMPP, we need to include the project folder in the path
     // Also handle the case where we're using the built-in PHP server
@@ -45,7 +50,8 @@ export const getImageUrl = (imageUrl: string) => {
   if (imageUrl.startsWith('http://192.168.') || 
       imageUrl.startsWith('http://10.') || 
       imageUrl.startsWith('http://172.') ||
-      imageUrl.startsWith('https://')) {
+      imageUrl.startsWith('https://') ||
+      imageUrl.includes('ngrok')) {
     return imageUrl;
   }
   

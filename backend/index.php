@@ -357,6 +357,12 @@ switch ($path) {
         } elseif (strpos($path, 'api/vendor/products/') === 0 && $method === 'DELETE') {
             include 'routes/vendors.php';
             handleDeleteProduct();
+        } elseif (strpos($path, 'api/admin/users/') === 0 && $method === 'PUT') {
+            include 'routes/admin.php';
+            handleUpdateUser();
+        } elseif (strpos($path, 'api/admin/users/') === 0 && $method === 'DELETE') {
+            include 'routes/admin.php';
+            handleDeleteUser();
         } else {
             http_response_code(404);
             echo json_encode(['error' => 'Endpoint not found']);

@@ -77,7 +77,7 @@ function handleLogin() {
             $vendorData = $vendor;
         }
         
-        echo json_encode([
+        $response = [
             'token' => $token,
             'user' => [
                 'id' => $user['id'],
@@ -88,7 +88,14 @@ function handleLogin() {
                 'isApproved' => $isApproved,
                 'vendorData' => $vendorData
             ]
-        ]);
+        ];
+        
+        // Debug logging for vendor data
+        if ($user['role'] === 'vendor') {
+            error_log('Vendor login - vendorData: ' . json_encode($vendorData));
+        }
+        
+        echo json_encode($response);
         
     } catch (PDOException $e) {
         error_log('Database error: ' . $e->getMessage());
@@ -151,7 +158,7 @@ function handleRegister() {
             $location = $input['location'] ?? '';
             $id_number = $input['id_number'] ?? null;
             
-            $stmt = $pdo->prepare("INSERT INTO vendors (id, user_id, farm_name, farm_description, location, id_number) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT INTO vendors (id, user_id, farm_name, farm_description, location, id_number, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')");
             $stmt->execute([$vendor_id, $id, $farm_name, $farm_description, $location, $id_number]);
             
             // Notify admins about new vendor registration
@@ -206,16 +213,19 @@ function handleGetUser() {
             return;
         }
         
-        // Get vendor approval status if user is a vendor
+        // Get vendor approval status and data if user is a vendor
         $isApproved = true; // Default for non-vendors
+        $vendorData = null;
         if ($user['role'] === 'vendor') {
-            $stmt = $pdo->prepare("SELECT status FROM vendors WHERE user_id = ?");
+            $stmt = $pdo->prepare("SELECT status, farm_name, farm_description, location, id_number FROM vendors WHERE user_id = ?");
             $stmt->execute([$user['id']]);
             $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
             $isApproved = $vendor && $vendor['status'] === 'approved';
+            $vendorData = $vendor;
         }
         
         $user['isApproved'] = $isApproved;
+        $user['vendorData'] = $vendorData;
         echo json_encode($user);
         
     } catch (PDOException $e) {

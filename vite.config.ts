@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => ({
       ".ngrok.app"
     ],
   },
-  logLevel: 'error', // Reduce Vite logging
+  logLevel: 'info', // Show Vite logging
   plugins: [
     react(),
     mode === 'development' &&

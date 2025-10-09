@@ -3,16 +3,24 @@ header('Content-Type: application/json');
 // Restrict CORS to specific origins for security
 $allowedOrigins = [
     'http://localhost:8080',
+    'http://localhost:8081',
+    'http://localhost:8082',
     'http://localhost:3000',
     'http://127.0.0.1:8080',
-    'http://127.0.0.1:3000'
+    'http://127.0.0.1:8081',
+    'http://127.0.0.1:8082',
+    'http://127.0.0.1:3000',
+    'http://192.168.16.200:8080',
+    'http://192.168.16.200:8081',
+    'http://192.168.16.200:8082',
+    'http://192.168.16.200:3000'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
     header('Access-Control-Allow-Origin: ' . $origin);
 } else {
-    header('Access-Control-Allow-Origin: http://localhost:8080'); // Default fallback
+    header('Access-Control-Allow-Origin: http://localhost:8082'); // Default fallback
 }
 
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');

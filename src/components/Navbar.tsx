@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Egg, User, LogOut, ShoppingCart } from 'lucide-react';
+import { Menu, X, User, LogOut, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { Button } from './ui/button';
 import { getApiUrl } from '../config/api';
 import Cart from './Cart';
+import Logo from './Logo';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -78,13 +79,10 @@ const Navbar = () => {
     <>
     <nav className="bg-white shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between h-24">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-2">
-              <div className="bg-primary text-white p-2 rounded-lg">
-                <Egg className="h-6 w-6" />
-              </div>
-              <span className="text-xl font-bold text-primary">PoultryHubKenya (KE)</span>
+            <Link to="/" className="hover:opacity-80 transition-opacity">
+              <Logo size="lg" showText={true} />
             </Link>
           </div>
 

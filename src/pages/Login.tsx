@@ -14,7 +14,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,13 +22,13 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const user = await login(email, password);
+      await login(email, password);
       toast.success('Login successful!');
       
       // Navigate based on user role
-      if (user.role === 'vendor') {
+      if (user?.role === 'vendor') {
         navigate('/vendor-dashboard');
-      } else if (user.role === 'admin') {
+      } else if (user?.role === 'admin') {
         // Redirect admins to admin login page
         navigate('/admin-login');
       } else {

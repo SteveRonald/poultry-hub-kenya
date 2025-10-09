@@ -26,6 +26,12 @@ interface ImageAnalysis {
   category_suggestion: string;
   confidence: number;
   analysis_method: string;
+  poultry_analysis?: {
+    breed_detected: string;
+    health_indicators: string[];
+    age_estimate: string;
+    quality_assessment: string;
+  };
 }
 
 interface ContentModeration {
@@ -67,6 +73,7 @@ const AIProductAssistant: React.FC<AIProductAssistantProps> = ({
   const [activeTab, setActiveTab] = useState<'image' | 'description' | 'moderation' | 'suggestions'>('image');
   const [loading, setLoading] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiConfig, setAiConfig] = useState<any>(null);
   
   // Image Analysis State
   const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysis | null>(null);
@@ -100,6 +107,7 @@ const AIProductAssistant: React.FC<AIProductAssistantProps> = ({
       const response = await fetch(getApiUrl('/api/ai/config'));
       const data = await response.json();
       setAiEnabled(data.success && data.config.enabled);
+      setAiConfig(data.config);
     } catch (error) {
       console.error('Failed to check AI config:', error);
       setAiEnabled(false);
@@ -292,19 +300,21 @@ const AIProductAssistant: React.FC<AIProductAssistantProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div className="flex items-center space-x-3">
           <Sparkles className="h-6 w-6 text-primary" />
-          <h2 className="text-xl font-semibold text-primary">AI Product Assistant</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-primary">AI Product Assistant</h2>
         </div>
-        <Badge variant="outline" className="text-green-600 border-green-600">
+        <Badge variant="outline" className="text-green-600 border-green-600 w-fit">
           <CheckCircle className="h-3 w-3 mr-1" />
-          AI Enabled
+          {aiConfig?.services?.ultralytics_hub?.has_api_key && aiConfig?.services?.ultralytics_hub?.has_model_id 
+            ? 'Custom AI Model Active' 
+            : 'AI Enabled'}
         </Badge>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+      <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg">
         {[
           { id: 'image', label: 'Image Analysis', icon: Image },
           { id: 'description', label: 'Description', icon: FileText },
@@ -314,14 +324,14 @@ const AIProductAssistant: React.FC<AIProductAssistantProps> = ({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 min-w-0 flex items-center justify-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'bg-white text-primary shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            <tab.icon className="h-4 w-4" />
-            <span>{tab.label}</span>
+            <tab.icon className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="truncate">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -340,8 +350,8 @@ const AIProductAssistant: React.FC<AIProductAssistantProps> = ({
             <CardContent className="space-y-4">
               {/* Image Upload */}
               <div className="space-y-4">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-1">
+                <div className="space-y-4">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Upload Product Image
                     </label>
@@ -357,7 +367,7 @@ const AIProductAssistant: React.FC<AIProductAssistantProps> = ({
                   <Button 
                     onClick={analyzeImage} 
                     disabled={loading || (!imageFile && !initialData?.imageUrl)}
-                    className="flex items-center space-x-2"
+                    className="w-full sm:w-auto flex items-center justify-center space-x-2"
                   >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                     <span>Analyze</span>
@@ -434,6 +444,53 @@ const AIProductAssistant: React.FC<AIProductAssistantProps> = ({
                       <p className="text-sm text-red-700 mt-1">
                         This image may contain inappropriate content and should be reviewed.
                       </p>
+                    </div>
+                  )}
+
+                  {/* Enhanced Poultry Analysis */}
+                  {imageAnalysis.poultry_analysis && (
+                    <div className="space-y-4 p-4 bg-green-50 border border-green-200 rounded-md">
+                      <h4 className="font-medium text-green-800 flex items-center space-x-2">
+                        <Sparkles className="h-4 w-4" />
+                        <span>AI Poultry Analysis</span>
+                      </h4>
+                      
+                      {imageAnalysis.poultry_analysis.breed_detected && (
+                        <div className="space-y-2">
+                          <h5 className="font-medium text-green-700">Breed Detected</h5>
+                          <Badge variant="secondary" className="bg-green-100 text-green-800">
+                            {imageAnalysis.poultry_analysis.breed_detected}
+                          </Badge>
+                        </div>
+                      )}
+                      
+                      {imageAnalysis.poultry_analysis.health_indicators.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="font-medium text-green-700">Health Indicators</h5>
+                          <ul className="space-y-1">
+                            {imageAnalysis.poultry_analysis.health_indicators.map((indicator, index) => (
+                              <li key={index} className="text-sm text-green-700 flex items-start space-x-2">
+                                <CheckCircle className="h-3 w-3 mt-0.5 text-green-500" />
+                                <span>{indicator}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {imageAnalysis.poultry_analysis.age_estimate && (
+                        <div className="space-y-2">
+                          <h5 className="font-medium text-green-700">Age Estimate</h5>
+                          <p className="text-sm text-green-700">{imageAnalysis.poultry_analysis.age_estimate}</p>
+                        </div>
+                      )}
+                      
+                      {imageAnalysis.poultry_analysis.quality_assessment && (
+                        <div className="space-y-2">
+                          <h5 className="font-medium text-green-700">Quality Assessment</h5>
+                          <p className="text-sm text-green-700">{imageAnalysis.poultry_analysis.quality_assessment}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

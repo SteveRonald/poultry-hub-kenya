@@ -2,18 +2,16 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
+require_once __DIR__ . '/../utils/security.php';
 
 function handleLogin() {
     global $pdo;
     
-    // Enable error reporting for debugging
-    error_reporting(E_ALL);
-    ini_set('display_errors', 1);
+    // Suppress error reporting for security
+    error_reporting(E_ERROR | E_PARSE);
+    ini_set('display_errors', 0);
     
     $input = json_decode(file_get_contents('php://input'), true);
-    
-    // Log the input for debugging
-    error_log('Login attempt: ' . json_encode($input));
     
     if (!isset($input['email']) || !isset($input['password'])) {
         http_response_code(400);
@@ -21,8 +19,23 @@ function handleLogin() {
         return;
     }
     
-    $email = $input['email'];
-    $password = $input['password'];
+    $email = sanitizeInput($input['email']);
+    $password = $input['password']; // Don't sanitize password as it might contain special chars
+    
+    // Rate limiting for login attempts
+    $clientIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    if (!checkRateLimit('login_' . $clientIP, 5, 300)) { // 5 attempts per 5 minutes
+        http_response_code(429);
+        echo json_encode(['error' => 'Too many login attempts. Please try again later.']);
+        return;
+    }
+    
+    // Validate email format
+    if (!validateEmail($email)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid email format']);
+        return;
+    }
     
     try {
         $stmt = $pdo->prepare("SELECT * FROM user_profiles WHERE email = ?");
@@ -35,14 +48,8 @@ function handleLogin() {
             return;
         }
         
-        // Check password - handle both bcrypt and regular password verification
-        $passwordValid = false;
-        if (password_verify($password, $user['password'])) {
-            $passwordValid = true;
-        } elseif ($user['password'] === $password) {
-            // Fallback for plain text passwords (for testing)
-            $passwordValid = true;
-        }
+        // Check password - only allow bcrypt hashed passwords
+        $passwordValid = password_verify($password, $user['password']);
         
         if (!$passwordValid) {
             http_response_code(401);
@@ -59,13 +66,15 @@ function handleLogin() {
         
         $token = generateJWT($user['id'], $user['email'], $user['role']);
         
-        // Get vendor approval status if user is a vendor
+        // Get vendor approval status and details if user is a vendor
         $isApproved = true; // Default for non-vendors
+        $vendorData = null;
         if ($user['role'] === 'vendor') {
-            $stmt = $pdo->prepare("SELECT status FROM vendors WHERE user_id = ?");
+            $stmt = $pdo->prepare("SELECT status, farm_name, farm_description, location, id_number FROM vendors WHERE user_id = ?");
             $stmt->execute([$user['id']]);
             $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
             $isApproved = $vendor && $vendor['status'] === 'approved';
+            $vendorData = $vendor;
         }
         
         echo json_encode([
@@ -76,7 +85,8 @@ function handleLogin() {
                 'name' => $user['full_name'],
                 'role' => $user['role'],
                 'phone' => $user['phone'],
-                'isApproved' => $isApproved
+                'isApproved' => $isApproved,
+                'vendorData' => $vendorData
             ]
         ]);
         

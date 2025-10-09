@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { getApiUrl } from '../config/api';
 
@@ -10,6 +10,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
     const token = localStorage.getItem('token');
@@ -35,6 +36,23 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
 
   const markAsRead = async (id: number) => {
     const token = localStorage.getItem('token');
@@ -66,8 +84,17 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
         )}
       </button>
       {open && (
-        <div className="origin-top-right absolute right-0 mt-2 w-80 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-          <div className="py-2 px-4 border-b font-semibold text-primary">Notifications</div>
+        <div ref={dropdownRef} className="origin-top-right absolute right-0 sm:right-0 left-2 sm:left-auto mt-2 w-72 sm:w-80 max-w-[calc(100vw-1rem)] sm:max-w-none rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+          <div className="py-2 px-4 border-b font-semibold text-primary flex items-center justify-between">
+            <span>Notifications</span>
+            <button 
+              onClick={() => setOpen(false)}
+              className="text-gray-400 hover:text-gray-600 text-lg font-bold"
+              aria-label="Close notifications"
+            >
+              ×
+            </button>
+          </div>
           <div className="max-h-80 overflow-y-auto">
             {isAdmin ? (
               <div className="p-4 text-center text-gray-500">

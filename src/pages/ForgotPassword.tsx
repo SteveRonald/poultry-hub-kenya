@@ -105,8 +105,10 @@ const ForgotPassword = () => {
       }
 
       const data = await response.json();
-      console.log('OTP verification response:', data);
-      console.log('Reset token from response:', data.reset_token);
+      if (import.meta.env.DEV) {
+        console.log('OTP verification response:', data);
+        console.log('Reset token from response:', data.reset_token);
+      }
       
       toast.success(data.message);
       setResetToken(data.reset_token);
@@ -145,8 +147,10 @@ const ForgotPassword = () => {
         new_password: newPassword.trim()
       };
       
-      console.log('Reset password request data:', requestData);
-      console.log('Reset token value:', resetToken);
+      if (import.meta.env.DEV) {
+        console.log('Reset password request data:', requestData);
+        console.log('Reset token value:', resetToken);
+      }
       
       const response = await fetch(getApiUrl('/api/reset-password'), {
         method: 'POST',
@@ -177,7 +181,9 @@ const ForgotPassword = () => {
         window.location.href = '/login';
       }, 2000);
     } catch (error) {
-      console.error('Error resetting password:', error);
+      if (import.meta.env.DEV) {
+        console.error('Error resetting password:', error);
+      }
       toast.error('Failed to reset password. Please try again.');
     } finally {
       setLoading(false);

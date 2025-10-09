@@ -42,7 +42,9 @@ const Dashboard = () => {
     });
       
       if (!res.ok) {
-        console.error('API response not ok:', res.status, res.statusText);
+        if (import.meta.env.DEV) {
+          console.error('API response not ok:', res.status, res.statusText);
+        }
         return;
       }
       
@@ -65,7 +67,9 @@ const Dashboard = () => {
         totalSpent,
       });
     } catch (error) {
-      console.error('Failed to fetch orders:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to fetch orders:', error);
+      }
     }
   };
 
@@ -113,10 +117,14 @@ const Dashboard = () => {
         setNewShippingAddress('');
       } else {
         const error = await response.json();
-        console.error('Failed to update shipping address:', error);
+        if (import.meta.env.DEV) {
+          console.error('Failed to update shipping address:', error);
+        }
       }
     } catch (error) {
-      console.error('Network error:', error);
+      if (import.meta.env.DEV) {
+        console.error('Network error:', error);
+      }
     } finally {
       setUpdatingShipping(false);
     }
@@ -161,53 +169,53 @@ const Dashboard = () => {
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl lg:text-3xl font-bold text-primary">
-              Welcome back, {user.name}!
+          <div className="mb-6 sm:mb-8 px-2 sm:px-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">
+              Welcome back, {user.name || user.email || 'User'}!
             </h1>
-            <p className="text-gray-600 mt-2">Manage your orders and profile</p>
+            <p className="text-gray-600 mt-2 text-sm sm:text-base">Manage your orders and profile</p>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <ShoppingCart className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Orders</p>
-                  <p className="text-xl font-bold text-primary">{stats.totalOrders}</p>
+                  <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Total Orders</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats.totalOrders}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <div className="h-6 w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <div className="h-5 w-5 sm:h-6 sm:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
                     <span className="text-xs text-yellow-800 font-bold">{stats.pendingOrders}</span>
                   </div>
-                  <p className="text-sm text-gray-600">Pending Orders</p>
-                  <p className="text-xl font-bold text-primary">{stats.pendingOrders}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">Pending Orders</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats.pendingOrders}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <Package className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Active Orders</p>
-                  <p className="text-xl font-bold text-primary">{stats.activeOrders}</p>
+                  <Package className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Active Orders</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats.activeOrders}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <TrendingUp className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Spent</p>
-                  <p className="text-lg font-bold text-primary">KSH {stats.totalSpent.toFixed(2)}</p>
+                  <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Total Spent</p>
+                  <p className="text-sm sm:text-lg font-bold text-primary">KSH {stats.totalSpent.toFixed(2)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -443,23 +451,25 @@ const Dashboard = () => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                            <p className="text-gray-900">{user.email}</p>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                            <p className="text-gray-900">{user.name}</p>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                            <p className="text-gray-900">{user.phone || 'Not provided'}</p>
-                          </div>
-                          <div className="col-span-3 mt-4">
-                            <Button onClick={() => setEditingProfile(true)}>Edit Profile</Button>
-                          </div>
-                        </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Email</label>
+                    <p className="text-gray-900 break-all">{user.email}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Name</label>
+                    <p className="text-gray-900">{user.name}</p>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700">Phone</label>
+                    <p className="text-gray-900">{user.phone || 'Not provided'}</p>
+                  </div>
+                </div>
+                <div className="pt-4">
+                  <Button onClick={() => setEditingProfile(true)} className="w-full sm:w-auto">Edit Profile</Button>
+                </div>
+              </div>
                       )}
                     </CardContent>
                   </Card>

@@ -16,11 +16,13 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const { cartSummary } = useCart();
 
-  // Debug logging for mobile
-  useEffect(() => {
-    console.log('Navbar - User:', user);
-    console.log('Navbar - Cart Summary:', cartSummary);
-  }, [user, cartSummary]);
+  // Debug logging for mobile (disabled for security)
+  // useEffect(() => {
+  //   if (import.meta.env.DEV) {
+  //     console.log('Navbar - User:', user);
+  //     console.log('Navbar - Cart Summary:', cartSummary);
+  //   }
+  // }, [user, cartSummary]);
 
   // Check for admin session
   useEffect(() => {
@@ -51,7 +53,9 @@ const Navbar = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
       } catch (error) {
-        console.error('Admin logout API call failed:', error);
+        if (import.meta.env.DEV) {
+          console.error('Admin logout API call failed:', error);
+        }
       }
     }
     localStorage.removeItem('admin_session_token');

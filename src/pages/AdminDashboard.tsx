@@ -12,9 +12,11 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
 import Analytics from '../components/Analytics';
+import { useAdmin } from '../contexts/AdminContext';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const { admin } = useAdmin();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<any>(null);
@@ -91,7 +93,9 @@ const AdminDashboard = () => {
             setContactMessages(newMessages);
           })
           .catch(error => {
-            console.error('Failed to fetch contact messages:', error);
+            if (import.meta.env.DEV) {
+              console.error('Failed to fetch contact messages:', error);
+            }
           });
       }
     }, 30000); // Check every 30 seconds
@@ -538,7 +542,7 @@ const AdminDashboard = () => {
           <div className="mb-8">
             <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
               <h1 className="text-2xl lg:text-3xl font-bold text-primary">
-                Welcome back, {JSON.parse(localStorage.getItem('admin_info') || '{}').full_name || 'Admin'}! Manage your marketplace.
+                Welcome back, {admin?.full_name || 'Admin'}! Manage your marketplace.
               </h1>
               <div className="flex items-center space-x-4">
                 <div className="bg-white rounded-lg shadow-md px-4 py-2 border border-gray-200">
@@ -1308,7 +1312,9 @@ const AdminDashboard = () => {
                             alt={`${selectedProduct.name} ${index + 1}`}
                             className="w-full h-32 object-cover rounded-lg border"
                             onError={(e) => {
-                              console.log('Image failed to load:', url);
+                              if (import.meta.env.DEV) {
+                                console.log('Image failed to load:', url);
+                              }
                               e.currentTarget.style.display = 'none';
                             }}
                           />
@@ -1525,7 +1531,9 @@ const AdminDashboard = () => {
                             alt={`${selectedOrder.product} ${index + 1}`}
                             className="w-full h-32 object-cover rounded-lg border"
                             onError={(e) => {
-                              console.log('Image failed to load:', url);
+                              if (import.meta.env.DEV) {
+                                console.log('Image failed to load:', url);
+                              }
                               e.currentTarget.style.display = 'none';
                             }}
                           />

@@ -1,19 +1,22 @@
 <?php
-// Email Configuration Settings
-// Update these settings with your actual email credentials
+// Load environment variables
+require_once __DIR__ . '/env_loader.php';
+
+// Email Configuration Settings - Uses environment variables for security
+// Create a .env file with your actual email credentials
 
 return [
     'smtp' => [
-        'host' => 'smtp.gmail.com', // Your SMTP server
-        'port' => 587,
-        'username' => 'okothroni863@gmail.com', // Your email address
-        'password' => 'lmag tcnr iyki avzx', // Your email password or app password
-        'encryption' => 'tls', // tls or ssl
-        'from_email' => 'okothroni863@gmail.com',
-        'from_name' => 'PoultryConnect Kenya'
+        'host' => getenv('SMTP_HOST') ?: 'smtp.gmail.com',
+        'port' => (int)(getenv('SMTP_PORT') ?: 587),
+        'username' => getenv('SMTP_USERNAME') ?: '',
+        'password' => getenv('SMTP_PASSWORD') ?: '',
+        'encryption' => getenv('SMTP_ENCRYPTION') ?: 'tls',
+        'from_email' => getenv('SMTP_FROM_EMAIL') ?: getenv('SMTP_USERNAME') ?: '',
+        'from_name' => getenv('SMTP_FROM_NAME') ?: 'Poultry Hub Kenya'
     ],
     
-    'admin_email' => 'okothroni863@gmail.com', // Admin email for notifications
+    'admin_email' => getenv('ADMIN_EMAIL') ?: getenv('SMTP_USERNAME') ?: '',
     
     // For development, you can use these settings:
     'development' => [

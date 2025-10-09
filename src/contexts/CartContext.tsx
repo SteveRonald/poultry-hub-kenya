@@ -60,7 +60,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
   const fetchCart = async () => {
     const token = localStorage.getItem('token');
-    console.log('CartContext - Token:', token ? 'Present' : 'Missing');
+    // if (import.meta.env.DEV) {
+    //   console.log('CartContext - Token:', token ? 'Present' : 'Missing');
+    // }
     if (!token) {
       setCartItems([]);
       setCartSummary({ total_items: 0, total_amount: 0, items_count: 0 });
@@ -76,7 +78,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('CartContext - Cart data:', data);
+        // if (import.meta.env.DEV) {
+        //   console.log('CartContext - Cart data:', data);
+        // }
         setCartItems(data.items || []);
         setCartSummary(data.summary || { total_items: 0, total_amount: 0, items_count: 0 });
       } else {

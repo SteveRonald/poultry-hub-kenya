@@ -57,7 +57,9 @@ const Contact = () => {
         toast.error(data.error || 'Failed to send message. Please try again.');
       }
     } catch (error) {
-      console.error('Contact form error:', error);
+      if (import.meta.env.DEV) {
+        console.error('Contact form error:', error);
+      }
       toast.error('Failed to send message. Please try again.');
     } finally {
       setIsSubmitting(false);

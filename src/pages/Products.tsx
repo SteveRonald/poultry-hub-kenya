@@ -120,7 +120,9 @@ const Products = () => {
         toast.error(data.error || 'Failed to place order');
       }
     } catch (error) {
-      console.error('Error placing order:', error);
+      if (import.meta.env.DEV) {
+        console.error('Error placing order:', error);
+      }
       toast.error('Failed to place order');
     } finally {
       setSubmitting(false);

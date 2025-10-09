@@ -12,7 +12,8 @@ function generateJWT($user_id, $email, $role) {
     $base64Header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
     $base64Payload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($payload));
     
-    $signature = hash_hmac('sha256', $base64Header . "." . $base64Payload, 'your-secret-key', true);
+    $secretKey = getenv('JWT_SECRET_KEY') ?: 'poultry-hub-kenya-secure-key-' . hash('sha256', __DIR__ . date('Y-m-d'));
+    $signature = hash_hmac('sha256', $base64Header . "." . $base64Payload, $secretKey, true);
     $base64Signature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
     
     return $base64Header . "." . $base64Payload . "." . $base64Signature;
@@ -29,7 +30,8 @@ function validateJWT($token) {
     $signature = $parts[2];
     
     // Verify signature
-    $expectedSignature = hash_hmac('sha256', $header . "." . $payload, 'your-secret-key', true);
+    $secretKey = getenv('JWT_SECRET_KEY') ?: 'poultry-hub-kenya-secure-key-' . hash('sha256', __DIR__ . date('Y-m-d'));
+    $expectedSignature = hash_hmac('sha256', $header . "." . $payload, $secretKey, true);
     $expectedSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($expectedSignature));
     
     if (!hash_equals($signature, $expectedSignature)) {

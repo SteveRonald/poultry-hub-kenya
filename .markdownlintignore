@@ -1,0 +1,17 @@
+# Ignore .htaccess files from markdown linting
+**/.htaccess
+**/*.htaccess
+uploads/.htaccess
+backend/.htaccess
+
+# Ignore other non-markdown files
+**/*.php
+**/*.js
+**/*.ts
+**/*.css
+**/*.html
+**/*.json
+**/*.sql
+**/*.md
+!README.md
+!SECURITY.md

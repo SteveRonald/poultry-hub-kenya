@@ -74,7 +74,9 @@ const VendorDashboard = () => {
       setOrders(Array.isArray(orders) ? orders : []);
       setLoading(false);
     }).catch((error) => {
-      console.error('Failed to fetch vendor data:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to fetch vendor data:', error);
+      }
       setProducts([]);
       setOrders([]);
       setLoading(false);
@@ -189,7 +191,9 @@ const VendorDashboard = () => {
           description: error.error || "Failed to update order status. Please try again.",
           variant: "destructive",
         });
-        console.error('Failed to update order status:', error);
+        if (import.meta.env.DEV) {
+          console.error('Failed to update order status:', error);
+        }
       }
     } catch (error) {
       toast({
@@ -197,7 +201,9 @@ const VendorDashboard = () => {
         description: "Network error. Please try again.",
         variant: "destructive",
       });
-      console.error('Network error:', error);
+      if (import.meta.env.DEV) {
+        console.error('Network error:', error);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -285,7 +291,9 @@ const VendorDashboard = () => {
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Failed to fetch products:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to fetch products:', error);
+      }
       setProducts([]);
     }
   };
@@ -297,7 +305,9 @@ const VendorDashboard = () => {
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Failed to fetch orders:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to fetch orders:', error);
+      }
       setOrders([]);
     }
   };
@@ -393,7 +403,9 @@ const VendorDashboard = () => {
         }
       }
     } catch (error) {
-      console.error('AI analysis error:', error);
+      if (import.meta.env.DEV) {
+        console.error('AI analysis error:', error);
+      }
     } finally {
       setAiLoading(false);
     }
@@ -424,7 +436,9 @@ const VendorDashboard = () => {
         }));
       }
     } catch (error) {
-      console.error('AI description generation error:', error);
+      if (import.meta.env.DEV) {
+        console.error('AI description generation error:', error);
+      }
     } finally {
       setAiLoading(false);
     }
@@ -529,16 +543,16 @@ const VendorDashboard = () => {
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8 px-2 sm:px-0">
             <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
               <div>
-                <h1 className="text-2xl lg:text-3xl font-bold text-primary">Vendor Dashboard</h1>
-                <p className="text-gray-600 mt-2">Welcome back, {user?.name}!</p>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">Vendor Dashboard</h1>
+                <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.email || 'Vendor'}!</p>
               </div>
-              <div className="flex items-center space-x-4">
-                <div className="bg-white rounded-lg shadow-md px-4 py-2 border border-gray-200">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">Notifications:</span>
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
+                  <div className="flex items-center space-x-1 sm:space-x-2">
+                    <span className="text-xs sm:text-sm text-gray-600">Notifications:</span>
                     <NotificationsMenu />
                   </div>
                 </div>
@@ -547,52 +561,52 @@ const VendorDashboard = () => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Total Products</p>
-                    <p className="text-2xl font-bold text-primary">{stats?.totalProducts || 'Loading...'}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Total Products</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats?.totalProducts || 'Loading...'}</p>
                   </div>
-                  <Package className="h-8 w-8 text-accent" />
+                  <Package className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Total Orders</p>
-                    <p className="text-2xl font-bold text-primary">{stats?.totalOrders || 'Loading...'}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Total Orders</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats?.totalOrders || 'Loading...'}</p>
                   </div>
-                  <Users className="h-8 w-8 text-accent" />
+                  <Users className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Total Revenue</p>
-                    <p className="text-2xl font-bold text-primary">KSH {stats?.totalRevenue || 'Loading...'}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Total Revenue</p>
+                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-primary">KSH {stats?.totalRevenue || 'Loading...'}</p>
                   </div>
-                  <BarChart3 className="h-8 w-8 text-accent" />
+                  <BarChart3 className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600">Pending Orders</p>
-                    <p className="text-2xl font-bold text-primary">{stats?.pendingOrders || 'Loading...'}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Pending Orders</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats?.pendingOrders || 'Loading...'}</p>
                   </div>
-                  <div className="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <span className="text-yellow-800 font-bold">{stats?.pendingOrders || 'Loading...'}</span>
+                  <div className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs sm:text-sm text-yellow-800 font-bold">{stats?.pendingOrders || 'Loading...'}</span>
                   </div>
                 </div>
               </CardContent>
@@ -608,7 +622,8 @@ const VendorDashboard = () => {
                   { id: 'products', label: 'My Products' },
                   { id: 'orders', label: 'Orders' },
                   { id: 'analytics', label: 'Analytics' },
-                  { id: 'ai-assistant', label: 'AI Assistant' }
+                  { id: 'ai-assistant', label: 'AI Assistant' },
+                  { id: 'profile', label: 'Profile' }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -629,10 +644,10 @@ const VendorDashboard = () => {
               {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <h2 className="text-xl font-semibold text-primary">Recent Activity</h2>
                     <Button 
-                      className="btn-primary flex items-center"
+                      className="btn-primary flex items-center w-full sm:w-auto"
                       onClick={() => setShowAddProductModal(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -716,10 +731,10 @@ const VendorDashboard = () => {
               {/* Products Tab */}
               {activeTab === 'products' && (
                 <div className="space-y-6">
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <h2 className="text-xl font-semibold text-primary">My Products</h2>
                     <Button 
-                      className="btn-primary flex items-center"
+                      className="btn-primary flex items-center w-full sm:w-auto"
                       onClick={() => setShowAddProductModal(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -848,18 +863,89 @@ const VendorDashboard = () => {
                 <div className="space-y-6">
                   <AIProductAssistant 
                     onImageAnalysis={(analysis) => {
-                      console.log('Image analysis:', analysis);
+                      if (import.meta.env.DEV) {
+                        console.log('Image analysis:', analysis);
+                      }
                     }}
                     onDescriptionGenerated={(description) => {
-                      console.log('Generated description:', description);
+                      if (import.meta.env.DEV) {
+                        console.log('Generated description:', description);
+                      }
                     }}
                     onContentModerated={(moderation) => {
-                      console.log('Content moderation:', moderation);
+                      if (import.meta.env.DEV) {
+                        console.log('Content moderation:', moderation);
+                      }
                     }}
                     onSuggestionsGenerated={(suggestions) => {
-                      console.log('Product suggestions:', suggestions);
+                      if (import.meta.env.DEV) {
+                        console.log('Product suggestions:', suggestions);
+                      }
                     }}
                   />
+                </div>
+              )}
+
+              {/* Profile Tab */}
+              {activeTab === 'profile' && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-semibold text-primary">Account Details</h2>
+                  
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700">Email</label>
+                            <p className="text-gray-900 break-all">{user?.email}</p>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700">Name</label>
+                            <p className="text-gray-900">{user?.name}</p>
+                          </div>
+                          <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                            <label className="block text-sm font-medium text-gray-700">Phone</label>
+                            <p className="text-gray-900">{user?.phone || 'Not provided'}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="pt-4 border-t border-gray-200">
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Vendor Information</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700">Farm Name</label>
+                              <p className="text-gray-900">{user?.vendorData?.farm_name || 'Not provided'}</p>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700">Location</label>
+                              <p className="text-gray-900">{user?.vendorData?.location || 'Not provided'}</p>
+                            </div>
+                            <div className="space-y-2 sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700">Farm Description</label>
+                              <p className="text-gray-900">{user?.vendorData?.farm_description || 'Not provided'}</p>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700">ID Number</label>
+                              <p className="text-gray-900">{user?.vendorData?.id_number || 'Not provided'}</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="pt-4 border-t border-gray-200">
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Account Status</h3>
+                          <div className="flex items-center space-x-2">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              user?.isApproved 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {user?.isApproved ? 'Approved' : 'Pending Approval'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
             </div>
@@ -1094,7 +1180,9 @@ const VendorDashboard = () => {
                               onDragEnd={handleDragEnd}
                               onDragOver={(e) => e.preventDefault()}
                               onError={(e) => {
-                                console.log('Image failed to load:', url);
+                                if (import.meta.env.DEV) {
+                                  console.log('Image failed to load:', url);
+                                }
                                 e.currentTarget.style.display = 'none';
                               }}
                             />
@@ -1382,7 +1470,9 @@ const VendorDashboard = () => {
                               onDragEnd={handleDragEnd}
                               onDragOver={(e) => e.preventDefault()}
                               onError={(e) => {
-                                console.log('Image failed to load:', url);
+                                if (import.meta.env.DEV) {
+                                  console.log('Image failed to load:', url);
+                                }
                                 e.currentTarget.style.display = 'none';
                               }}
                             />

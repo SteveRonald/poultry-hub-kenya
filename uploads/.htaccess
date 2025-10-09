@@ -1,5 +1,43 @@
-# Allow access to uploaded files
-<Files "*">
-    Order allow,deny
-    Allow from all
+# Security configuration for uploads directory
+
+# Prevent execution of PHP files
+<Files "*.php">
+    Order Deny,Allow
+    Deny from all
 </Files>
+
+# Prevent execution of other script files
+<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Only allow image files
+<FilesMatch "\.(jpg|jpeg|png|gif|webp)$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+
+# Block access to other file types
+<FilesMatch "^(?!.*\.(jpg|jpeg|png|gif|webp)$).*$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Prevent directory browsing
+Options -Indexes
+
+# Set proper MIME types
+<IfModule mod_mime.c>
+    AddType image/jpeg .jpg .jpeg
+    AddType image/png .png
+    AddType image/gif .gif
+    AddType image/webp .webp
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options nosniff
+    Header set X-Frame-Options DENY
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>

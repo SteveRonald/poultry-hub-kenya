@@ -8,7 +8,7 @@ import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
-import { useProducts } from '../hooks/useProducts';
+import { useProducts, Product } from '../hooks/useProducts';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ const Products = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [showQuickOrderModal, setShowQuickOrderModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quickOrderData, setQuickOrderData] = useState({
     quantity: 1,
     shipping_address: '',
@@ -222,9 +222,9 @@ const Products = () => {
                     <img 
                       src={(() => {
                         // Handle both old single image_url and new image_urls array
-                        if (product.image_urls) {
+                        if (product.image_url && product.image_url.startsWith('[')) {
                           try {
-                            const images = JSON.parse(product.image_urls);
+                            const images = JSON.parse(product.image_url);
                             const imageUrl = images.length > 0 ? images[0].replace(/\\/g, '/') : 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
                             return getImageUrl(imageUrl);
                           } catch (e) {
@@ -356,7 +356,7 @@ const Products = () => {
                     </button>
                   </div>
                   <p className="text-sm text-gray-500 mt-1">
-                    Total: KSH {(parseFloat(selectedProduct.price) * quickOrderData.quantity).toFixed(2)}
+                    Total: KSH {(selectedProduct.price * quickOrderData.quantity).toFixed(2)}
                   </p>
                 </div>
               </div>

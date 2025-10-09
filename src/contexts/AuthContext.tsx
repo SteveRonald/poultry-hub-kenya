@@ -11,6 +11,13 @@ interface User {
   role: 'customer' | 'vendor' | 'admin';
   phone?: string;
   isApproved?: boolean;
+  vendorData?: {
+    status: string;
+    farm_name: string;
+    farm_description: string;
+    location: string;
+    id_number: string;
+  };
 }
 
 interface AuthContextType {
@@ -59,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: data.role,
         phone: data.phone,
         isApproved: data.isApproved,
+        vendorData: data.vendorData,
       });
     } catch (err) {
       setUser(null);
@@ -90,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: data.user.role,
         phone: data.user.phone,
         isApproved: data.user.isApproved,
+        vendorData: data.user.vendorData,
       });
       
       // Return user data for navigation logic

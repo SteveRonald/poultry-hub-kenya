@@ -572,6 +572,15 @@ function handleVendorApproval() {
         return;
     }
     
+    // Get admin ID from JWT token
+    $payload = validateJWT($token);
+    if (!$payload) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid token']);
+        return;
+    }
+    $adminId = $payload['user_id'];
+    
     $input = json_decode(file_get_contents('php://input'), true);
     $vendorId = $input['vendor_id'] ?? null;
     
@@ -593,9 +602,9 @@ function handleVendorApproval() {
             return;
         }
         
-        // Update vendor status
-        $stmt = $pdo->prepare("UPDATE vendors SET status = 'approved' WHERE id = ?");
-        $stmt->execute([$vendorId]);
+        // Update vendor status with approval tracking
+        $stmt = $pdo->prepare("UPDATE vendors SET status = 'approved', approved_at = NOW(), approved_by = ? WHERE id = ?");
+        $stmt->execute([$adminId, $vendorId]);
         
         // Notify vendor about approval
         $vendorName = $vendor['farm_name'] ?: $vendor['full_name'];

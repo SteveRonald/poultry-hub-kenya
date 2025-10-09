@@ -806,11 +806,11 @@ const AdminDashboard = () => {
                     {Array.isArray(vendors) && vendors.map(vendor => (
                       <Card key={vendor.id}>
                         <CardContent className="p-6">
-                          <div className="flex justify-between items-start">
+                          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start space-y-4 lg:space-y-0">
                             <div className="flex-1">
                               <h3 className="font-semibold text-lg text-primary">{vendor.name}</h3>
                               <p className="text-gray-600 mb-2">{vendor.farmName}</p>
-                              <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
                                 <div>
                                   <span className="font-medium">Location:</span> {vendor.location}
                                 </div>
@@ -825,8 +825,8 @@ const AdminDashboard = () => {
                                 </div>
                               </div>
                             </div>
-                            <div className="flex space-x-2 ml-4">
-                              <Button size="sm" variant="outline">
+                            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 lg:ml-4">
+                              <Button size="sm" variant="outline" className="w-full sm:w-auto">
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Details
                               </Button>
@@ -836,6 +836,7 @@ const AdminDashboard = () => {
                                   variant="destructive"
                                   onClick={() => handleDisapproveVendor(vendor.id)}
                                   disabled={actionLoading === `disapprove-vendor-${vendor.id}`}
+                                  className="w-full sm:w-auto"
                                 >
                                   {actionLoading === `disapprove-vendor-${vendor.id}` ? (
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -847,7 +848,7 @@ const AdminDashboard = () => {
                               ) : (
                                 <Button 
                                   size="sm" 
-                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                                   onClick={() => handleApproveVendor(vendor.id)}
                                   disabled={actionLoading === `approve-vendor-${vendor.id}`}
                                 >

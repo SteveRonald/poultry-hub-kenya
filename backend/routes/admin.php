@@ -91,9 +91,9 @@ function handleAdminStats() {
         $stmt = $pdo->query("SELECT COUNT(*) as total FROM orders");
         $totalOrders = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         
-        // Get total revenue (sum of quantity * price for all orders)
-        $stmt = $pdo->query("SELECT SUM(o.quantity * p.price) as total FROM orders o JOIN products p ON o.product_id = p.id");
-        $totalRevenue = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+        // Get platform commission (10% from delivered orders only)
+        require_once __DIR__ . '/../utils/commission.php';
+        $platformCommission = getPlatformTotalCommission();
         
         // Get total users
         $stmt = $pdo->query("SELECT COUNT(*) as total FROM user_profiles");
@@ -109,7 +109,7 @@ function handleAdminStats() {
             'totalProducts' => intval($totalProducts),
             'pendingProducts' => intval($pendingProducts),
             'totalOrders' => intval($totalOrders),
-            'totalRevenue' => floatval($totalRevenue),
+            'totalRevenue' => floatval($platformCommission),
             'totalUsers' => intval($totalUsers),
             'totalAdmins' => intval($totalAdmins)
         ]);
@@ -117,6 +117,71 @@ function handleAdminStats() {
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Failed to fetch stats: ' . $e->getMessage()]);
+    }
+}
+
+function handleAdminCommissionData() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+    
+    try {
+        require_once __DIR__ . '/../utils/commission.php';
+        
+        // Get platform commission
+        $platformCommission = getPlatformTotalCommission();
+        
+        // Get detailed commission breakdown
+        $stmt = $pdo->query("
+            SELECT 
+                pc.order_id,
+                pc.total_amount,
+                pc.commission_amount,
+                pc.vendor_amount,
+                pc.status,
+                pc.created_at,
+                p.name as product_name,
+                v.farm_name as vendor_name
+            FROM platform_commissions pc
+            JOIN orders o ON pc.order_id = o.id
+            JOIN products p ON o.product_id = p.id
+            LEFT JOIN vendors v ON p.vendor_id = v.id
+            ORDER BY pc.created_at DESC
+            LIMIT 20
+        ");
+        $commissionBreakdown = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Get vendor earnings summary
+        $stmt = $pdo->query("
+            SELECT 
+                ve.vendor_id,
+                v.farm_name as vendor_name,
+                SUM(ve.net_amount) as total_earnings,
+                COUNT(*) as order_count
+            FROM vendor_earnings ve
+            LEFT JOIN vendors v ON ve.vendor_id = v.id
+            WHERE ve.status = 'confirmed'
+            GROUP BY ve.vendor_id, v.farm_name
+            ORDER BY total_earnings DESC
+        ");
+        $vendorEarnings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        echo json_encode([
+            'success' => true,
+            'platform_commission' => $platformCommission,
+            'vendor_earnings_total' => $platformCommission * 9, // 90% of platform commission
+            'commission_breakdown' => $commissionBreakdown,
+            'vendor_earnings' => $vendorEarnings
+        ]);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch commission data: ' . $e->getMessage()]);
     }
 }
 
@@ -283,6 +348,9 @@ function handleAdminOrders() {
 function handleUpdateOrderStatus() {
     global $pdo;
     
+    // Include commission utilities
+    require_once __DIR__ . '/../utils/commission.php';
+    
     $token = getBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
@@ -304,6 +372,23 @@ function handleUpdateOrderStatus() {
     
     try {
         $pdo->beginTransaction();
+        
+        // Get order details including vendor_id and total_amount
+        $stmt = $pdo->prepare("
+            SELECT o.id, o.total_amount, p.vendor_id
+            FROM orders o 
+            JOIN products p ON o.product_id = p.id 
+            WHERE o.id = ?
+        ");
+        $stmt->execute([$orderId]);
+        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$order) {
+            $pdo->rollBack();
+            http_response_code(404);
+            echo json_encode(['error' => 'Order not found']);
+            return;
+        }
         
         // Update order status
         $stmt = $pdo->prepare("
@@ -328,11 +413,28 @@ function handleUpdateOrderStatus() {
         ");
         $stmt->execute([$paymentStatus, $orderId]);
         
+        // Process commission if status is 'delivered'
+        if ($newStatus === 'delivered') {
+            $commissionResult = processCommission(
+                $orderId,
+                $order['vendor_id'],
+                $order['total_amount']
+            );
+            
+            if (!$commissionResult['success']) {
+                // Log the error but don't fail the order status update
+                error_log("Commission processing failed: " . $commissionResult['message']);
+            }
+        }
+        
+        // Always commit the transaction
         $pdo->commit();
         echo json_encode(['success' => true, 'message' => 'Order status updated successfully']);
         
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         http_response_code(500);
         error_log("Error updating order status: " . $e->getMessage());
         echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);

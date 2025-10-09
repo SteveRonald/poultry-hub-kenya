@@ -24,7 +24,7 @@ if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
 }
 
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, Cache-Control, Pragma');
 header('Access-Control-Allow-Credentials: true');
 
 // Security headers
@@ -127,6 +127,13 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/admin.php';
             handleAdminStats();
+        }
+        break;
+        
+    case 'api/admin/commission-data':
+        if ($method === 'GET') {
+            include 'routes/admin.php';
+            handleAdminCommissionData();
         }
         break;
         
@@ -278,6 +285,13 @@ switch ($path) {
         if ($method === 'PUT') {
             include 'routes/vendors.php';
             handleUpdateVendorOrderStatus();
+        }
+        break;
+        
+    case 'api/vendor/earnings':
+        if ($method === 'GET') {
+            include 'routes/vendors.php';
+            handleGetVendorEarnings();
         }
         break;
         

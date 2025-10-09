@@ -30,6 +30,7 @@ const VendorDashboard = () => {
   const [stats, setStats] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [earnings, setEarnings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [productForm, setProductForm] = useState<any>({ 
     name: '', 
@@ -67,11 +68,17 @@ const VendorDashboard = () => {
     Promise.all([
       fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([stats, products, orders]) => {
+      fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
+        headers: { 
+          Authorization: `Bearer ${token}`
+        } 
+      }).then(r => r.json()),
+      fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([stats, products, orders, earnings]) => {
       setStats(stats);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
+      setEarnings(earnings?.success ? earnings : null);
       setLoading(false);
     }).catch((error) => {
       if (import.meta.env.DEV) {
@@ -79,8 +86,49 @@ const VendorDashboard = () => {
       }
       setProducts([]);
       setOrders([]);
+      setEarnings(null);
       setLoading(false);
     });
+    
+    // Listen for order status updates from other tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'orderStatusUpdate' && e.newValue) {
+        try {
+          const update = JSON.parse(e.newValue);
+          if (update.source === 'admin') {
+            // Refresh orders when admin makes changes
+            const token = localStorage.getItem('token');
+            if (token) {
+              fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
+                headers: { 
+                  Authorization: `Bearer ${token}`
+                } 
+              })
+                .then(r => r.json())
+                .then(orders => setOrders(Array.isArray(orders) ? orders : []));
+              
+              fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(stats => setStats(stats));
+              
+              fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(earnings => setEarnings(earnings?.success ? earnings : null));
+            }
+          }
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error('Error parsing order status update:', error);
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -163,6 +211,20 @@ const VendorDashboard = () => {
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string, statusNotes?: string) => {
     const token = localStorage.getItem('token');
     setSubmitting(true);
+    
+    // Optimistically update the UI immediately
+    const updatedOrders = orders.map(order => 
+      order.id === orderId 
+        ? { ...order, status: newStatus, status_notes: statusNotes, updated_at: new Date().toISOString() }
+        : order
+    );
+    setOrders(updatedOrders);
+    
+    // Update selected order in modal if it's the same order
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder({ ...selectedOrder, status: newStatus, status_notes: statusNotes });
+    }
+    
     try {
       const response = await fetch(getApiUrl(`/api/vendor/orders/status?id=${orderId}`), {
         method: 'PUT',
@@ -176,15 +238,54 @@ const VendorDashboard = () => {
           description: `Order status has been updated to ${newStatus}.`,
           variant: "success",
         });
-        // Refresh orders data
-        const res = await fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } });
+        
+        // Small delay to ensure database transaction is committed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Refresh orders data to ensure consistency
+        const res = await fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
+          headers: { 
+            Authorization: `Bearer ${token}`
+          } 
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (import.meta.env.DEV) {
+            console.log('Refreshed orders after status update:', data);
+            console.log('Order that was updated:', data.find((order: any) => order.id === orderId));
+          }
+          setOrders(Array.isArray(data) ? data : []);
+        }
+        
+        // Refresh stats to update pending orders count
+        const statsRes = await fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } });
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setStats(statsData);
+        }
+        
+        // Notify other tabs about the status change
+        localStorage.setItem('orderStatusUpdate', JSON.stringify({
+          orderId,
+          newStatus,
+          timestamp: Date.now(),
+          source: 'vendor'
+        }));
+        
+        setShowViewOrderModal(false);
+        setSelectedOrder(null);
+      } else {
+        // Revert optimistic update on failure
+        const res = await fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
+          headers: { 
+            Authorization: `Bearer ${token}`
+          } 
+        });
         if (res.ok) {
           const data = await res.json();
           setOrders(Array.isArray(data) ? data : []);
         }
-        setShowViewOrderModal(false);
-        setSelectedOrder(null);
-      } else {
+        
         const error = await response.json();
         toast({
           title: "Update Failed",
@@ -196,6 +297,17 @@ const VendorDashboard = () => {
         }
       }
     } catch (error) {
+      // Revert optimistic update on network error
+      const res = await fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
+        headers: { 
+          Authorization: `Bearer ${token}`
+        } 
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(Array.isArray(data) ? data : []);
+      }
+      
       toast({
         title: "Update Failed",
         description: "Network error. Please try again.",
@@ -274,15 +386,6 @@ const VendorDashboard = () => {
     }
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
-    const token = localStorage.getItem('token');
-    await fetch(getApiUrl(`/api/vendor/orders/${orderId}/status`), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status }),
-    });
-    fetchOrders();
-  };
 
   const fetchProducts = async () => {
     const token = localStorage.getItem('token');
@@ -301,7 +404,7 @@ const VendorDashboard = () => {
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(getApiUrl('/api/vendor/orders'), { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -309,6 +412,24 @@ const VendorDashboard = () => {
         console.error('Failed to fetch orders:', error);
       }
       setOrders([]);
+    }
+  };
+
+  const fetchEarnings = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) {
+        setEarnings(data);
+      } else {
+        setEarnings(null);
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Failed to fetch earnings:', error);
+      }
+      setEarnings(null);
     }
   };
 
@@ -567,7 +688,7 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs sm:text-sm text-gray-600">Total Products</p>
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats?.totalProducts || 'Loading...'}</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats ? (stats.totalProducts || 0) : 'Loading...'}</p>
                   </div>
                   <Package className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
                 </div>
@@ -579,7 +700,7 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs sm:text-sm text-gray-600">Total Orders</p>
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats?.totalOrders || 'Loading...'}</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats ? (stats.totalOrders || 0) : 'Loading...'}</p>
                   </div>
                   <Users className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
                 </div>
@@ -590,8 +711,8 @@ const VendorDashboard = () => {
               <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-600">Total Revenue</p>
-                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-primary">KSH {stats?.totalRevenue || 'Loading...'}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Total Sales</p>
+                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-primary">KSH {stats ? (stats.totalRevenue || 0) : 'Loading...'}</p>
                   </div>
                   <BarChart3 className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
                 </div>
@@ -603,10 +724,10 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs sm:text-sm text-gray-600">Pending Orders</p>
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats?.pendingOrders || 'Loading...'}</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats ? (stats.pendingOrders || 0) : 'Loading...'}</p>
                   </div>
                   <div className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs sm:text-sm text-yellow-800 font-bold">{stats?.pendingOrders || 'Loading...'}</span>
+                    <span className="text-xs sm:text-sm text-yellow-800 font-bold">{stats ? (stats.pendingOrders || 0) : '...'}</span>
                   </div>
                 </div>
               </CardContent>
@@ -621,6 +742,7 @@ const VendorDashboard = () => {
                   { id: 'overview', label: 'Overview' },
                   { id: 'products', label: 'My Products' },
                   { id: 'orders', label: 'Orders' },
+                  { id: 'earnings', label: 'Earnings' },
                   { id: 'analytics', label: 'Analytics' },
                   { id: 'ai-assistant', label: 'AI Assistant' },
                   { id: 'profile', label: 'Profile' }
@@ -850,6 +972,106 @@ const VendorDashboard = () => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+
+              {/* Earnings Tab */}
+              {activeTab === 'earnings' && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-semibold text-primary">Earnings Breakdown</h2>
+                  
+                  {/* Total Earnings Summary */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600">Total Earnings</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            KSH {earnings?.total_earnings?.toFixed(2) || '0.00'}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600">Commission Rate</p>
+                          <p className="text-2xl font-bold text-blue-600">10%</p>
+                          <p className="text-xs text-gray-500">Platform Fee</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600">Your Share</p>
+                          <p className="text-2xl font-bold text-primary">90%</p>
+                          <p className="text-xs text-gray-500">Net Earnings</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Commission Explanation */}
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="text-lg font-semibold text-primary mb-3">How Commission Works</h3>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <p>• <strong>Platform Commission:</strong> 10% of each delivered order goes to Poultry Hub Kenya</p>
+                        <p>• <strong>Your Earnings:</strong> 90% of each delivered order goes to you</p>
+                        <p>• <strong>Commission Processing:</strong> Only triggered when order status is marked as "delivered"</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Earnings Breakdown Table */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Recent Earnings</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {earnings?.earnings_breakdown?.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left py-2">Order Date</th>
+                                <th className="text-left py-2">Product</th>
+                                <th className="text-left py-2">Order Total</th>
+                                <th className="text-left py-2">Commission (10%)</th>
+                                <th className="text-left py-2">Your Earnings (90%)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {earnings.earnings_breakdown.map((earning: any, index: number) => (
+                                <tr key={index} className="border-b">
+                                  <td className="py-2 text-sm">
+                                    {new Date(earning.order_date).toLocaleDateString()}
+                                  </td>
+                                  <td className="py-2 text-sm">{earning.product_name}</td>
+                                  <td className="py-2 text-sm font-medium">
+                                    KSH {parseFloat(earning.order_total).toFixed(2)}
+                                  </td>
+                                  <td className="py-2 text-sm text-red-600">
+                                    -KSH {parseFloat(earning.commission_amount).toFixed(2)}
+                                  </td>
+                                  <td className="py-2 text-sm text-green-600 font-medium">
+                                    KSH {parseFloat(earning.net_amount).toFixed(2)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <p>No earnings yet. Earnings will appear here once orders are delivered.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
               )}
 

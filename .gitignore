@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Environment variables (CRITICAL - Never commit these!)
+.env
+.env.local
+.env.production
+.env.staging
+
+# Security sensitive files
+backend/config/database.php.backup
+backend/config/email_config.php.backup
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

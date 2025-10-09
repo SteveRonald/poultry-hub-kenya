@@ -262,6 +262,12 @@ function handleAIConfig() {
             'hugging_face' => [
                 'enabled' => $config['services']['hugging_face']['enabled'],
                 'has_api_key' => !empty($config['services']['hugging_face']['api_key'])
+            ],
+            'ultralytics_hub' => [
+                'enabled' => $config['services']['ultralytics_hub']['enabled'],
+                'has_api_key' => !empty($config['services']['ultralytics_hub']['api_key']),
+                'has_model_id' => !empty($config['services']['ultralytics_hub']['model_id']),
+                'features' => $config['services']['ultralytics_hub']['features']
             ]
         ],
         'fallback' => $config['fallback'],

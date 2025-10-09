@@ -1,9 +1,12 @@
 <?php
-// Database configuration for local development
-$host = 'localhost';
-$dbname = 'poultry marketplace';
-$username = 'root';
-$password = '';
+// Load environment variables
+require_once __DIR__ . '/env_loader.php';
+
+// Database configuration - uses environment variables for security
+$host = getenv('DB_HOST') ?: 'localhost';
+$dbname = getenv('DB_NAME') ?: 'poultry marketplace';
+$username = getenv('DB_USER') ?: 'root';
+$password = getenv('DB_PASSWORD') ?: '';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$dbname;charset=$charset";

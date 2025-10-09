@@ -4,6 +4,7 @@
 
 require_once __DIR__ . '/RoboflowAnalyzer.php';
 require_once __DIR__ . '/OpenAIVisionAnalyzer.php';
+require_once __DIR__ . '/UltralyticsHubAnalyzer.php';
 
 class ImageAnalyzer {
     private $config;
@@ -36,8 +37,21 @@ class ImageAnalyzer {
         ];
         
         try {
-            // Try Hugging Face Vision first (FREE and works well)
-            if ($this->config['services']['hugging_face_vision']['enabled']) {
+            // Try Ultralytics Hub custom model first (YOUR TRAINED MODEL)
+            if ($this->config['services']['ultralytics_hub']['enabled'] && 
+                !empty($this->config['services']['ultralytics_hub']['api_key']) &&
+                !empty($this->config['services']['ultralytics_hub']['model_id'])) {
+                
+                $ultralyticsAnalyzer = new UltralyticsHubAnalyzer();
+                $ultralyticsAnalysis = $ultralyticsAnalyzer->analyzeImage($imagePath, $imageUrl);
+                if ($ultralyticsAnalysis && strpos($ultralyticsAnalysis['analysis_method'], 'ultralytics_hub') !== false) {
+                    $analysis = array_merge($analysis, $ultralyticsAnalysis);
+                    $analysis['analysis_method'] = 'ultralytics_hub';
+                }
+            }
+            
+            // Try Hugging Face Vision as fallback (FREE and works well)
+            if ($analysis['analysis_method'] === 'fallback' && $this->config['services']['hugging_face_vision']['enabled']) {
                 $huggingFaceAnalysis = $this->analyzeWithHuggingFaceVision($imageUrl ?? $imagePath);
                 if ($huggingFaceAnalysis) {
                     $analysis = array_merge($analysis, $huggingFaceAnalysis);

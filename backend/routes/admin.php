@@ -28,14 +28,8 @@ function handleAdminLogin() {
             return;
         }
         
-        // Check password
-        $passwordValid = false;
-        if (password_verify($password, $admin['password'])) {
-            $passwordValid = true;
-        } elseif ($admin['password'] === $password) {
-            // Fallback for plain text passwords (for testing)
-            $passwordValid = true;
-        }
+        // Check password - only allow bcrypt hashed passwords
+        $passwordValid = password_verify($password, $admin['password']);
         
         if (!$passwordValid) {
             http_response_code(401);

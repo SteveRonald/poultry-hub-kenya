@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => ({
       ".ngrok.app"
     ],
   },
+  logLevel: 'error', // Reduce Vite logging
   plugins: [
     react(),
     mode === 'development' &&
@@ -25,5 +26,22 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  build: {
+    // Remove console.log statements in production
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: mode === 'production',
+        drop_debugger: mode === 'production',
+      },
+    },
+    // Source maps only in development
+    sourcemap: mode === 'development',
+  },
+  define: {
+    // Ensure environment variables are properly set
+    'import.meta.env.DEV': mode === 'development',
+    'import.meta.env.PROD': mode === 'production',
   },
 }));

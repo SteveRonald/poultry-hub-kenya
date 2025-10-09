@@ -1,7 +1,12 @@
 <?php
 
 function getEmailTemplate($type, $data = []) {
-    $baseUrl = 'http://localhost/poultry-hub-kenya';
+    // Dynamic base URL based on environment
+    $baseUrl = getenv('BASE_URL') ?: 
+               (isset($_SERVER['HTTP_HOST']) ? 
+                (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . 
+                '://' . $_SERVER['HTTP_HOST'] . '/poultry-hub-kenya' : 
+                'http://localhost/poultry-hub-kenya');
     
     switch ($type) {
         case 'order_confirmation':

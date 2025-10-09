@@ -39,8 +39,10 @@ export const getApiUrl = (endpoint: string) => {
   return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 };
 
-// Log the API base URL for debugging
-console.log('API Base URL:', API_BASE_URL);
+// Log the API base URL for debugging (disabled for security)
+// if (import.meta.env.DEV) {
+//   console.log('API Base URL:', API_BASE_URL);
+// }
 
 // Helper function to convert localhost URLs to network URLs for images
 export const getImageUrl = (imageUrl: string) => {

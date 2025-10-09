@@ -378,7 +378,9 @@ const Training = () => {
                     title={selectedVideoTitle}
                     loading="lazy"
                     onError={() => {
-                      console.log('Video failed to load:', selectedVideo);
+                      if (import.meta.env.DEV) {
+                        console.log('Video failed to load:', selectedVideo);
+                      }
                     }}
                   ></iframe>
                   {showVideoMessage && (

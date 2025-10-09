@@ -139,41 +139,52 @@ const VendorAnalytics: React.FC = () => {
           <p className="text-gray-600">Your business performance and insights</p>
         </div>
         
-        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
-          <div className="flex space-x-2">
-            <input
-              type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-              placeholder="Start Date"
-            />
-            <input
-              type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-              placeholder="End Date"
-            />
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+            <div className="flex flex-col space-y-1">
+              <label htmlFor="start-date" className="text-sm font-medium text-gray-700">Start Date</label>
+              <input
+                id="start-date"
+                type="date"
+                value={dateRange.start}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto"
+                aria-label="Select start date for analytics"
+              />
+            </div>
+            <div className="flex flex-col space-y-1">
+              <label htmlFor="end-date" className="text-sm font-medium text-gray-700">End Date</label>
+              <input
+                id="end-date"
+                type="date"
+                value={dateRange.end}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm w-full sm:w-auto"
+                aria-label="Select end date for analytics"
+              />
+            </div>
           </div>
           
-          <div className="flex space-x-2">
-            {['7', '30', '90', '365'].map((p) => (
-              <Button
-                key={p}
-                variant={period === p ? "default" : "outline"}
-                size="sm"
-                onClick={() => setPeriod(p)}
-              >
-                {p}D
-              </Button>
-            ))}
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+            <div className="flex flex-wrap gap-2">
+              {['7', '30', '90', '365'].map((p) => (
+                <Button
+                  key={p}
+                  variant={period === p ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setPeriod(p)}
+                  className="flex-1 sm:flex-none"
+                >
+                  {p}D
+                </Button>
+              ))}
+            </div>
+            
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
           </div>
-          
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
         </div>
       </div>
 

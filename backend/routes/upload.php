@@ -39,15 +39,46 @@ function handleImageUpload() {
         return;
     }
     
-    // Check file type
+    // Check file type with multiple validation methods
     $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    
+    // Check MIME type
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
     $mimeType = finfo_file($finfo, $file['tmp_name']);
     finfo_close($finfo);
     
-    if (!in_array($mimeType, $allowedTypes)) {
+    // Check file extension
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    
+    // Validate both MIME type and extension
+    if (!in_array($mimeType, $allowedTypes) || !in_array($extension, $allowedExtensions)) {
         http_response_code(400);
         echo json_encode(['error' => 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed']);
+        return;
+    }
+    
+    // Additional security: Check file header
+    $fileHeader = file_get_contents($file['tmp_name'], false, null, 0, 10);
+    $validHeaders = [
+        "\xFF\xD8\xFF", // JPEG
+        "\x89PNG\r\n\x1a\n", // PNG
+        "GIF87a", // GIF87a
+        "GIF89a", // GIF89a
+        "RIFF", // WebP (starts with RIFF)
+    ];
+    
+    $headerValid = false;
+    foreach ($validHeaders as $header) {
+        if (strpos($fileHeader, $header) === 0) {
+            $headerValid = true;
+            break;
+        }
+    }
+    
+    if (!$headerValid) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid file format detected']);
         return;
     }
     

@@ -33,6 +33,7 @@ const AdminDashboard = () => {
   const [showViewOrderModal, setShowViewOrderModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [contactMessages, setContactMessages] = useState<any[]>([]);
+  const [commissionData, setCommissionData] = useState<any>(null);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -58,19 +59,57 @@ const AdminDashboard = () => {
       fetch(getApiUrl('/api/admin/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/admin/vendors'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/admin/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch(getApiUrl('/api/admin/orders'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([stats, vendors, products, orders, contactMessages]) => {
+      fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
+    ]).then(([stats, vendors, products, orders, contactMessages, commissionData]) => {
       setStats(stats);
       setVendors(Array.isArray(vendors) ? vendors : []);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
       setContactMessages(Array.isArray(contactMessages) ? contactMessages : []);
+      setCommissionData(commissionData);
       setLoading(false);
     }).catch((error) => {
       toast.error('Failed to load dashboard data');
       setLoading(false);
     });
+    
+    // Listen for order status updates from other tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'orderStatusUpdate' && e.newValue) {
+        try {
+          const update = JSON.parse(e.newValue);
+          if (update.source === 'vendor') {
+            // Refresh orders when vendor makes changes
+            const token = localStorage.getItem('admin_session_token');
+            if (token) {
+              fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(orders => setOrders(Array.isArray(orders) ? orders : []));
+              
+              fetch(getApiUrl('/api/admin/stats'), { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(stats => setStats(stats));
+              
+              fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(commissionData => setCommissionData(commissionData));
+            }
+          }
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error('Error parsing order status update:', error);
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   // Real-time notifications for contact messages
@@ -395,6 +434,20 @@ const AdminDashboard = () => {
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string, statusNotes?: string) => {
     const token = localStorage.getItem('admin_session_token');
     setActionLoading(`update-order-${orderId}`);
+    
+    // Optimistically update the UI immediately
+    const updatedOrders = orders.map(order => 
+      order.id === orderId 
+        ? { ...order, status: newStatus, status_notes: statusNotes, updated_at: new Date().toISOString() }
+        : order
+    );
+    setOrders(updatedOrders);
+    
+    // Update selected order in modal if it's the same order
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder({ ...selectedOrder, status: newStatus, status_notes: statusNotes });
+    }
+    
     try {
       const response = await fetch(getApiUrl(`/api/admin/orders/status?id=${orderId}`), {
         method: 'PUT',
@@ -404,19 +457,63 @@ const AdminDashboard = () => {
       
       if (response.ok) {
         toast.success('Order status updated successfully!');
-        // Refresh orders data
-        const res = await fetch(getApiUrl('/api/admin/orders'), { headers: { Authorization: `Bearer ${token}` } });
+        
+        // Small delay to ensure database transaction is committed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Refresh orders data to ensure consistency
+        const res = await fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { 
+          headers: { 
+            Authorization: `Bearer ${token}`
+          } 
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (import.meta.env.DEV) {
+            console.log('Refreshed orders after status update:', data);
+            console.log('Order that was updated:', data.find((order: any) => order.id === orderId));
+          }
+          setOrders(Array.isArray(data) ? data : []);
+        }
+        
+        // Refresh stats to update platform revenue if order is delivered
+        if (newStatus === 'delivered') {
+          const statsRes = await fetch(getApiUrl('/api/admin/stats'), { headers: { Authorization: `Bearer ${token}` } });
+          if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            setStats(statsData);
+          }
+        }
+        
+        // Notify other tabs about the status change
+        localStorage.setItem('orderStatusUpdate', JSON.stringify({
+          orderId,
+          newStatus,
+          timestamp: Date.now(),
+          source: 'admin'
+        }));
+        
+        setShowViewOrderModal(false);
+        setSelectedOrder(null);
+      } else {
+        // Revert optimistic update on failure
+        const res = await fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
           const data = await res.json();
           setOrders(Array.isArray(data) ? data : []);
         }
-        setShowViewOrderModal(false);
-        setSelectedOrder(null);
-      } else {
+        
         const error = await response.json();
         toast.error(error.error || 'Failed to update order status');
       }
     } catch (error) {
+      // Revert optimistic update on network error
+      const res = await fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(Array.isArray(data) ? data : []);
+      }
+      
       toast.error('Network error. Please try again.');
     } finally {
       setActionLoading(null);
@@ -615,8 +712,9 @@ const AdminDashboard = () => {
               <CardContent className="p-4">
                 <div className="text-center">
                   <TrendingUp className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Revenue</p>
-                  <p className="text-lg font-bold text-primary">KSH {(stats?.totalRevenue / 1000000).toFixed(1) || '0.0'}M</p>
+                  <p className="text-sm text-gray-600">Platform Revenue</p>
+                  <p className="text-lg font-bold text-primary">KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
+                  <p className="text-xs text-gray-500 mt-1">10% commission from delivered orders</p>
                 </div>
               </CardContent>
             </Card>
@@ -653,6 +751,7 @@ const AdminDashboard = () => {
                   { id: 'orders', label: 'All Orders' },
                   { id: 'users', label: 'User Management' },
                   { id: 'messages', label: 'Contact Messages' },
+                  { id: 'commission', label: 'Commission' },
                   { id: 'analytics', label: 'Analytics' }
                 ].map(tab => (
                   <button
@@ -1229,6 +1328,151 @@ const AdminDashboard = () => {
                           </CardContent>
                         </Card>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Commission Tab */}
+              {activeTab === 'commission' && (
+                <div className="space-y-6">
+                  <h2 className="text-xl font-semibold text-primary">Commission Management</h2>
+                  
+                  {commissionData ? (
+                    <>
+                      {/* Commission Overview Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card>
+                          <CardContent className="p-6">
+                            <div className="text-center">
+                              <TrendingUp className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                              <h3 className="text-lg font-semibold text-green-900 mb-2">Platform Commission (10%)</h3>
+                              <p className="text-3xl font-bold text-green-600">KSH {commissionData.platform_commission?.toFixed(2) || '0.00'}</p>
+                              <p className="text-sm text-green-700 mt-1">Total commission earned</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardContent className="p-6">
+                            <div className="text-center">
+                              <Users className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+                              <h3 className="text-lg font-semibold text-orange-900 mb-2">Vendor Earnings (90%)</h3>
+                              <p className="text-3xl font-bold text-orange-600">KSH {commissionData.vendor_earnings_total?.toFixed(2) || '0.00'}</p>
+                              <p className="text-sm text-orange-700 mt-1">Total paid to vendors</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* How Commission Works */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg font-semibold text-primary">How Platform Commission Works</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="bg-blue-50 p-4 rounded-lg">
+                            <div className="space-y-2 text-sm text-blue-800">
+                              <p>• <strong>Commission Rate:</strong> 10% of each delivered order</p>
+                              <p>• <strong>Vendor Share:</strong> 90% of each delivered order</p>
+                              <p>• <strong>Processing:</strong> Commission is calculated automatically when order status changes to "delivered"</p>
+                              <p>• <strong>Platform Revenue:</strong> Accumulated 10% commission from all delivered orders</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Recent Commission Breakdown */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg font-semibold text-primary">Recent Commission Calculations</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {commissionData.commission_breakdown?.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left py-2">Order Date</th>
+                                    <th className="text-left py-2">Product</th>
+                                    <th className="text-left py-2">Vendor</th>
+                                    <th className="text-left py-2">Order Total</th>
+                                    <th className="text-left py-2">Commission (10%)</th>
+                                    <th className="text-left py-2">Vendor Earnings (90%)</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {commissionData.commission_breakdown.map((commission: any, index: number) => (
+                                    <tr key={index} className="border-b">
+                                      <td className="py-2 text-sm">
+                                        {new Date(commission.created_at).toLocaleDateString()}
+                                      </td>
+                                      <td className="py-2 text-sm">{commission.product_name}</td>
+                                      <td className="py-2 text-sm">{commission.vendor_name || 'N/A'}</td>
+                                      <td className="py-2 text-sm font-medium">
+                                        KSH {parseFloat(commission.total_amount).toFixed(2)}
+                                      </td>
+                                      <td className="py-2 text-sm text-green-600 font-medium">
+                                        KSH {parseFloat(commission.commission_amount).toFixed(2)}
+                                      </td>
+                                      <td className="py-2 text-sm text-orange-600 font-medium">
+                                        KSH {parseFloat(commission.vendor_amount).toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-500">
+                              <p>No commission data available yet.</p>
+                              <p className="text-sm mt-1">Commission records will appear here once orders are marked as delivered.</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {/* Vendor Earnings Summary */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg font-semibold text-primary">Vendor Earnings Summary</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {commissionData.vendor_earnings?.length > 0 ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left py-2">Vendor</th>
+                                    <th className="text-left py-2">Orders</th>
+                                    <th className="text-left py-2">Total Earnings</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {commissionData.vendor_earnings.map((vendor: any, index: number) => (
+                                    <tr key={index} className="border-b">
+                                      <td className="py-2 text-sm font-medium">{vendor.vendor_name || 'Unknown Vendor'}</td>
+                                      <td className="py-2 text-sm">{vendor.order_count}</td>
+                                      <td className="py-2 text-sm text-orange-600 font-medium">
+                                        KSH {parseFloat(vendor.total_earnings).toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-500">
+                              <p>No vendor earnings data available yet.</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-gray-500">Loading commission data...</p>
                     </div>
                   )}
                 </div>

@@ -403,6 +403,9 @@ function handleGetOrders() {
 function handleUpdateOrderStatus() {
     global $pdo;
     
+    // Include commission utilities
+    require_once __DIR__ . '/../utils/commission.php';
+    
     $token = getBearerToken();
     if (!$token) {
         http_response_code(401);
@@ -433,6 +436,9 @@ function handleUpdateOrderStatus() {
     }
     
     try {
+        $pdo->beginTransaction();
+        
+        // Update order status
         $stmt = $pdo->prepare("
             UPDATE orders 
             SET status = ?, status_notes = ?, updated_at = NOW()
@@ -445,17 +451,39 @@ function handleUpdateOrderStatus() {
             $input['order_id']
         ]);
         
-        if ($stmt->rowCount() > 0) {
-            echo json_encode([
-                'success' => true,
-                'message' => 'Order status updated successfully'
-            ]);
-        } else {
+        if ($stmt->rowCount() === 0) {
+            $pdo->rollBack();
             http_response_code(404);
             echo json_encode(['error' => 'Order not found']);
+            return;
         }
         
+        // Process commission if status is 'delivered'
+        if ($input['status'] === 'delivered') {
+            $eligibility = isOrderEligibleForCommission($input['order_id']);
+            if ($eligibility['eligible']) {
+                $commissionResult = processCommission(
+                    $input['order_id'],
+                    $eligibility['vendor_id'],
+                    $eligibility['total_amount']
+                );
+                
+                if (!$commissionResult['success']) {
+                    // Log the error but don't fail the order status update
+                    error_log("Commission processing failed: " . $commissionResult['message']);
+                }
+            }
+        }
+        
+        $pdo->commit();
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Order status updated successfully'
+        ]);
+        
     } catch (Exception $e) {
+        $pdo->rollBack();
         http_response_code(500);
         echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
     }

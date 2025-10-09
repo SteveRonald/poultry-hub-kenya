@@ -31,6 +31,23 @@ const Dashboard = () => {
     if (!user) return;
     setProfileForm({ name: user.name, email: user.email, phone: user.phone });
     fetchOrders();
+    
+    // Refresh orders every 30 seconds to get status updates
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 30000);
+    
+    // Refresh orders when user returns to the tab
+    const handleFocus = () => {
+      fetchOrders();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [user]);
 
   const fetchOrders = async () => {

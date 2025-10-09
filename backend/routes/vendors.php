@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
+require_once __DIR__ . '/../utils/commission.php';
 
 function handleGetVendors() {
     global $pdo;
@@ -462,6 +463,9 @@ function handleGetVendorOrders() {
 function handleUpdateVendorOrderStatus() {
     global $pdo;
     
+    // Include commission utilities
+    require_once __DIR__ . '/../utils/commission.php';
+    
     $token = getBearerToken();
     if (!$token) {
         http_response_code(401);
@@ -504,9 +508,9 @@ function handleUpdateVendorOrderStatus() {
         
         $vendorId = $vendor['id'];
         
-        // Verify that the order belongs to this vendor
+        // Verify that the order belongs to this vendor and get order details
         $stmt = $pdo->prepare("
-            SELECT o.id, o.status 
+            SELECT o.id, o.status, o.total_amount 
             FROM orders o 
             JOIN products p ON o.product_id = p.id 
             WHERE o.id = ? AND p.vendor_id = ?
@@ -543,14 +547,80 @@ function handleUpdateVendorOrderStatus() {
         ");
         $stmt->execute([$paymentStatus, $orderId]);
         
+        // Process commission if status is 'delivered'
+        if ($newStatus === 'delivered') {
+            $commissionResult = processCommission(
+                $orderId,
+                $vendorId,
+                $order['total_amount']
+            );
+            
+            if (!$commissionResult['success']) {
+                // Log the error but don't fail the order status update
+                error_log("Commission processing failed: " . $commissionResult['message']);
+            }
+        }
+        
+        // Always commit the transaction
         $pdo->commit();
         echo json_encode(['success' => true, 'message' => 'Order status updated successfully']);
         
     } catch (PDOException $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         http_response_code(500);
         error_log("Error updating vendor order status: " . $e->getMessage());
         echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
+    }
+}
+
+function handleGetVendorEarnings() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+    
+    $payload = validateJWT($token);
+    if (!$payload) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid token']);
+        return;
+    }
+    
+    try {
+        // Get vendor_id from vendors table using user_id
+        $stmt = $pdo->prepare("SELECT id FROM vendors WHERE user_id = ?");
+        $stmt->execute([$payload['user_id']]);
+        $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$vendor) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Vendor profile not found']);
+            return;
+        }
+        
+        $vendorId = $vendor['id'];
+        
+        // Get total earnings
+        $totalEarnings = getVendorTotalEarnings($vendorId);
+        
+        // Get earnings breakdown
+        $earningsBreakdown = getVendorEarningsBreakdown($vendorId, 20);
+        
+        echo json_encode([
+            'success' => true,
+            'total_earnings' => $totalEarnings,
+            'earnings_breakdown' => $earningsBreakdown
+        ]);
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch vendor earnings: ' . $e->getMessage()]);
     }
 }
 ?>

@@ -28,13 +28,17 @@ class ContentModerator {
             $basicValidation = $this->basicContentValidation($productName, $description);
             $moderation = array_merge($moderation, $basicValidation);
             
-            // AI-powered moderation if enabled
-            if ($this->config['services']['hugging_face']['enabled']) {
+            // AI-powered moderation: try OpenAI first, then Hugging Face
+            $aiModeration = null;
+            if ($this->config['services']['openai_vision']['enabled'] && !empty($this->config['services']['openai_vision']['api_key'])) {
+                $aiModeration = $this->aiContentModerationOpenAI($productName, $description);
+            }
+            if (!$aiModeration && $this->config['services']['hugging_face']['enabled']) {
                 $aiModeration = $this->aiContentModeration($productName, $description);
-                if ($aiModeration) {
-                    $moderation = array_merge($moderation, $aiModeration);
-                    $moderation['moderation_method'] = 'ai_enhanced';
-                }
+            }
+            if ($aiModeration) {
+                $moderation = array_merge($moderation, $aiModeration);
+                $moderation['moderation_method'] = 'ai_enhanced';
             }
             
             // Image moderation
@@ -185,6 +189,89 @@ class ContentModerator {
         }
         
         return $moderation;
+    }
+    
+    /**
+     * OpenAI-powered content moderation
+     */
+    private function aiContentModerationOpenAI($productName, $description) {
+        $apiKey = $this->config['services']['openai_vision']['api_key'] ?? '';
+        if (empty($apiKey)) {
+            return null;
+        }
+        
+        $prompt = "Moderate the following product content for a poultry marketplace. Identify issues (toxicity, hate, threats, insults, spam, contact info, adult content) and provide suggestions. Respond in JSON with fields: issues (array of strings), suggestions (array of strings), confidence (0.0-1.0).\n\n" .
+                  "Product name: $productName\nDescription: $description";
+        
+        $data = [
+            "model" => "gpt-4o-mini",
+            "messages" => [
+                [
+                    "role" => "user",
+                    "content" => [
+                        ["type" => "text", "text" => $prompt]
+                    ]
+                ]
+            ],
+            "max_tokens" => 300,
+            "temperature" => 0.2
+        ];
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, "https://api.openai.com/v1/chat/completions");
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey
+        ]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        
+        if ($httpCode === 429) {
+            usleep(200000);
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, "https://api.openai.com/v1/chat/completions");
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+        }
+        
+        if ($httpCode !== 200 || !$response) {
+            return null;
+        }
+        
+        $result = json_decode($response, true);
+        $content = $result['choices'][0]['message']['content'] ?? '';
+        if (empty($content)) {
+            return null;
+        }
+        
+        if (preg_match('/\{.*\}/s', $content, $matches)) {
+            $json = json_decode($matches[0], true);
+            if (is_array($json)) {
+                return [
+                    'issues' => $json['issues'] ?? [],
+                    'suggestions' => $json['suggestions'] ?? [],
+                    'confidence' => $json['confidence'] ?? 0.8
+                ];
+            }
+        }
+        
+        return null;
     }
     
     /**

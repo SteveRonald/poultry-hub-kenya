@@ -5,10 +5,20 @@
 class DescriptionGenerator {
     private $config;
     private $cache;
+    private $fingerprintStorePath;
     
     public function __construct() {
         $this->config = require __DIR__ . '/../../config/ai_config.php';
         $this->cache = [];
+        // Prepare on-disk store for description fingerprints (simple JSON file)
+        $cacheDir = __DIR__ . '/../../cache';
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0777, true);
+        }
+        $this->fingerprintStorePath = $cacheDir . '/description_fingerprints.json';
+        if (!file_exists($this->fingerprintStorePath)) {
+            @file_put_contents($this->fingerprintStorePath, json_encode(['items' => []]));
+        }
     }
     
     /**
@@ -25,17 +35,41 @@ class DescriptionGenerator {
         $description = '';
         
         try {
-            // Try AI generation first
-            if ($this->config['services']['hugging_face']['enabled']) {
+            // Try OpenAI first
+            if ($this->config['services']['openai_vision']['enabled'] && !empty($this->config['services']['openai_vision']['api_key'])) {
+                $openaiDescription = $this->generateWithOpenAI($productName, $category, $imageAnalysis, $additionalInfo);
+                if ($openaiDescription) {
+                    $description = $openaiDescription;
+                }
+            }
+            
+            // Try Hugging Face next
+            if (empty($description) && $this->config['services']['hugging_face']['enabled']) {
                 $aiDescription = $this->generateWithAI($productName, $category, $imageAnalysis, $additionalInfo);
                 if ($aiDescription) {
                     $description = $aiDescription;
                 }
             }
             
+            // Deduplicate: if description is near-duplicate, diversify
+            if (!empty($description) && $this->isNearDuplicate($description)) {
+                $description = $this->diversifyDescription($description, $productName, $category, $imageAnalysis, $additionalInfo);
+            }
+            // Persist fingerprint for future checks
+            if (!empty($description)) {
+                $this->rememberFingerprint($description);
+            }
+
             // Fallback to template-based generation
             if (empty($description)) {
                 $description = $this->generateWithTemplate($productName, $category, $imageAnalysis, $additionalInfo);
+                // Even for template, apply dedup and remember
+                if (!empty($description) && $this->isNearDuplicate($description)) {
+                    $description = $this->diversifyDescription($description, $productName, $category, $imageAnalysis, $additionalInfo);
+                }
+                if (!empty($description)) {
+                    $this->rememberFingerprint($description);
+                }
             }
             
             // Cache the result
@@ -48,6 +82,87 @@ class DescriptionGenerator {
             $description = $this->generateWithTemplate($productName, $category, $imageAnalysis, $additionalInfo);
         }
         
+        return $description;
+    }
+    
+    /**
+     * Generate description using OpenAI
+     */
+    private function generateWithOpenAI($productName, $category, $imageAnalysis, $additionalInfo) {
+        $apiKey = $this->config['services']['openai_vision']['api_key'] ?? '';
+        if (empty($apiKey)) {
+            return null;
+        }
+        
+        $context = $this->buildContext($productName, $category, $imageAnalysis, $additionalInfo);
+        
+        $prompt = "Generate a professional product description for a poultry marketplace. " .
+                  "Product: $productName. Category: $category. Context: $context " .
+                  "Make it informative, appealing, and suitable for farmers and customers. " .
+                  "Include key features, benefits, and usage information. Keep it under 200 words and professional.";
+        
+        $data = [
+            "model" => "gpt-4o-mini",
+            "messages" => [
+                [
+                    "role" => "user",
+                    "content" => [
+                        [
+                            "type" => "text",
+                            "text" => $prompt
+                        ]
+                    ]
+                ]
+            ],
+            "max_tokens" => 300,
+            "temperature" => 0.7
+        ];
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, "https://api.openai.com/v1/chat/completions");
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey
+        ]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        
+        // Quick retry on 429 (rate limited)
+        if ($httpCode === 429) {
+            usleep(200000); // 200ms
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, "https://api.openai.com/v1/chat/completions");
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+        }
+        
+        if ($httpCode !== 200 || !$response) {
+            return null;
+        }
+        
+        $result = json_decode($response, true);
+        $content = $result['choices'][0]['message']['content'] ?? '';
+        if (empty($content)) {
+            return null;
+        }
+        
+        $description = trim($content);
         return $description;
     }
     
@@ -197,6 +312,91 @@ class DescriptionGenerator {
             
             'default' => "{product_name} - Quality {category} for your poultry needs. {quality_indicator} {detected_features} This product is {additional_info} and suitable for various poultry farming applications. Contact us for more information and pricing."
         ];
+    }
+
+    /**
+     * Simple normalization and fingerprinting helpers
+     */
+    private function normalizeText($text) {
+        $text = strtolower($text);
+        // Remove punctuation and collapse whitespace
+        $text = preg_replace('/[^a-z0-9\s]/', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', trim($text));
+        return $text;
+    }
+    
+    private function fingerprint($text) {
+        return sha1($this->normalizeText($text));
+    }
+    
+    private function loadFingerprintStore() {
+        $raw = @file_get_contents($this->fingerprintStorePath);
+        if (!$raw) return ['items' => []];
+        $data = json_decode($raw, true);
+        if (!is_array($data) || !isset($data['items']) || !is_array($data['items'])) {
+            return ['items' => []];
+        }
+        return $data;
+    }
+    
+    private function saveFingerprintStore($store) {
+        // Limit to last 200 entries
+        if (isset($store['items']) && count($store['items']) > 200) {
+            $store['items'] = array_slice($store['items'], -200);
+        }
+        @file_put_contents($this->fingerprintStorePath, json_encode($store));
+    }
+    
+    private function isNearDuplicate($text) {
+        $store = $this->loadFingerprintStore();
+        $fp = $this->fingerprint($text);
+        foreach ($store['items'] as $item) {
+            // Exact fingerprint match
+            if (!empty($item['fp']) && $item['fp'] === $fp) {
+                return true;
+            }
+            // Similarity check using similar_text percentage on normalized strings
+            if (!empty($item['sample'])) {
+                $a = $this->normalizeText($text);
+                $b = $this->normalizeText($item['sample']);
+                $percent = 0.0;
+                similar_text($a, $b, $percent);
+                if ($percent >= 90.0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    private function rememberFingerprint($text) {
+        $store = $this->loadFingerprintStore();
+        $store['items'][] = [
+            'fp' => $this->fingerprint($text),
+            'sample' => mb_substr($text, 0, 500),
+            'ts' => time()
+        ];
+        $this->saveFingerprintStore($store);
+    }
+    
+    private function diversifyDescription($text, $productName, $category, $imageAnalysis, $additionalInfo) {
+        // Add specific attributes to differentiate similar descriptions
+        $traits = [];
+        if (!empty($additionalInfo)) {
+            $traits = array_slice($additionalInfo, 0, 3);
+        }
+        if (empty($traits) && !empty($imageAnalysis['detected_objects'])) {
+            $traits = array_slice($imageAnalysis['detected_objects'], 0, 3);
+        }
+        $traitsLine = !empty($traits) ? (' Key specifics: ' . implode(', ', $traits) . '.') : '';
+        // Ensure product/category mention for uniqueness
+        $suffix = " This description is tailored for $productName in the $category category." . $traitsLine;
+        $augmented = rtrim($text);
+        if (substr($augmented, -1) !== '.') {
+            $augmented .= '.';
+        }
+        $augmented .= $suffix;
+        return $augmented;
     }
     
     /**

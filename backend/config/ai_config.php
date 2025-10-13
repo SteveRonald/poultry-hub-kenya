@@ -18,7 +18,7 @@ return [
         ],
         'hugging_face' => [
             'enabled' => true,
-            'api_key' => '', // Optional - works without API key for basic models
+            'api_key' => getenv('hugging_face_vision') ?: '', // Optional - works without API key for basic models
             'models' => [
                 'description_generation' => 'microsoft/DialoGPT-medium',
                 'text_classification' => 'distilbert-base-uncased-finetuned-sst-2-english',
@@ -54,7 +54,7 @@ return [
         ],
         'hugging_face_vision' => [
             'enabled' => true, // FREE - no API key needed
-            'api_key' => '', // Optional - works without API key
+            'api_key' => getenv('hugging_face_vision'), // Optional - works without API key
             'models' => [
                 'image_classification' => 'microsoft/resnet-50',
                 'object_detection' => 'facebook/detr-resnet-50',

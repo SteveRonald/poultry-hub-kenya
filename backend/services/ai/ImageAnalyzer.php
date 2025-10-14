@@ -1,6 +1,10 @@
 <?php
 // AI Image Analysis Service
-// Uses Hugging Face Vision with fallback analysis
+// Uses Google Cloud Vision API (free tier) and fallback analysis
+
+require_once __DIR__ . '/RoboflowAnalyzer.php';
+require_once __DIR__ . '/OpenAIVisionAnalyzer.php';
+require_once __DIR__ . '/UltralyticsHubAnalyzer.php';
 
 class ImageAnalyzer {
     private $config;
@@ -33,12 +37,44 @@ class ImageAnalyzer {
         ];
         
         try {
-            // Use Hugging Face Vision for image analysis
+            // Try Ultralytics Hub custom model first (YOUR TRAINED MODEL)
+            if ($this->config['services']['ultralytics_hub']['enabled'] && 
+                !empty($this->config['services']['ultralytics_hub']['api_key']) &&
+                !empty($this->config['services']['ultralytics_hub']['model_id'])) {
+                
+                $ultralyticsAnalyzer = new UltralyticsHubAnalyzer();
+                $ultralyticsAnalysis = $ultralyticsAnalyzer->analyzeImage($imagePath, $imageUrl);
+                if ($ultralyticsAnalysis && strpos($ultralyticsAnalysis['analysis_method'], 'ultralytics_hub') !== false) {
+                    $analysis = array_merge($analysis, $ultralyticsAnalysis);
+                    $analysis['analysis_method'] = 'ultralytics_hub';
+                }
+            }
+            
+            // Try Hugging Face Vision as fallback (FREE and works well)
             if ($analysis['analysis_method'] === 'fallback' && $this->config['services']['hugging_face_vision']['enabled']) {
                 $huggingFaceAnalysis = $this->analyzeWithHuggingFaceVision($imageUrl ?? $imagePath);
                 if ($huggingFaceAnalysis) {
                     $analysis = array_merge($analysis, $huggingFaceAnalysis);
                     $analysis['analysis_method'] = 'hugging_face_vision';
+                }
+            }
+            
+            // Try Roboflow custom model as fallback
+            if ($analysis['analysis_method'] === 'fallback' && $this->config['services']['roboflow']['enabled'] && !empty($this->config['services']['roboflow']['api_key'])) {
+                $roboflowAnalyzer = new RoboflowAnalyzer();
+                $roboflowAnalysis = $roboflowAnalyzer->analyzeImage($imagePath, $imageUrl);
+                if ($roboflowAnalysis && $roboflowAnalysis['analysis_method'] === 'roboflow_custom') {
+                    $analysis = array_merge($analysis, $roboflowAnalysis);
+                    $analysis['analysis_method'] = 'roboflow_custom';
+                }
+            }
+            
+            // Try Google Vision API as fallback
+            if ($analysis['analysis_method'] === 'fallback' && $this->config['services']['google_vision']['enabled'] && !empty($this->config['services']['google_vision']['api_key'])) {
+                $googleAnalysis = $this->analyzeWithGoogleVision($imageUrl ?? $imagePath);
+                if ($googleAnalysis) {
+                    $analysis = array_merge($analysis, $googleAnalysis);
+                    $analysis['analysis_method'] = 'google_vision';
                 }
             }
             
@@ -63,13 +99,77 @@ class ImageAnalyzer {
     /**
      * Google Cloud Vision API analysis
      */
-    // Removed Google Vision integration; using OpenAI and Hugging Face only
     private function analyzeWithGoogleVision($imageSource) {
-        return null;
+        $apiKey = $this->config['services']['google_vision']['api_key'];
+        if (empty($apiKey)) {
+            // Try Hugging Face Vision API as fallback
+            return $this->analyzeWithHuggingFaceVision($imageSource);
+        }
+        
+        $url = "https://vision.googleapis.com/v1/images:annotate?key=" . $apiKey;
+        
+        // Prepare image data
+        if (filter_var($imageSource, FILTER_VALIDATE_URL)) {
+            $imageData = ['source' => ['imageUri' => $imageSource]];
+        } else {
+            $imageContent = base64_encode(file_get_contents($imageSource));
+            $imageData = ['content' => $imageContent];
+        }
+        
+        $requestData = [
+            'requests' => [
+                [
+                    'image' => $imageData,
+                    'features' => [
+                        ['type' => 'LABEL_DETECTION', 'maxResults' => 10],
+                        ['type' => 'SAFE_SEARCH_DETECTION'],
+                        ['type' => 'TEXT_DETECTION'],
+                        ['type' => 'OBJECT_LOCALIZATION', 'maxResults' => 10]
+                    ]
+                ]
+            ]
+        ];
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestData));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($httpCode !== 200) {
+            error_log("Google Vision API Error: HTTP $httpCode - $response");
+            return null;
+        }
+        
+        $data = json_decode($response, true);
+        if (!$data || !isset($data['responses'][0])) {
+            return null;
+        }
+        
+        $response = $data['responses'][0];
+        
+        // Process the response
+        $analysis = [
+            'quality_score' => $this->calculateQualityScore($response),
+            'detected_objects' => $this->extractObjects($response),
+            'suggestions' => $this->generateSuggestions($response),
+            'inappropriate_content' => $this->checkInappropriateContent($response),
+            'category_suggestion' => $this->suggestCategory($response),
+            'confidence' => $this->calculateConfidence($response),
+            'is_poultry_related' => $this->isPoultryRelated($response)
+        ];
+        
+        return $analysis;
     }
     
     /**
-     * Hugging Face Vision API analysis
+     * Hugging Face Vision API analysis (Free)
      */
     private function analyzeWithHuggingFaceVision($imageSource) {
         // Use Hugging Face's image classification models

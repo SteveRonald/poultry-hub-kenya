@@ -13,7 +13,8 @@ $allowedOrigins = [
     'http://192.168.137.1:8080',
     'http://192.168.83.24:8081',
     'http://192.168.83.24:8082',
-    'http://192.168.83.24:3000'
+    'http://192.168.83.24:3000',
+    'https://poultryhubkenya.great-site.net'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';

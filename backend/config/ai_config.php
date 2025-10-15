@@ -25,8 +25,8 @@ return [
                 'content_moderation' => 'unitary/toxic-bert'
             ]
         ],
-            ]
-        ],
+    
+    
         'roboflow' => [
             'enabled' => false, // Disabled - using OpenAI instead
             'api_key' => getenv('ROBOFLOW_API_KEY') ?: '', // Use environment variable
@@ -96,3 +96,4 @@ return [
     ]
 ];
 ?>
+

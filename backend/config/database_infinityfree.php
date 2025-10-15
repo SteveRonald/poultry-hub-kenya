@@ -3,7 +3,7 @@
 $host = 'sql303.infinityfree.com';
 $dbname = 'if0_40167313_poultrymarketplace';
 $username = 'if0_40167313';
-$password = 'your_password_here'; // Replace with actual password
+$password = 'your_actual_password'; // Replace with your real InfinityFree password
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$dbname;charset=$charset";

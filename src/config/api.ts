@@ -28,8 +28,14 @@ const getApiBaseUrl = () => {
     return `http://${host}/poultry-hub-kenya/backend`;
   }
   
-  // Production mode - you can set your production URL here
-  return 'https://yourdomain.com/backend';
+  // Production mode - InfinityFree backend URL
+  // Also check if we're on Netlify domain
+  if (window.location.hostname === 'poultryhubkenya.netlify.app' || 
+      window.location.hostname.includes('netlify.app')) {
+    return 'https://poultryhubkenya.great-site.net';
+  }
+  
+  return 'https://poultryhubkenya.great-site.net';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -39,10 +45,11 @@ export const getApiUrl = (endpoint: string) => {
   return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 };
 
-// Log the API base URL for debugging (disabled for security)
-// if (import.meta.env.DEV) {
-//   console.log('API Base URL:', API_BASE_URL);
-// }
+// Log the API base URL for debugging
+console.log('Environment:', import.meta.env.MODE);
+console.log('Is DEV:', import.meta.env.DEV);
+console.log('Hostname:', window.location.hostname);
+console.log('API Base URL:', API_BASE_URL);
 
 // Helper function to convert localhost URLs to network URLs for images
 export const getImageUrl = (imageUrl: string) => {

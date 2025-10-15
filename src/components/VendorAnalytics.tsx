@@ -194,7 +194,7 @@ const VendorAnalytics: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Revenue</p>
+                <p className="text-sm text-gray-600">Total Sales</p>
                 <p className="text-2xl font-bold text-primary">KSH {data.overview.total_revenue.toLocaleString()}</p>
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />

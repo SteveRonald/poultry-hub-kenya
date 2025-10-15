@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Include database configuration
-require_once 'config/database.php';
+require_once 'config/database_infinityfree.php';
 
 // Get the request method and path
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -80,8 +80,9 @@ $path = ltrim($path, '/'); // Remove leading slash
 // Debug: log the path being processed
 error_log("Request URI: " . $requestUri);
 error_log("Processed path: " . $path);
-echo "<!-- Debug: Request URI: $requestUri -->\n";
-echo "<!-- Debug: Processed path: $path -->\n";
+// Remove debug output that breaks JSON response
+// echo "<!-- Debug: Request URI: $requestUri -->\n";
+// echo "<!-- Debug: Processed path: $path -->\n";
 
 // Route the request
 switch ($path) {

@@ -10,7 +10,7 @@ $password = getenv('DB_PASSWORD') ?: '';
 $charset = 'utf8mb4';
 
 // Debug mode for deployment (remove in production)
-$debug = true; // Set to false in production
+$debug = false; // Set to false in production
 
 if ($debug) {
     echo "<!-- Debug Info:\n";

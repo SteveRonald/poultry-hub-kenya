@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../utils/url_helper.php';
 
 function handleGetProducts() {
     global $pdo;
@@ -37,12 +36,8 @@ function handleGetProducts() {
         $stmt->execute($params);
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Image URL fixing is now handled by the url_helper utility
-
         // Format the response to match frontend expectations
         $formatted_products = array_map(function($product) {
-            $imageUrl = $product['image_urls'] ? json_decode($product['image_urls'], true)[0] : null;
-            
             return [
                 'id' => $product['id'],
                 'name' => $product['name'],
@@ -51,7 +46,7 @@ function handleGetProducts() {
                 'price' => floatval($product['price']),
                 'stock_quantity' => intval($product['stock_quantity']),
                 'unit' => $product['unit'],
-                'image_url' => fixImageUrl($imageUrl),
+                'image_url' => $product['image_urls'] ? json_decode($product['image_urls'], true)[0] : null,
                 'vendor_profiles' => [
                     'farm_name' => $product['farm_name'],
                     'location' => $product['vendor_location']

@@ -42,15 +42,20 @@ function loadEnv($path) {
 }
 
 // Load environment variables from .env file
-// For InfinityFree deployment, .env should be in htdocs root
-$envPath = __DIR__ . '/../.env'; // htdocs/.env
+$envPath = __DIR__ . '/../.env'; // Look in backend directory
 if (file_exists($envPath)) {
     loadEnv($envPath);
 } else {
-    // Fallback to backend directory (for development)
-    $backendEnvPath = __DIR__ . '/.env';
-    if (file_exists($backendEnvPath)) {
-        loadEnv($backendEnvPath);
+    // Fallback to root directory
+    $rootEnvPath = __DIR__ . '/../../.env';
+    if (file_exists($rootEnvPath)) {
+        loadEnv($rootEnvPath);
+    } else {
+        // Fallback to env.example for development
+        $examplePath = __DIR__ . '/../../env.example';
+        if (file_exists($examplePath)) {
+            loadEnv($examplePath);
+        }
     }
 }
 ?>

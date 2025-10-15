@@ -1,46 +1,31 @@
 <?php
-// Set CORS headers first, before any output
+header('Content-Type: application/json');
+// Restrict CORS to specific origins for security
 $allowedOrigins = [
     'http://localhost:8080',
-    'http://localhost:8081', 
+    'http://localhost:8081',
     'http://localhost:8082',
     'http://localhost:3000',
     'http://127.0.0.1:8080',
     'http://127.0.0.1:8081',
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
-<<<<<<< HEAD
-    'http://192.168.83.24:8080',
-    'http://192.168.83.24:8081',
-    'http://192.168.83.24:8082',
-    'http://192.168.83.24:3000'
-=======
     'http://192.168.137.1:8080',
     'http://192.168.83.24:8081',
     'http://192.168.83.24:8082',
-    'http://192.168.83.24:3000',
-    'https://poultryhubkenya.great-site.net',
-    'https://poultryhubkenya.netlify.app'
->>>>>>> 9b788bd3b68d35f789604ff875dc787691c8e566
+    'http://192.168.83.24:3000'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
     header('Access-Control-Allow-Origin: ' . $origin);
 } else {
-    // Always set CORS headers, default to Netlify for cross-origin requests
-    header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
-}
-
-// Also set CORS headers for direct requests (when no Origin header)
-if (empty($origin)) {
-    header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
+    header('Access-Control-Allow-Origin: http://localhost:8082'); // Default fallback
 }
 
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Origin, Content-Type, Authorization, Cache-Control, Pragma, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, Cache-Control, Pragma');
 header('Access-Control-Allow-Credentials: true');
-header('Content-Type: application/json');
 
 // Security headers
 header('X-Content-Type-Options: nosniff');
@@ -51,29 +36,12 @@ header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // Send CORS headers for preflight
-    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
-        header('Access-Control-Allow-Origin: ' . $origin);
-    } else {
-        header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
-    }
-    
-    // Also set CORS headers for direct preflight requests
-    if (empty($origin)) {
-        header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
-    }
-    
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Origin, Content-Type, Authorization, Cache-Control, Pragma, X-Requested-With');
-    header('Access-Control-Allow-Credentials: true');
-    header('Access-Control-Max-Age: 86400'); // Cache preflight for 24 hours
     http_response_code(200);
     exit();
 }
 
 // Include database configuration
-require_once 'config/database_infinityfree.php';
+require_once 'config/database.php';
 
 // Get the request method and path
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -81,47 +49,12 @@ $requestUri = $_SERVER['REQUEST_URI'] ?? '/api/admin/analytics';
 $path = parse_url($requestUri, PHP_URL_PATH);
 $path = str_replace('/poultry-hub-kenya/backend/', '', $path);
 $path = str_replace('/backend/', '', $path);
-$path = str_replace('/poultry-hub-kenya/', '', $path); // For root deployment
 $path = ltrim($path, '/'); // Remove leading slash
-
-// Debug: log the path being processed
-error_log("Request URI: " . $requestUri);
-error_log("Processed path: " . $path);
-// Remove debug output that breaks JSON response
-// echo "<!-- Debug: Request URI: $requestUri -->\n";
-// echo "<!-- Debug: Processed path: $path -->\n";
 
 // Route the request
 switch ($path) {
     case '':
         echo json_encode(['message' => 'Poultry Hub Kenya API is running', 'status' => 'success']);
-        break;
-        
-    case 'cors-test':
-        // Get the actual headers that were sent
-        $sent_headers = [];
-        foreach (headers_list() as $header) {
-            if (strpos($header, 'Access-Control') === 0) {
-                $sent_headers[] = $header;
-            }
-        }
-        
-        echo json_encode([
-            'message' => 'CORS test successful',
-            'origin' => $origin,
-            'headers_sent' => headers_sent(),
-            'sent_cors_headers' => $sent_headers,
-            'request_headers' => [
-                'HTTP_ORIGIN' => $_SERVER['HTTP_ORIGIN'] ?? 'not_set',
-                'HTTP_HOST' => $_SERVER['HTTP_HOST'] ?? 'not_set',
-                'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? 'not_set'
-            ],
-            'allowed_origins' => $allowedOrigins,
-            'server_info' => [
-                'SERVER_NAME' => $_SERVER['SERVER_NAME'] ?? 'not_set',
-                'HTTP_HOST' => $_SERVER['HTTP_HOST'] ?? 'not_set'
-            ]
-        ]);
         break;
         
     case 'api/users/login':

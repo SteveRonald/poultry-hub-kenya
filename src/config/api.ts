@@ -28,8 +28,8 @@ const getApiBaseUrl = () => {
     return `http://${host}/poultry-hub-kenya/backend`;
   }
   
-  // Production mode - you can set your production URL here
-   return 'https://poultryhubkenya.great-site.net';
+  // Production mode - InfinityFree backend URL
+  return 'https://poultryhubkenya.great-site.net';
 };
 
 export const API_BASE_URL = getApiBaseUrl();

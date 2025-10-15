@@ -15,14 +15,14 @@ $allowedOrigins = [
     'http://192.168.83.24:8082',
     'http://192.168.83.24:3000',
     'https://poultryhubkenya.great-site.net',
-    'https://poultryhubkenya.netlify.app'  // Add this line
+    'https://poultryhubkenya.netlify.app'
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
     header('Access-Control-Allow-Origin: ' . $origin);
 } else {
-    header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app'); // Change this
+    header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
 }
 
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');

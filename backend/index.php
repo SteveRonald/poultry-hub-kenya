@@ -1,6 +1,5 @@
 <?php
-header('Content-Type: application/json');
-// Restrict CORS to specific origins for security
+// Set CORS headers first, before any output
 $allowedOrigins = [
     'http://localhost:8080',
     'http://localhost:8081', 
@@ -22,12 +21,19 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
     header('Access-Control-Allow-Origin: ' . $origin);
 } else {
+    // Always set CORS headers, default to Netlify for cross-origin requests
+    header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
+}
+
+// Also set CORS headers for direct requests (when no Origin header)
+if (empty($origin)) {
     header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
 }
 
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, Cache-Control, Pragma');
+header('Access-Control-Allow-Headers: Origin, Content-Type, Authorization, Cache-Control, Pragma, X-Requested-With');
 header('Access-Control-Allow-Credentials: true');
+header('Content-Type: application/json');
 
 // Security headers
 header('X-Content-Type-Options: nosniff');
@@ -38,6 +44,23 @@ header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    // Send CORS headers for preflight
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
+        header('Access-Control-Allow-Origin: ' . $origin);
+    } else {
+        header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
+    }
+    
+    // Also set CORS headers for direct preflight requests
+    if (empty($origin)) {
+        header('Access-Control-Allow-Origin: https://poultryhubkenya.netlify.app');
+    }
+    
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Origin, Content-Type, Authorization, Cache-Control, Pragma, X-Requested-With');
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Max-Age: 86400'); // Cache preflight for 24 hours
     http_response_code(200);
     exit();
 }
@@ -51,12 +74,46 @@ $requestUri = $_SERVER['REQUEST_URI'] ?? '/api/admin/analytics';
 $path = parse_url($requestUri, PHP_URL_PATH);
 $path = str_replace('/poultry-hub-kenya/backend/', '', $path);
 $path = str_replace('/backend/', '', $path);
+$path = str_replace('/poultry-hub-kenya/', '', $path); // For root deployment
 $path = ltrim($path, '/'); // Remove leading slash
+
+// Debug: log the path being processed
+error_log("Request URI: " . $requestUri);
+error_log("Processed path: " . $path);
+echo "<!-- Debug: Request URI: $requestUri -->\n";
+echo "<!-- Debug: Processed path: $path -->\n";
 
 // Route the request
 switch ($path) {
     case '':
         echo json_encode(['message' => 'Poultry Hub Kenya API is running', 'status' => 'success']);
+        break;
+        
+    case 'cors-test':
+        // Get the actual headers that were sent
+        $sent_headers = [];
+        foreach (headers_list() as $header) {
+            if (strpos($header, 'Access-Control') === 0) {
+                $sent_headers[] = $header;
+            }
+        }
+        
+        echo json_encode([
+            'message' => 'CORS test successful',
+            'origin' => $origin,
+            'headers_sent' => headers_sent(),
+            'sent_cors_headers' => $sent_headers,
+            'request_headers' => [
+                'HTTP_ORIGIN' => $_SERVER['HTTP_ORIGIN'] ?? 'not_set',
+                'HTTP_HOST' => $_SERVER['HTTP_HOST'] ?? 'not_set',
+                'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? 'not_set'
+            ],
+            'allowed_origins' => $allowedOrigins,
+            'server_info' => [
+                'SERVER_NAME' => $_SERVER['SERVER_NAME'] ?? 'not_set',
+                'HTTP_HOST' => $_SERVER['HTTP_HOST'] ?? 'not_set'
+            ]
+        ]);
         break;
         
     case 'api/users/login':

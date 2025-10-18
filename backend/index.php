@@ -436,6 +436,73 @@ switch ($path) {
         }
         break;
         
+    // Backup system routes
+    case 'api/admin/backup/create':
+        if ($method === 'POST') {
+            include 'routes/backup.php';
+            handleCreateBackup();
+        }
+        break;
+        
+    case 'api/admin/backup/list':
+        if ($method === 'GET') {
+            include 'routes/backup.php';
+            handleListBackups();
+        }
+        break;
+        
+    case 'api/admin/backup/download':
+        if ($method === 'GET') {
+            include 'routes/backup.php';
+            handleDownloadBackup();
+        }
+        break;
+        
+    case 'api/admin/backup/delete':
+        if ($method === 'DELETE') {
+            include 'routes/backup.php';
+            handleDeleteBackup();
+        }
+        break;
+        
+    case 'api/admin/backup/status':
+        if ($method === 'GET') {
+            include 'routes/backup.php';
+            handleBackupStatus();
+        }
+        break;
+        
+    case 'api/admin/backup/restore':
+        if ($method === 'POST') {
+            include 'routes/backup.php';
+            handleRestoreBackup();
+        }
+        break;
+        
+    case 'api/admin/backup/logs':
+        if ($method === 'GET') {
+            include 'routes/backup.php';
+            handleBackupLogs();
+        }
+        break;
+        
+    case 'api/admin/backup/settings':
+        if ($method === 'GET') {
+            include 'routes/backup_settings.php';
+            handleGetBackupSettings();
+        } elseif ($method === 'PUT') {
+            include 'routes/backup_settings.php';
+            handleUpdateBackupSettings();
+        }
+        break;
+        
+    case 'api/admin/backup/test':
+        if ($method === 'GET') {
+            include 'routes/backup_settings.php';
+            handleTestBackupConnection();
+        }
+        break;
+        
     default:
         // Handle dynamic routes like /api/vendor/products/{id}
         if (strpos($path, 'api/vendor/products/') === 0 && $method === 'PUT') {

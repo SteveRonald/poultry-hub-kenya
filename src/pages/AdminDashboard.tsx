@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
 import Analytics from '../components/Analytics';
+import BackupManagement from '../components/BackupManagement';
 import { useAdmin } from '../contexts/AdminContext';
 
 const AdminDashboard = () => {
@@ -975,6 +976,7 @@ const AdminDashboard = () => {
                   { id: 'messages', label: 'Contact Messages' },
                   { id: 'commission', label: 'Commission' },
                   { id: 'analytics', label: 'Analytics' },
+                  { id: 'backup', label: 'Backup' },
                   { id: 'profile', label: 'Profile' }
                 ].map(tab => (
                   <button
@@ -1752,6 +1754,11 @@ const AdminDashboard = () => {
               {/* Analytics Tab */}
               {activeTab === 'analytics' && (
                 <Analytics />
+              )}
+
+              {/* Backup Tab */}
+              {activeTab === 'backup' && (
+                <BackupManagement />
               )}
 
               {/* Profile Tab */}

@@ -449,6 +449,36 @@ function handleUpdateOrderStatus() {
             }
         }
         
+        // Notify customer and vendor about order status change
+        require_once __DIR__ . '/../utils/notifications.php';
+        
+        // Get order details for notifications
+        $stmt = $pdo->prepare("
+            SELECT o.user_id, o.vendor_id, o.order_number, p.name as product_name, u.full_name as customer_name
+            FROM orders o 
+            JOIN products p ON o.product_id = p.id 
+            JOIN user_profiles u ON o.user_id = u.id
+            WHERE o.id = ?
+        ");
+        $stmt->execute([$orderId]);
+        $orderDetails = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($orderDetails) {
+            // Notify customer
+            $customerMessage = "Your order #{$orderDetails['order_number']} status has been updated to: {$newStatus}";
+            notifyUser($orderDetails['user_id'], $customerMessage, 'order');
+            
+            // Notify vendor
+            if ($orderDetails['vendor_id']) {
+                $vendorMessage = "Order #{$orderDetails['order_number']} for '{$orderDetails['product_name']}' status updated to: {$newStatus}";
+                notifyVendor($orderDetails['vendor_id'], $vendorMessage, 'order');
+            }
+            
+            // Notify other admins
+            $adminMessage = "Order #{$orderDetails['order_number']} status changed to '{$newStatus}' for customer '{$orderDetails['customer_name']}'";
+            notifyAllAdmins($adminMessage, 'order');
+        }
+        
         // Always commit the transaction
         $pdo->commit();
         echo json_encode(['success' => true, 'message' => 'Order status updated successfully']);
@@ -734,6 +764,10 @@ function handleVendorApproval() {
         $vendorName = $vendor['farm_name'] ?: $vendor['full_name'];
         notifyVendor($vendorId, "Congratulations! Your vendor account '{$vendorName}' has been approved. You can now start selling products!", 'success');
         
+        // Notify other admins about vendor approval
+        require_once __DIR__ . '/../utils/notifications.php';
+        notifyAllAdmins("Vendor '{$vendorName}' has been approved and can now sell products", 'success');
+        
         echo json_encode(['message' => 'Vendor approved successfully']);
         
     } catch (PDOException $e) {
@@ -827,6 +861,10 @@ function handleProductApproval() {
         
         // Notify vendor about product approval
         notifyVendor($product['vendor_id'], "Your product '{$product['name']}' has been approved and is now live!", 'success');
+        
+        // Notify other admins about product approval
+        require_once __DIR__ . '/../utils/notifications.php';
+        notifyAllAdmins("Product '{$product['name']}' has been approved and is now live", 'success');
         
         echo json_encode(['message' => 'Product approved successfully']);
         

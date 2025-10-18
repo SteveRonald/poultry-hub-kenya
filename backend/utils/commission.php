@@ -83,6 +83,30 @@ function processCommission($orderId, $vendorId, $totalAmount) {
             $pdo->commit();
         }
         
+        // Send notifications about commission processing
+        require_once __DIR__ . '/notifications.php';
+        
+        // Get order and vendor details for notifications
+        $stmt = $pdo->prepare("
+            SELECT o.order_number, o.user_id, v.farm_name, u.full_name as customer_name
+            FROM orders o 
+            JOIN vendors v ON o.vendor_id = v.id
+            JOIN user_profiles u ON o.user_id = u.id
+            WHERE o.id = ?
+        ");
+        $stmt->execute([$orderId]);
+        $orderDetails = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($orderDetails) {
+            // Notify vendor about earnings
+            $vendorMessage = "Commission processed for order #{$orderDetails['order_number']}. You earned KSH " . number_format($commission['vendor_amount'], 2);
+            notifyVendor($vendorId, $vendorMessage, 'earnings');
+            
+            // Notify admins about commission processing
+            $adminMessage = "Commission processed for order #{$orderDetails['order_number']}. Platform earned KSH " . number_format($commission['commission_amount'], 2) . ", Vendor earned KSH " . number_format($commission['vendor_amount'], 2);
+            notifyAllAdmins($adminMessage, 'commission');
+        }
+        
         return [
             'success' => true,
             'message' => 'Commission processed successfully',

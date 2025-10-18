@@ -562,6 +562,30 @@ function handleUpdateVendorOrderStatus() {
             }
         }
         
+        // Notify customer and admins about order status change
+        require_once __DIR__ . '/../utils/notifications.php';
+        
+        // Get order details for notifications
+        $stmt = $pdo->prepare("
+            SELECT o.user_id, o.order_number, p.name as product_name, u.full_name as customer_name
+            FROM orders o 
+            JOIN products p ON o.product_id = p.id 
+            JOIN user_profiles u ON o.user_id = u.id
+            WHERE o.id = ?
+        ");
+        $stmt->execute([$orderId]);
+        $orderDetails = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($orderDetails) {
+            // Notify customer
+            $customerMessage = "Your order #{$orderDetails['order_number']} status has been updated to: {$newStatus}";
+            notifyUser($orderDetails['user_id'], $customerMessage, 'order');
+            
+            // Notify admins
+            $adminMessage = "Vendor updated order #{$orderDetails['order_number']} status to '{$newStatus}' for customer '{$orderDetails['customer_name']}'";
+            notifyAllAdmins($adminMessage, 'order');
+        }
+        
         // Always commit the transaction
         $pdo->commit();
         echo json_encode(['success' => true, 'message' => 'Order status updated successfully']);

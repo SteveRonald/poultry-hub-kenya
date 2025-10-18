@@ -25,6 +25,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (userData: any) => Promise<void>;
   logout: () => void;
+  fetchUser: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   register: async () => {},
   logout: () => {},
+  fetchUser: async () => {},
   isLoading: false,
 });
 
@@ -88,7 +90,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      if (!res.ok) throw new Error('Invalid credentials');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Invalid credentials');
+      }
       const data = await res.json();
       localStorage.setItem('token', data.token);
       setUser({
@@ -145,7 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, fetchUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

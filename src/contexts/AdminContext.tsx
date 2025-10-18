@@ -5,6 +5,10 @@ interface AdminInfo {
   email: string;
   full_name: string;
   role: string;
+  phone?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_login?: string;
 }
 
 interface AdminContextType {
@@ -12,6 +16,7 @@ interface AdminContextType {
   isAuthenticated: boolean;
   login: (adminData: AdminInfo, token: string) => void;
   logout: () => void;
+  updateAdmin: (adminData: AdminInfo) => void;
   loading: boolean;
 }
 
@@ -64,11 +69,17 @@ export const AdminProvider: React.FC<AdminProviderProps> = ({ children }) => {
     setAdmin(null);
   };
 
+  const updateAdmin = (adminData: AdminInfo) => {
+    localStorage.setItem('admin_info', JSON.stringify(adminData));
+    setAdmin(adminData);
+  };
+
   const value: AdminContextType = {
     admin,
     isAuthenticated: !!admin,
     login,
     logout,
+    updateAdmin,
     loading
   };
 

@@ -30,39 +30,39 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <CartProvider>
-          <Toaster />
-          <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/training" element={<Training />} />
-            <Route path="/blog" element={<Blog />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/vendor-dashboard" element={
-              <ProtectedRoute allowedRoles={['vendor', 'admin']}>
-                <VendorDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/admin-dashboard" element={
-              <AdminProtectedRoute>
-                <AdminProvider>
-                  <AdminDashboard />
-                </AdminProvider>
-              </AdminProtectedRoute>
-            } />
-            <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+          <AdminProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/training" element={<Training />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/vendor-dashboard" element={
+                  <ProtectedRoute allowedRoles={['vendor', 'admin']}>
+                    <VendorDashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/admin-dashboard" element={
+                  <AdminProtectedRoute>
+                    <AdminDashboard />
+                  </AdminProtectedRoute>
+                } />
+                <Route path="/admin-login" element={<AdminLogin />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </AdminProvider>
         </CartProvider>
       </AuthProvider>
     </TooltipProvider>

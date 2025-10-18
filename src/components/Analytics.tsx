@@ -30,6 +30,10 @@ import {
   Download
 } from 'lucide-react';
 import { getApiUrl } from '../config/api';
+import { exportToPDF } from '../utils/pdfExport';
+import { useAuth } from '../contexts/AuthContext';
+import { useAdmin } from '../contexts/AdminContext';
+import { toast } from 'sonner';
 
 interface AnalyticsData {
   overview: {
@@ -68,6 +72,9 @@ const Analytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [exporting, setExporting] = useState(false);
+  const { user } = useAuth();
+  const { admin } = useAdmin();
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -98,6 +105,36 @@ const Analytics: React.FC = () => {
   useEffect(() => {
     fetchAnalytics();
   }, [period, dateRange]);
+
+  const handleExport = async () => {
+    if (!data) return;
+    
+    setExporting(true);
+    try {
+      const result = await exportToPDF({
+        title: 'Admin Analytics Report',
+        subtitle: 'Comprehensive platform analytics and insights',
+        data,
+        dateRange: dateRange.start && dateRange.end ? {
+          startDate: dateRange.start,
+          endDate: dateRange.end
+        } : undefined,
+        exportedBy: admin?.full_name || user?.name || 'Admin',
+        userRole: 'admin'
+      });
+      
+      if (result.success) {
+        toast.success('Analytics report has been exported successfully!');
+      } else {
+        toast.error(result.error || 'Failed to export PDF. Please try again.');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export PDF. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const COLORS = ['#2c5530', '#4a7c59', '#6ba86b', '#8bc34a', '#a5d6a7'];
 
@@ -188,9 +225,15 @@ const Analytics: React.FC = () => {
               ))}
             </div>
             
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full sm:w-auto"
+              onClick={handleExport}
+              disabled={!data || exporting}
+            >
               <Download className="h-4 w-4 mr-2" />
-              Export
+              {exporting ? 'Exporting...' : 'Export PDF'}
             </Button>
           </div>
         </div>

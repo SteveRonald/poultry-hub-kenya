@@ -24,7 +24,7 @@ import {
 } from '../components/ui/alert-dialog';
 
 const VendorDashboard = () => {
-  const { user } = useAuth();
+  const { user, fetchUser } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<any>(null);
@@ -52,6 +52,19 @@ const VendorDashboard = () => {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  
+  // Profile edit form state
+  const [profileFormData, setProfileFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    farm_name: '',
+    farm_description: '',
+    location: '',
+    id_number: ''
+  });
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
   
   // AI Assistant states
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
@@ -591,6 +604,68 @@ const VendorDashboard = () => {
     setProductForm((prev: any) => ({ ...prev, [name]: value }));
   };
 
+  // Profile edit functions
+  const openEditProfileModal = () => {
+    if (user) {
+      setProfileFormData({
+        full_name: user.name || user.full_name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        farm_name: user.vendorData?.farm_name || '',
+        farm_description: user.vendorData?.farm_description || '',
+        location: user.vendorData?.location || '',
+        id_number: user.vendorData?.id_number || ''
+      });
+    }
+    setShowEditProfileModal(true);
+  };
+
+  const handleProfileFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setProfileFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSubmitting(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/vendor/profile'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profileFormData)
+      });
+
+      if (response.ok) {
+        // Refresh user data
+        await fetchUser();
+        setShowEditProfileModal(false);
+        // Show success notification
+        toast({
+          title: "Profile Updated",
+          description: "Your profile has been updated successfully!",
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      // Show error notification
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setProfileSubmitting(false);
+    }
+  };
+
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -668,7 +743,7 @@ const VendorDashboard = () => {
             <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
               <div>
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">Vendor Dashboard</h1>
-                <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.email || 'Vendor'}!</p>
+                <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.full_name || user?.email || 'Vendor'}!</p>
               </div>
               <div className="flex items-center space-x-2 sm:space-x-4">
                 <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
@@ -940,7 +1015,8 @@ const VendorDashboard = () => {
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Quantity</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Total</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order Date</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Last Updated</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                         </tr>
                       </thead>
@@ -958,6 +1034,7 @@ const VendorDashboard = () => {
                               </Badge>
                             </td>
                             <td className="py-3 px-4">{order.date}</td>
+                            <td className="py-3 px-4">{order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}</td>
                             <td className="py-3 px-4">
                               <Button 
                                 size="sm" 
@@ -1111,7 +1188,15 @@ const VendorDashboard = () => {
               {/* Profile Tab */}
               {activeTab === 'profile' && (
                 <div className="space-y-6">
-                  <h2 className="text-xl font-semibold text-primary">Account Details</h2>
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold text-primary">Account Details</h2>
+                    <Button
+                      onClick={openEditProfileModal}
+                      className="btn-primary"
+                    >
+                      Edit Profile
+                    </Button>
+                  </div>
                   
                   <Card>
                     <CardContent className="p-6">
@@ -1123,7 +1208,7 @@ const VendorDashboard = () => {
                           </div>
                           <div className="space-y-2">
                             <label className="block text-sm font-medium text-gray-700">Name</label>
-                            <p className="text-gray-900">{user?.name}</p>
+                            <p className="text-gray-900">{user?.name || user?.full_name || 'Not provided'}</p>
                           </div>
                           <div className="space-y-2 sm:col-span-2 lg:col-span-1">
                             <label className="block text-sm font-medium text-gray-700">Phone</label>
@@ -1926,6 +2011,162 @@ const VendorDashboard = () => {
                   Close
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {showEditProfileModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-primary">Edit Profile</h2>
+                <button
+                  onClick={() => setShowEditProfileModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                  title="Close modal"
+                  aria-label="Close modal"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateProfile} className="space-y-6">
+                {/* Personal Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
+                        Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="full_name"
+                        name="full_name"
+                        value={profileFormData.full_name}
+                        onChange={handleProfileFormChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Enter your full name"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                        Email Address *
+                      </label>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={profileFormData.email}
+                        onChange={handleProfileFormChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Enter your email"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        id="phone"
+                        name="phone"
+                        value={profileFormData.phone}
+                        onChange={handleProfileFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Enter your phone number"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Farm Information */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Farm Information</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="farm_name" className="block text-sm font-medium text-gray-700 mb-1">
+                        Farm Name *
+                      </label>
+                      <input
+                        type="text"
+                        id="farm_name"
+                        name="farm_name"
+                        value={profileFormData.farm_name}
+                        onChange={handleProfileFormChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Enter your farm name"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                        Location *
+                      </label>
+                      <input
+                        type="text"
+                        id="location"
+                        name="location"
+                        value={profileFormData.location}
+                        onChange={handleProfileFormChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Enter your farm location"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="id_number" className="block text-sm font-medium text-gray-700 mb-1">
+                        ID Number
+                      </label>
+                      <input
+                        type="text"
+                        id="id_number"
+                        name="id_number"
+                        value={profileFormData.id_number}
+                        onChange={handleProfileFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Enter your ID number"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="farm_description" className="block text-sm font-medium text-gray-700 mb-1">
+                        Farm Description
+                      </label>
+                      <textarea
+                        id="farm_description"
+                        name="farm_description"
+                        value={profileFormData.farm_description}
+                        onChange={handleProfileFormChange}
+                        rows={4}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        placeholder="Describe your farm and what you produce"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-6 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowEditProfileModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={profileSubmitting}
+                    className="btn-primary"
+                  >
+                    {profileSubmitting ? 'Updating...' : 'Update Profile'}
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

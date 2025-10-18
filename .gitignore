@@ -32,3 +32,9 @@ backend/config/email_config.php.backup
 *.njsproj
 *.sln
 *.sw?
+
+# Vendor test files (PHP linting issues)
+backend/vendor/**/test/**
+backend/vendor/**/tests/**
+backend/vendor/**/Test/**
+backend/vendor/**/Tests/**

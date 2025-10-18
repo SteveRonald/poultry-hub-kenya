@@ -448,7 +448,8 @@ function handleGetVendorOrders() {
                 'notes' => $order['notes'],
                 'order_type' => $order['order_type'],
                 'date' => $order['created_at'],
-                'updated_at' => $order['updated_at']
+                'updated_at' => $order['updated_at'],
+                'last_status_updated' => $order['last_status_updated']
             ];
         }, $orders);
         
@@ -527,7 +528,7 @@ function handleUpdateVendorOrderStatus() {
         // Update order status
         $stmt = $pdo->prepare("
             UPDATE orders
-            SET status = ?, status_notes = ?, updated_at = NOW()
+            SET status = ?, status_notes = ?, updated_at = NOW(), last_status_updated = NOW()
             WHERE id = ?
         ");
         $stmt->execute([$newStatus, $statusNotes, $orderId]);
@@ -572,6 +573,143 @@ function handleUpdateVendorOrderStatus() {
         http_response_code(500);
         error_log("Error updating vendor order status: " . $e->getMessage());
         echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
+    }
+}
+
+function handleUpdateVendorProfile() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+    
+    $payload = validateJWT($token);
+    if (!$payload) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid token']);
+        return;
+    }
+    
+    $userId = $payload['user_id'];
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!$input) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid JSON data']);
+        return;
+    }
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // Update user_profiles table
+        $userFields = [];
+        $userValues = [];
+        
+        if (isset($input['full_name'])) {
+            $userFields[] = "full_name = ?";
+            $userValues[] = trim($input['full_name']);
+        }
+        
+        if (isset($input['phone'])) {
+            // Check if phone is already taken by another user
+            $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE phone = ? AND id != ?");
+            $stmt->execute([$input['phone'], $userId]);
+            if ($stmt->fetch()) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['error' => 'Phone number is already taken by another user']);
+                return;
+            }
+            $userFields[] = "phone = ?";
+            $userValues[] = trim($input['phone']);
+        }
+        
+        if (isset($input['email'])) {
+            // Check if email is already taken by another user
+            $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE email = ? AND id != ?");
+            $stmt->execute([$input['email'], $userId]);
+            if ($stmt->fetch()) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['error' => 'Email is already taken by another user']);
+                return;
+            }
+            $userFields[] = "email = ?";
+            $userValues[] = trim($input['email']);
+        }
+        
+        if (!empty($userFields)) {
+            $userFields[] = "updated_at = NOW()";
+            $userValues[] = $userId;
+            
+            $stmt = $pdo->prepare("UPDATE user_profiles SET " . implode(', ', $userFields) . " WHERE id = ?");
+            $stmt->execute($userValues);
+        }
+        
+        // Update vendors table
+        $vendorFields = [];
+        $vendorValues = [];
+        
+        if (isset($input['farm_name'])) {
+            // Check if farm name is already taken by another vendor
+            $stmt = $pdo->prepare("SELECT v.id FROM vendors v WHERE v.farm_name = ? AND v.user_id != ?");
+            $stmt->execute([$input['farm_name'], $userId]);
+            if ($stmt->fetch()) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['error' => 'Farm name is already taken by another vendor']);
+                return;
+            }
+            $vendorFields[] = "farm_name = ?";
+            $vendorValues[] = trim($input['farm_name']);
+        }
+        
+        if (isset($input['farm_description'])) {
+            $vendorFields[] = "farm_description = ?";
+            $vendorValues[] = trim($input['farm_description']);
+        }
+        
+        if (isset($input['location'])) {
+            $vendorFields[] = "location = ?";
+            $vendorValues[] = trim($input['location']);
+        }
+        
+        if (isset($input['id_number'])) {
+            // Check if ID number is already taken by another vendor
+            $stmt = $pdo->prepare("SELECT v.id FROM vendors v WHERE v.id_number = ? AND v.user_id != ?");
+            $stmt->execute([$input['id_number'], $userId]);
+            if ($stmt->fetch()) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['error' => 'ID number is already taken by another vendor']);
+                return;
+            }
+            $vendorFields[] = "id_number = ?";
+            $vendorValues[] = trim($input['id_number']);
+        }
+        
+        if (!empty($vendorFields)) {
+            $vendorFields[] = "updated_at = NOW()";
+            $vendorValues[] = $userId;
+            
+            $stmt = $pdo->prepare("UPDATE vendors SET " . implode(', ', $vendorFields) . " WHERE user_id = ?");
+            $stmt->execute($vendorValues);
+        }
+        
+        $pdo->commit();
+        echo json_encode(['success' => true, 'message' => 'Profile updated successfully']);
+        
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        error_log("Error updating vendor profile: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to update profile: ' . $e->getMessage()]);
     }
 }
 

@@ -49,6 +49,7 @@ $requestUri = $_SERVER['REQUEST_URI'] ?? '/api/admin/analytics';
 $path = parse_url($requestUri, PHP_URL_PATH);
 $path = str_replace('/poultry-hub-kenya/backend/', '', $path);
 $path = str_replace('/backend/', '', $path);
+$path = str_replace('index.php/', '', $path); // Remove index.php/ if present
 $path = ltrim($path, '/'); // Remove leading slash
 
 // Route the request
@@ -229,6 +230,41 @@ switch ($path) {
         }
         break;
         
+    case 'api/admin/profile':
+        if ($method === 'PUT') {
+            include 'routes/admin.php';
+            handleUpdateAdminProfile();
+        }
+        break;
+        
+    case 'api/admin/me':
+        if ($method === 'GET') {
+            include 'routes/admin.php';
+            handleGetAdminProfile();
+        }
+        break;
+        
+    case 'api/admin/contact-messages/delete':
+        if ($method === 'DELETE') {
+            include 'routes/admin.php';
+            handleDeleteContactMessage();
+        }
+        break;
+        
+    case 'api/admin/orders/delete':
+        if ($method === 'DELETE') {
+            include 'routes/admin.php';
+            handleDeleteOrder();
+        }
+        break;
+        
+    case 'api/admin/users/toggle-status':
+        if ($method === 'PUT') {
+            include 'routes/admin.php';
+            handleToggleUserAccountStatus();
+        }
+        break;
+        
     case 'api/admin/vendors/approve':
         if ($method === 'PUT') {
             include 'routes/admin.php';
@@ -292,6 +328,13 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/vendors.php';
             handleGetVendorEarnings();
+        }
+        break;
+        
+    case 'api/vendor/profile':
+        if ($method === 'PUT') {
+            include 'routes/vendors.php';
+            handleUpdateVendorProfile();
         }
         break;
         

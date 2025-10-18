@@ -329,10 +329,12 @@ function handleGetOrders() {
                 o.notes,
                 o.order_type,
                 o.created_at,
+                o.last_status_updated,
                 p.name as product_name,
                 p.price as unit_price,
                 u.full_name as vendor_name,
-                u.phone as vendor_phone
+                u.phone as vendor_phone,
+                u.email as vendor_email
             FROM orders o
             JOIN products p ON o.product_id = p.id
             JOIN vendors v ON o.vendor_id = v.id
@@ -358,6 +360,7 @@ function handleGetOrders() {
                     'payment_status' => $order['payment_status'],
                     'order_type' => $order['order_type'],
                     'created_at' => $order['created_at'],
+                    'last_status_updated' => $order['last_status_updated'],
                     'items' => [],
                     'total_amount' => 0
                 ];
@@ -371,7 +374,8 @@ function handleGetOrders() {
                 'unit_price' => $order['unit_price'],
                 'total_amount' => $order['total_amount'],
                 'vendor_name' => $order['vendor_name'],
-                'vendor_phone' => $order['vendor_phone']
+                'vendor_phone' => $order['vendor_phone'],
+                'vendor_email' => $order['vendor_email']
             ];
             
             $groupedOrders[$orderNumber]['total_amount'] += $order['total_amount'];
@@ -423,7 +427,7 @@ function handleUpdateOrderStatus() {
     try {
         $stmt = $pdo->prepare("
             UPDATE orders 
-            SET status = ?, status_notes = ?, updated_at = NOW()
+            SET status = ?, status_notes = ?, updated_at = NOW(), last_status_updated = NOW()
             WHERE id = ?
         ");
         

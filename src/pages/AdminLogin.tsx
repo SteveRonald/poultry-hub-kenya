@@ -6,12 +6,14 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { getApiUrl } from '../config/api';
 import { toast } from 'sonner';
+import { useAdmin } from '../contexts/AdminContext';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAdmin();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,9 +31,8 @@ const AdminLogin = () => {
         return;
       }
       const data = await res.json();
-      localStorage.setItem('admin_session_token', data.session_token);
-      // Optionally store admin info
-      localStorage.setItem('admin_info', JSON.stringify(data.admin));
+      // Use AdminContext login function to properly store admin data
+      login(data.admin, data.session_token);
       toast.success('Admin login successful!');
       navigate('/admin-dashboard');
     } catch (err) {

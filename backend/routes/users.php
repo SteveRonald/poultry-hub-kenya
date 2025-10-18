@@ -57,6 +57,13 @@ function handleLogin() {
             return;
         }
         
+        // Check if account is disabled
+        if ($user['account_status'] === 'disabled') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Your account has been disabled. Please contact support for assistance.']);
+            return;
+        }
+        
         // SECURITY CHECK: Prevent admins from logging in through regular user login
         if ($user['role'] === 'admin') {
             http_response_code(401);
@@ -145,6 +152,45 @@ function handleRegister() {
             return;
         }
         
+        // Check if phone already exists (if provided)
+        if ($phone) {
+            $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE phone = ?");
+            $stmt->execute([$phone]);
+            if ($stmt->fetch()) {
+                http_response_code(409);
+                echo json_encode(['error' => 'Phone number already registered']);
+                return;
+            }
+        }
+        
+        // If vendor, check for duplicate vendor-specific details
+        if ($role === 'vendor') {
+            $farm_name = $input['farm_name'] ?? '';
+            $id_number = $input['id_number'] ?? null;
+            
+            // Check if farm name already exists
+            if ($farm_name) {
+                $stmt = $pdo->prepare("SELECT id FROM vendors WHERE farm_name = ?");
+                $stmt->execute([$farm_name]);
+                if ($stmt->fetch()) {
+                    http_response_code(409);
+                    echo json_encode(['error' => 'Farm name already registered. Please choose a different farm name.']);
+                    return;
+                }
+            }
+            
+            // Check if ID number already exists (if provided)
+            if ($id_number) {
+                $stmt = $pdo->prepare("SELECT id FROM vendors WHERE id_number = ?");
+                $stmt->execute([$id_number]);
+                if ($stmt->fetch()) {
+                    http_response_code(409);
+                    echo json_encode(['error' => 'ID number already registered. Please check your ID number.']);
+                    return;
+                }
+            }
+        }
+        
         // Create user
         $id = uniqid();
         $stmt = $pdo->prepare("INSERT INTO user_profiles (id, email, password, full_name, phone, role) VALUES (?, ?, ?, ?, ?, ?)");
@@ -153,10 +199,8 @@ function handleRegister() {
         // If vendor, create vendor profile
         if ($role === 'vendor') {
             $vendor_id = uniqid();
-            $farm_name = $input['farm_name'] ?? '';
             $farm_description = $input['farm_description'] ?? '';
             $location = $input['location'] ?? '';
-            $id_number = $input['id_number'] ?? null;
             
             $stmt = $pdo->prepare("INSERT INTO vendors (id, user_id, farm_name, farm_description, location, id_number, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')");
             $stmt->execute([$vendor_id, $id, $farm_name, $farm_description, $location, $id_number]);

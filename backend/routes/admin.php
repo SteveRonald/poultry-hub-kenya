@@ -37,6 +37,13 @@ function handleAdminLogin() {
             return;
         }
         
+        // Check if admin account is disabled
+        if ($admin['account_status'] === 'disabled') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Your admin account has been disabled. Please contact system administrator.']);
+            return;
+        }
+        
         // Generate session token
         $sessionToken = bin2hex(random_bytes(32));
         
@@ -44,14 +51,28 @@ function handleAdminLogin() {
         $stmt = $pdo->prepare("INSERT INTO admin_sessions (admin_id, session_token, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR))");
         $stmt->execute([$admin['id'], $sessionToken]);
         
+        // Get last login from admin_sessions (excluding current session)
+        $stmt = $pdo->prepare("SELECT created_at as last_login FROM admin_sessions WHERE admin_id = ? AND session_token != ? ORDER BY created_at DESC LIMIT 1");
+        $stmt->execute([$admin['id'], $sessionToken]);
+        $lastSession = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        $adminData = [
+            'id' => $admin['id'],
+            'email' => $admin['email'],
+            'full_name' => $admin['full_name'],
+            'role' => $admin['role'],
+            'phone' => $admin['phone'],
+            'created_at' => $admin['created_at'],
+            'updated_at' => $admin['updated_at']
+        ];
+        
+        if ($lastSession) {
+            $adminData['last_login'] = $lastSession['last_login'];
+        }
+        
         echo json_encode([
             'session_token' => $sessionToken,
-            'admin' => [
-                'id' => $admin['id'],
-                'email' => $admin['email'],
-                'full_name' => $admin['full_name'],
-                'role' => $admin['role']
-            ]
+            'admin' => $adminData
         ]);
         
     } catch (PDOException $e) {
@@ -333,7 +354,8 @@ function handleAdminOrders() {
                 'notes' => $order['notes'],
                 'order_type' => $order['order_type'],
                 'date' => $order['created_at'],
-                'updated_at' => $order['updated_at']
+                'updated_at' => $order['updated_at'],
+                'last_status_updated' => $order['last_status_updated']
             ];
         }, $orders);
         
@@ -393,7 +415,7 @@ function handleUpdateOrderStatus() {
         // Update order status
         $stmt = $pdo->prepare("
             UPDATE orders
-            SET status = ?, status_notes = ?, updated_at = NOW()
+            SET status = ?, status_notes = ?, updated_at = NOW(), last_status_updated = NOW()
             WHERE id = ?
         ");
         $stmt->execute([$newStatus, $statusNotes, $orderId]);
@@ -861,6 +883,217 @@ function handleProductRejection() {
     }
 }
 
+function handleGetAdminProfile() {
+    global $pdo;
+    
+    // Get Authorization header using the same method as handleUpdateAdminProfile
+    $token = '';
+    
+    // Method 1: From getallheaders() (most reliable with Apache)
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    }
+    // Method 2: From apache_request_headers()
+    elseif (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    }
+    // Method 3: Direct from $_SERVER (fallback)
+    elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['HTTP_AUTHORIZATION'];
+    }
+    // Method 4: From REDIRECT_HTTP_AUTHORIZATION (Apache rewrite fallback)
+    elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    
+    $token = preg_replace('/^Bearer\s+/i', '', $token);
+    
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Authorization token required']);
+        return;
+    }
+    
+    // Validate admin session
+    if (!validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid or expired session']);
+        return;
+    }
+    
+    try {
+        // Get admin ID from session
+        $stmt = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ? AND expires_at > NOW()");
+        $stmt->execute([$token]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$session) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid session']);
+            return;
+        }
+        
+        $adminId = $session['admin_id'];
+        
+        // Get admin profile
+        $stmt = $pdo->prepare("SELECT id, full_name, email, phone, role, created_at, updated_at FROM user_profiles WHERE id = ? AND role = 'admin'");
+        $stmt->execute([$adminId]);
+        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$admin) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Admin profile not found']);
+            return;
+        }
+        
+        // Get last login from admin_sessions (excluding current session)
+        $stmt = $pdo->prepare("SELECT created_at as last_login FROM admin_sessions WHERE admin_id = ? AND session_token != ? ORDER BY created_at DESC LIMIT 1");
+        $stmt->execute([$adminId, $token]);
+        $lastSession = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($lastSession) {
+            $admin['last_login'] = $lastSession['last_login'];
+        } else {
+            // If no previous session found, use current session as last login
+            $stmt = $pdo->prepare("SELECT created_at as last_login FROM admin_sessions WHERE admin_id = ? AND session_token = ?");
+            $stmt->execute([$adminId, $token]);
+            $currentSession = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($currentSession) {
+                $admin['last_login'] = $currentSession['last_login'];
+            }
+        }
+        
+        echo json_encode($admin);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        error_log("Error getting admin profile: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to get admin profile: ' . $e->getMessage()]);
+    }
+}
+
+function handleUpdateAdminProfile() {
+    global $pdo;
+    
+    try {
+        // Get Authorization header - prioritize getallheaders() as it works best with Apache
+        $token = '';
+        
+        // Method 1: From getallheaders() (most reliable with Apache)
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (isset($headers['Authorization'])) {
+                $token = $headers['Authorization'];
+            }
+        }
+        // Method 2: From apache_request_headers()
+        elseif (function_exists('apache_request_headers')) {
+            $headers = apache_request_headers();
+            if (isset($headers['Authorization'])) {
+                $token = $headers['Authorization'];
+            }
+        }
+        // Method 3: Direct from $_SERVER (fallback)
+        elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+            $token = $_SERVER['HTTP_AUTHORIZATION'];
+        }
+        // Method 4: From REDIRECT_HTTP_AUTHORIZATION (Apache rewrite fallback)
+        elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+            $token = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        }
+        
+        $token = preg_replace('/^Bearer\s+/i', '', $token);
+        
+        if (!$token) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Authorization token required']);
+            return;
+        }
+        
+        // Validate admin session
+        if (!validateAdminSession($token)) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid or expired session']);
+            return;
+        }
+        
+        $input = json_decode(file_get_contents('php://input'), true);
+        
+        if (!$input) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid JSON input']);
+            return;
+        }
+        
+        // Validate required fields
+        if (!isset($input['full_name']) || !isset($input['email'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Full name and email are required']);
+            return;
+        }
+        
+        $full_name = trim($input['full_name']);
+        $email = trim($input['email']);
+        $phone = trim($input['phone'] ?? '');
+        
+        // Validate email format
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid email format']);
+            return;
+        }
+        
+        // Get admin ID from session
+        $stmt = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ? AND expires_at > NOW()");
+        $stmt->execute([$token]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$session) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid session']);
+            return;
+        }
+        
+        $adminId = $session['admin_id'];
+        
+        // Check if email is already taken by another user
+        $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE email = ? AND id != ?");
+        $stmt->execute([$email, $adminId]);
+        if ($stmt->fetch()) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Email is already taken by another user']);
+            return;
+        }
+        
+        // Update admin profile
+        $stmt = $pdo->prepare("UPDATE user_profiles SET full_name = ?, email = ?, phone = ?, updated_at = NOW() WHERE id = ?");
+        $stmt->execute([$full_name, $email, $phone, $adminId]);
+        
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Admin profile not found']);
+            return;
+        }
+        
+        echo json_encode(['success' => true, 'message' => 'Profile updated successfully']);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        error_log("Error updating admin profile: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to update profile: ' . $e->getMessage()]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        error_log("Unexpected error updating admin profile: " . $e->getMessage());
+        echo json_encode(['error' => 'An unexpected error occurred: ' . $e->getMessage()]);
+    }
+}
+
 function validateAdminSession($token) {
     global $pdo;
     
@@ -869,7 +1102,262 @@ function validateAdminSession($token) {
         $stmt->execute([$token]);
         return $stmt->fetch() !== false;
     } catch (PDOException $e) {
+        error_log("Error validating admin session: " . $e->getMessage());
         return false;
+    }
+}
+
+function handleDeleteContactMessage() {
+    global $pdo;
+    
+    // Get Authorization header
+    $token = '';
+    
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['HTTP_AUTHORIZATION'];
+    } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    
+    $token = preg_replace('/^Bearer\s+/i', '', $token);
+    
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Authorization token required']);
+        return;
+    }
+    
+    // Validate admin session
+    if (!validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid or expired session']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input || !isset($input['id'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Contact message ID is required']);
+        return;
+    }
+    
+    $messageId = $input['id'];
+    
+    try {
+        // Check if message exists
+        $stmt = $pdo->prepare("SELECT id FROM contact_messages WHERE id = ?");
+        $stmt->execute([$messageId]);
+        
+        if (!$stmt->fetch()) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Contact message not found']);
+            return;
+        }
+        
+        // Delete the message
+        $stmt = $pdo->prepare("DELETE FROM contact_messages WHERE id = ?");
+        $stmt->execute([$messageId]);
+        
+        echo json_encode(['success' => true, 'message' => 'Contact message deleted successfully']);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        error_log("Error deleting contact message: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to delete contact message: ' . $e->getMessage()]);
+    }
+}
+
+function handleDeleteOrder() {
+    global $pdo;
+    
+    // Get Authorization header
+    $token = '';
+    
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['HTTP_AUTHORIZATION'];
+    } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    
+    $token = preg_replace('/^Bearer\s+/i', '', $token);
+    
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Authorization token required']);
+        return;
+    }
+    
+    // Validate admin session
+    if (!validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid or expired session']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input || !isset($input['id'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Order ID is required']);
+        return;
+    }
+    
+    $orderId = $input['id'];
+    
+    try {
+        // Check if order exists
+        $stmt = $pdo->prepare("SELECT id FROM orders WHERE id = ?");
+        $stmt->execute([$orderId]);
+        
+        if (!$stmt->fetch()) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Order not found']);
+            return;
+        }
+        
+        // Delete the order directly (no order_items table exists)
+        $stmt = $pdo->prepare("DELETE FROM orders WHERE id = ?");
+        $stmt->execute([$orderId]);
+        
+        echo json_encode(['success' => true, 'message' => 'Order deleted successfully']);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        error_log("Error deleting order: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to delete order: ' . $e->getMessage()]);
+    }
+}
+
+function handleToggleUserAccountStatus() {
+    global $pdo;
+    
+    // Get Authorization header
+    $token = '';
+    
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['HTTP_AUTHORIZATION'];
+    } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    
+    $token = preg_replace('/^Bearer\s+/i', '', $token);
+    
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Authorization token required']);
+        return;
+    }
+    
+    // Validate admin session
+    if (!validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid or expired session']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input || !isset($input['user_id']) || !isset($input['action'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'User ID and action are required']);
+        return;
+    }
+    
+    $userId = $input['user_id'];
+    $action = $input['action']; // 'disable' or 'enable'
+    
+    if (!in_array($action, ['disable', 'enable'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid action. Must be disable or enable']);
+        return;
+    }
+    
+    try {
+        // Get current admin ID to prevent self-disabling
+        $stmt = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ? AND expires_at > NOW()");
+        $stmt->execute([$token]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$session) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid session']);
+            return;
+        }
+        
+        $adminId = $session['admin_id'];
+        
+        // Prevent admin from disabling themselves
+        if ($userId === $adminId) {
+            http_response_code(400);
+            echo json_encode(['error' => 'You cannot disable your own account']);
+            return;
+        }
+        
+        // Check if user exists
+        $stmt = $pdo->prepare("SELECT id, role FROM user_profiles WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            http_response_code(404);
+            echo json_encode(['error' => 'User not found']);
+            return;
+        }
+        
+        $newStatus = $action === 'disable' ? 'disabled' : 'active';
+        
+        // Update user_profiles table
+        $stmt = $pdo->prepare("UPDATE user_profiles SET account_status = ?, updated_at = NOW() WHERE id = ?");
+        $stmt->execute([$newStatus, $userId]);
+        
+        // If user is a vendor, also update vendors table
+        if ($user['role'] === 'vendor') {
+            $stmt = $pdo->prepare("UPDATE vendors SET account_status = ?, updated_at = NOW() WHERE user_id = ?");
+            $stmt->execute([$newStatus, $userId]);
+        }
+        
+        $actionText = $action === 'disable' ? 'disabled' : 'enabled';
+        echo json_encode([
+            'success' => true, 
+            'message' => "User account has been {$actionText} successfully",
+            'new_status' => $newStatus
+        ]);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        error_log("Error toggling user account status: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to update account status: ' . $e->getMessage()]);
     }
 }
 ?>

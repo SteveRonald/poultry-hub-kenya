@@ -340,7 +340,8 @@ const Dashboard = () => {
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="font-medium text-sm">#{order.order_number}</p>
-                              <p className="text-xs text-gray-500">{new Date(order.created_at).toLocaleDateString()}</p>
+                              <p className="text-xs text-gray-500">Ordered: {new Date(order.created_at).toLocaleDateString()}</p>
+                              <p className="text-xs text-gray-500">Updated: {new Date(order.last_status_updated || order.created_at).toLocaleString()}</p>
                             </div>
                             <Badge className={getStatusColor(order.status)}>
                               {order.status}
@@ -379,7 +380,8 @@ const Dashboard = () => {
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Quantity</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Total</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order Date</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Last Updated</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                         </tr>
                       </thead>
@@ -395,6 +397,7 @@ const Dashboard = () => {
                               </Badge>
                             </td>
                             <td className="py-3 px-4">{new Date(order.created_at).toLocaleDateString()}</td>
+                            <td className="py-3 px-4">{new Date(order.last_status_updated || order.created_at).toLocaleString()}</td>
                             <td className="py-3 px-4">
                               <Button 
                                 size="sm" 
@@ -605,6 +608,43 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Vendor Contact Information */}
+                  {selectedOrder.items && selectedOrder.items.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-primary">Vendor Contact Information</h3>
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
+                            <p className="text-gray-900">{selectedOrder.items[0].vendor_name}</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
+                            <a 
+                              href={`mailto:${selectedOrder.items[0].vendor_email}`}
+                              className="text-blue-600 hover:text-blue-800 underline"
+                            >
+                              {selectedOrder.items[0].vendor_email}
+                            </a>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
+                            <a 
+                              href={`tel:${selectedOrder.items[0].vendor_phone}`}
+                              className="text-blue-600 hover:text-blue-800 underline"
+                            >
+                              {selectedOrder.items[0].vendor_phone}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="mt-3 p-3 bg-blue-100 rounded text-sm text-blue-800">
+                          <p className="font-medium">💡 Need to contact the vendor?</p>
+                          <p>Use the email or phone number above to directly reach out to the vendor for any questions about your order.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Order Summary */}
                   <div className="border-t pt-6">

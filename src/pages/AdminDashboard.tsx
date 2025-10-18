@@ -16,7 +16,7 @@ import { useAdmin } from '../contexts/AdminContext';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
-  const { admin } = useAdmin();
+  const { admin, updateAdmin } = useAdmin();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<any>(null);
@@ -50,6 +50,26 @@ const AdminDashboard = () => {
     onConfirm: () => {},
     type: 'info'
   });
+  
+  // Profile update states
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [profileFormData, setProfileFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: ''
+  });
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
+  
+  // Delete confirmation states
+  const [showDeleteContactModal, setShowDeleteContactModal] = useState(false);
+  const [showDeleteOrderModal, setShowDeleteOrderModal] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<any>(null);
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  
+  // Account status toggle states
+  const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('admin_session_token');
@@ -624,10 +644,212 @@ const AdminDashboard = () => {
     });
   };
 
+  // Fetch admin profile data
+  const fetchAdminProfile = async () => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) return;
+    
+    try {
+      const response = await fetch(getApiUrl('/api/admin/me'), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const adminData = await response.json();
+        updateAdmin(adminData);
+      }
+    } catch (error) {
+      console.error('Error fetching admin profile:', error);
+    }
+  };
+
+  // Profile update functions
+  const openEditProfileModal = () => {
+    if (admin) {
+      setProfileFormData({
+        full_name: admin.full_name || '',
+        email: admin.email || '',
+        phone: admin.phone || ''
+      });
+    }
+    setShowEditProfileModal(true);
+  };
+
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setProfileFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSubmitting(true);
+    
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      
+      const response = await fetch(getApiUrl('/api/admin/profile'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profileFormData)
+      });
+
+      if (response.ok) {
+        // Refresh admin data
+        const adminResponse = await fetch(getApiUrl('/api/admin/me'), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (adminResponse.ok) {
+          const adminData = await adminResponse.json();
+          // Update admin context
+          updateAdmin(adminData);
+        }
+        
+        setShowEditProfileModal(false);
+        toast.success('Your profile has been updated successfully!');
+      } else {
+        const responseText = await response.text();
+        console.error('Profile update error response:', responseText);
+        
+        try {
+          const errorData = JSON.parse(responseText);
+          throw new Error(errorData.error || 'Failed to update profile');
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          throw new Error(`Server error: ${response.status} ${response.statusText}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to update profile. Please try again.");
+    } finally {
+      setProfileSubmitting(false);
+    }
+  };
+
+  // Delete contact message function
+  const handleDeleteContactMessage = async () => {
+    if (!contactToDelete) return;
+    
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/admin/contact-messages/delete'), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id: contactToDelete.id })
+      });
+
+      if (response.ok) {
+        // Remove from local state
+        setContactMessages(prev => prev.filter(msg => msg.id !== contactToDelete.id));
+        setShowDeleteContactModal(false);
+        setContactToDelete(null);
+        toast.success('Contact message deleted successfully!');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete contact message');
+      }
+    } catch (error) {
+      console.error('Error deleting contact message:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete contact message. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Delete order function
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/admin/orders/delete'), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id: orderToDelete.id })
+      });
+
+      if (response.ok) {
+        // Remove from local state
+        setOrders(prev => prev.filter(order => order.id !== orderToDelete.id));
+        setShowDeleteOrderModal(false);
+        setOrderToDelete(null);
+        setDeleteConfirmationText('');
+        toast.success('Order deleted successfully!');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete order');
+      }
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete order. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Toggle user account status function
+  const handleToggleAccountStatus = async (userId: string, currentStatus: string) => {
+    setTogglingStatus(userId);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const action = currentStatus === 'active' ? 'disable' : 'enable';
+      
+      const response = await fetch(getApiUrl('/api/admin/users/toggle-status'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ user_id: userId, action })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Update the user in the local state
+        setUsers(prev => prev.map(user => 
+          user.id === userId 
+            ? { ...user, account_status: result.new_status }
+            : user
+        ));
+        
+        toast.success(result.message);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update account status');
+      }
+    } catch (error) {
+      console.error('Error toggling account status:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to update account status. Please try again.");
+    } finally {
+      setTogglingStatus(null);
+    }
+  };
+
   // Fetch all on mount
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  // Fetch admin profile data when profile tab is accessed
+  useEffect(() => {
+    if (activeTab === 'profile') {
+      fetchAdminProfile();
+    }
+  }, [activeTab]);
 
 
   return (
@@ -752,7 +974,8 @@ const AdminDashboard = () => {
                   { id: 'users', label: 'User Management' },
                   { id: 'messages', label: 'Contact Messages' },
                   { id: 'commission', label: 'Commission' },
-                  { id: 'analytics', label: 'Analytics' }
+                  { id: 'analytics', label: 'Analytics' },
+                  { id: 'profile', label: 'Profile' }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -1057,7 +1280,8 @@ const AdminDashboard = () => {
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Amount</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order Date</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Last Updated</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                         </tr>
                       </thead>
@@ -1075,14 +1299,28 @@ const AdminDashboard = () => {
                               </Badge>
                             </td>
                             <td className="py-3 px-4">{order.date}</td>
+                            <td className="py-3 px-4">{order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}</td>
                             <td className="py-3 px-4">
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => viewOrder(order)}
-                              >
-                                View Details
-                              </Button>
+                              <div className="flex space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => viewOrder(order)}
+                                >
+                                  View Details
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => {
+                                    setOrderToDelete(order);
+                                    setShowDeleteOrderModal(true);
+                                  }}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  Delete
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1105,6 +1343,7 @@ const AdminDashboard = () => {
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Phone</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Role</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Joined</th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                         </tr>
@@ -1120,6 +1359,11 @@ const AdminDashboard = () => {
                                 {user.role}
                               </Badge>
                             </td>
+                            <td className="py-3 px-4">
+                              <Badge className={(user.account_status || 'active') === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                                {user.account_status || 'active'}
+                              </Badge>
+                            </td>
                             <td className="py-3 px-4">{new Date(user.created_at).toLocaleDateString()}</td>
                             <td className="py-3 px-4">
                               <div className="flex space-x-2">
@@ -1129,6 +1373,21 @@ const AdminDashboard = () => {
                                   onClick={() => handleEditUser(user)}
                                 >
                                   <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant={(user.account_status || 'active') === 'active' ? 'destructive' : 'default'}
+                                  onClick={() => handleToggleAccountStatus(user.id, user.account_status || 'active')}
+                                  disabled={togglingStatus === user.id || user.id === admin?.id}
+                                  className={(user.account_status || 'active') === 'disabled' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+                                >
+                                  {togglingStatus === user.id ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  ) : (user.account_status || 'active') === 'active' ? (
+                                    'Disable'
+                                  ) : (
+                                    'Enable'
+                                  )}
                                 </Button>
                                 <Button 
                                   size="sm" 
@@ -1265,18 +1524,18 @@ const AdminDashboard = () => {
                       {contactMessages.map((message) => (
                         <Card key={message.id} className={`${message.status === 'new' ? 'border-l-4 border-l-blue-500 bg-blue-50' : ''}`}>
                           <CardContent className="p-6">
-                            <div className="flex justify-between items-start mb-4">
+                            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-4 gap-4">
                               <div className="flex-1">
-                                <div className="flex items-center space-x-3 mb-2">
-                                  <h3 className="text-lg font-semibold text-gray-900">{message.subject}</h3>
-                                  <Badge className={message.status === 'new' ? 'bg-blue-100 text-blue-800' : 
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                                  <h3 className="text-lg font-semibold text-gray-900 break-words">{message.subject}</h3>
+                                  <Badge className={`${message.status === 'new' ? 'bg-blue-100 text-blue-800' : 
                                                    message.status === 'replied' ? 'bg-green-100 text-green-800' : 
-                                                   'bg-gray-100 text-gray-800'}>
+                                                   'bg-gray-100 text-gray-800'} self-start`}>
                                     {message.status}
                                   </Badge>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
-                                  <div>
+                                <div className="grid grid-cols-1 gap-3 text-sm text-gray-600 mb-3">
+                                  <div className="break-words">
                                     <span className="font-medium">From:</span> {message.name} ({message.email})
                                   </div>
                                   <div>
@@ -1292,7 +1551,7 @@ const AdminDashboard = () => {
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex space-x-2">
+                              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 lg:ml-4">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1301,8 +1560,20 @@ const AdminDashboard = () => {
                                     setShowReplyModal(true);
                                   }}
                                   disabled={message.status === 'replied'}
+                                  className="w-full sm:w-auto"
                                 >
                                   {message.status === 'replied' ? 'Replied' : 'Reply'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setContactToDelete(message);
+                                    setShowDeleteContactModal(true);
+                                  }}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
+                                >
+                                  Delete
                                 </Button>
                               </div>
                             </div>
@@ -1481,6 +1752,72 @@ const AdminDashboard = () => {
               {/* Analytics Tab */}
               {activeTab === 'analytics' && (
                 <Analytics />
+              )}
+
+              {/* Profile Tab */}
+              {activeTab === 'profile' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold text-primary">Admin Profile</h2>
+                    <Button onClick={openEditProfileModal} className="btn-primary">
+                      Edit Profile
+                    </Button>
+                  </div>
+
+                  {/* Profile Information */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold text-primary">Profile Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                          <p className="text-gray-900">{admin?.full_name || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                          <p className="text-gray-900">{admin?.email || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                          <p className="text-gray-900">{admin?.phone || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                          <Badge className="bg-green-100 text-green-800">Administrator</Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Account Information */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold text-primary">Account Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Account Status</label>
+                          <Badge className="bg-green-100 text-green-800">Active</Badge>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Last Login</label>
+                          <p className="text-gray-900">{admin?.last_login ? new Date(admin.last_login).toLocaleString() : 'Not available'}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Account Created</label>
+                          <p className="text-gray-900">{admin?.created_at ? new Date(admin.created_at).toLocaleDateString() : 'Not available'}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Admin ID</label>
+                          <p className="text-gray-900 font-mono text-sm">{admin?.id || 'Not available'}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               )}
             </div>
           </div>
@@ -1945,6 +2282,209 @@ const AdminDashboard = () => {
                 >
                   Close
                 </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Edit Modal */}
+      {showEditProfileModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-primary mb-4">Edit Profile</h3>
+              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                <div>
+                  <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    id="full_name"
+                    name="full_name"
+                    value={profileFormData.full_name}
+                    onChange={handleProfileChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={profileFormData.email}
+                    onChange={handleProfileChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    name="phone"
+                    value={profileFormData.phone}
+                    onChange={handleProfileChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowEditProfileModal(false)}
+                    disabled={profileSubmitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={profileSubmitting}
+                  >
+                    {profileSubmitting ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Updating...
+                      </div>
+                    ) : (
+                      'Update Profile'
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Contact Message Confirmation Modal */}
+      {showDeleteContactModal && contactToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md mx-auto">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center mb-4">
+                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                  <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Contact Message</h3>
+                <p className="text-sm text-gray-500 mb-6 break-words">
+                  Are you sure you want to delete this contact message from <strong>{contactToDelete.name}</strong>? 
+                  This action cannot be undone.
+                </p>
+                <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDeleteContactModal(false);
+                      setContactToDelete(null);
+                    }}
+                    disabled={deleting}
+                    className="w-full sm:w-auto order-2 sm:order-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleDeleteContactMessage}
+                    disabled={deleting}
+                    className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto order-1 sm:order-2"
+                  >
+                    {deleting ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Deleting...
+                      </div>
+                    ) : (
+                      'Delete Message'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Order Confirmation Modal */}
+      {showDeleteOrderModal && orderToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md mx-auto max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center mb-4">
+                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                  <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Order</h3>
+                <p className="text-sm text-gray-500 mb-4 break-words">
+                  <strong>WARNING:</strong> You are about to permanently delete order #{orderToDelete.id} from <strong>{orderToDelete.customer}</strong>.
+                </p>
+                <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-6">
+                  <p className="text-sm text-red-800 font-medium">
+                    ⚠️ This action is irreversible and will delete:
+                  </p>
+                  <ul className="text-sm text-red-700 mt-2 text-left">
+                    <li>• Order details and history</li>
+                    <li>• Order payment information</li>
+                    <li>• Commission records (if any)</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-gray-500 mb-6">
+                  Please type <strong>DELETE</strong> to confirm this action.
+                </p>
+                <input
+                  type="text"
+                  placeholder="Type DELETE to confirm"
+                  value={deleteConfirmationText}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                />
+                <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDeleteOrderModal(false);
+                      setOrderToDelete(null);
+                      setDeleteConfirmationText('');
+                    }}
+                    disabled={deleting}
+                    className="w-full sm:w-auto order-2 sm:order-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleDeleteOrder}
+                    disabled={deleting || deleteConfirmationText !== 'DELETE'}
+                    className="bg-red-600 hover:bg-red-700 text-white disabled:bg-gray-400 w-full sm:w-auto order-1 sm:order-2"
+                  >
+                    {deleting ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Deleting...
+                      </div>
+                    ) : (
+                      'Delete Order Permanently'
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

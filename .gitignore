@@ -29,6 +29,11 @@ backend/config/google_drive_tokens.json
 backend/logs/
 backend/backups/
 
+# OAuth and API tokens
+**/google_drive_tokens.json
+**/oauth_tokens.json
+**/api_tokens.json
+
 # API Keys and tokens
 **/tokens.json
 **/credentials.json

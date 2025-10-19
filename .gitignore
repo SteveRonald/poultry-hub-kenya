@@ -17,10 +17,23 @@ dist-ssr
 .env.local
 .env.production
 .env.staging
+backend/.env
+backend/.env.local
+backend/.env.production
+backend/.env.staging
 
 # Security sensitive files
 backend/config/database.php.backup
 backend/config/email_config.php.backup
+backend/config/google_drive_tokens.json
+backend/logs/
+backend/backups/
+
+# API Keys and tokens
+**/tokens.json
+**/credentials.json
+**/*_key.txt
+**/*_secret.txt
 
 # Editor directories and files
 .vscode/*

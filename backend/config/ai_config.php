@@ -72,8 +72,8 @@ return [
         ],
         'ultralytics_hub' => [
             'enabled' => true, // Your custom trained model
-            'api_key' => getenv('ULTRALYTICS_HUB_API_KEY') ?: 'ef0239ec885e78eff75d14e43590b6b0ecdfc54ed3', // Use environment variable
-            'model_id' => getenv('ULTRALYTICS_HUB_MODEL_ID') ?: 'https://hub.ultralytics.com/models/yx8VjcgEdxX3oe0iThY6', // Use environment variable
+            'api_key' => getenv('ULTRALYTICS_HUB_API_KEY') ?: '', // Use environment variable
+            'model_id' => getenv('ULTRALYTICS_HUB_MODEL_ID') ?: '', // Use environment variable
             'features' => [
                 'custom_poultry_detection' => true,
                 'breed_identification' => true,

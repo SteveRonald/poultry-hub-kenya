@@ -16,11 +16,20 @@ $allowedOrigins = [
     'http://192.168.83.24:3000'
 ];
 
+// Add production domains from environment
+$productionDomains = getenv('ALLOWED_ORIGINS');
+if ($productionDomains) {
+    $productionDomains = explode(',', $productionDomains);
+    $allowedOrigins = array_merge($allowedOrigins, array_map('trim', $productionDomains));
+}
+
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$defaultOrigin = getenv('DEFAULT_CORS_ORIGIN') ?: 'http://localhost:8082';
+
 if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
     header('Access-Control-Allow-Origin: ' . $origin);
 } else {
-    header('Access-Control-Allow-Origin: http://localhost:8082'); // Default fallback
+    header('Access-Control-Allow-Origin: ' . $defaultOrigin); // Default fallback
 }
 
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');

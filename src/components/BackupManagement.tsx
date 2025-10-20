@@ -1780,10 +1780,10 @@ const BackupManagement: React.FC = () => {
 
       {/* Google Drive Folder Info */}
       {googleDriveFolderInfo && (
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-4">Google Drive Backup Folder</h3>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="flex items-center space-x-3">
+          <div className="bg-green-50 p-3 sm:p-4 rounded-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                   <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1791,10 +1791,20 @@ const BackupManagement: React.FC = () => {
                   </svg>
                 </div>
               </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-medium text-green-800">{googleDriveFolderInfo.name}</h4>
-                <p className="text-sm text-green-600">Folder ID: {googleDriveFolderInfo.id}</p>
-                <p className="text-xs text-green-500">Created: {new Date(googleDriveFolderInfo.createdTime).toLocaleString()}</p>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm sm:text-base font-medium text-green-800 break-words" title={googleDriveFolderInfo.name}>
+                  {googleDriveFolderInfo.name}
+                </h4>
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs sm:text-sm text-green-600">
+                    <span className="font-medium">Folder ID:</span>
+                    <br className="sm:hidden" />
+                    <span className="break-all font-mono text-xs sm:text-sm">{googleDriveFolderInfo.id}</span>
+                  </p>
+                  <p className="text-xs text-green-500">
+                    <span className="font-medium">Created:</span> {new Date(googleDriveFolderInfo.createdTime).toLocaleString()}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -1898,7 +1908,7 @@ const BackupManagement: React.FC = () => {
       </div>
 
       {/* Upload Local Backups to Google Drive */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
         <div className="flex items-center space-x-2 mb-4">
           <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center">
             <svg className="w-4 h-4 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1907,34 +1917,45 @@ const BackupManagement: React.FC = () => {
           </div>
           <h3 className="text-lg font-semibold text-gray-900">Upload Local Backups to Google Drive</h3>
         </div>
-        <p className="text-gray-600 mb-4">Select local backups to upload to Google Drive for cloud storage</p>
+        <p className="text-gray-600 mb-4 text-sm sm:text-base">Select local backups to upload to Google Drive for cloud storage</p>
         
         {backups.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <p>No local backups available to upload</p>
+            <p className="text-sm sm:text-base">No local backups available to upload</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {backups.slice(0, 5).map((backup, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">{backup.filename}</div>
-                  <div className="text-sm text-gray-500">
-                    {formatFileSize(backup.size)} • {backup.created}
+              <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-900 text-sm sm:text-base truncate" title={backup.filename}>
+                    {backup.filename}
+                  </div>
+                  <div className="text-xs sm:text-sm text-gray-500 mt-1">
+                    <span className="block sm:inline">{formatFileSize(backup.size)}</span>
+                    <span className="hidden sm:inline"> • </span>
+                    <span className="block sm:inline">{backup.created}</span>
                   </div>
                 </div>
                 <button
                   onClick={() => uploadToGoogleDrive(backup.filename)}
                   disabled={uploadingFiles.has(backup.filename)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base w-full sm:w-auto"
                 >
                   {uploadingFiles.has(backup.filename) ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Uploading...
+                      <span className="hidden sm:inline">Uploading...</span>
+                      <span className="sm:hidden">Uploading</span>
                     </>
                   ) : (
-                    'Upload'
+                    <>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      <span className="hidden sm:inline">Upload</span>
+                      <span className="sm:hidden">Upload to Drive</span>
+                    </>
                   )}
                 </button>
               </div>

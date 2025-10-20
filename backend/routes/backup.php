@@ -7,10 +7,51 @@ require_once __DIR__ . '/admin.php';
  * Handle backup API requests
  */
 
+// Local helper to robustly extract Bearer token for backup routes only
+function getBackupBearerToken() {
+    $headers = [];
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+    }
+    if ((!$headers || count($headers) === 0) && function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+    }
+
+    // Try common header locations/case variants
+    $candidates = [
+        'Authorization' => null,
+        'authorization' => null,
+    ];
+
+    foreach ($candidates as $key => $_) {
+        if (isset($headers[$key])) {
+            $auth = $headers[$key];
+            if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
+                return $matches[1];
+            }
+        }
+    }
+
+    // Fallback to server var sometimes set by web servers
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $auth = $_SERVER['HTTP_AUTHORIZATION'];
+        if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
+            return $matches[1];
+        }
+    }
+
+    // Final fallback: allow explicit token query for this route only
+    if (isset($_GET['token']) && is_string($_GET['token']) && $_GET['token'] !== '') {
+        return $_GET['token'];
+    }
+
+    return null;
+}
+
 function handleCreateBackup() {
     global $pdo;
     
-    $token = getBearerToken();
+    $token = getBackupBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
         echo json_encode(['error' => 'Unauthorized']);
@@ -53,7 +94,7 @@ function handleCreateBackup() {
 function handleListBackups() {
     global $pdo;
     
-    $token = getBearerToken();
+    $token = getBackupBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
         echo json_encode(['error' => 'Unauthorized']);
@@ -78,7 +119,7 @@ function handleListBackups() {
 function handleDownloadBackup() {
     global $pdo;
     
-    $token = getBearerToken();
+    $token = getBackupBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
         echo json_encode(['error' => 'Unauthorized']);
@@ -113,7 +154,7 @@ function handleDownloadBackup() {
 function handleDeleteBackup() {
     global $pdo;
     
-    $token = getBearerToken();
+    $token = getBackupBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
         echo json_encode(['error' => 'Unauthorized']);
@@ -156,7 +197,7 @@ function handleDeleteBackup() {
 function handleBackupStatus() {
     global $pdo;
     
-    $token = getBearerToken();
+    $token = getBackupBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
         echo json_encode(['error' => 'Unauthorized']);
@@ -207,7 +248,7 @@ function handleBackupStatus() {
 function handleRestoreBackup() {
     global $pdo;
     
-    $token = getBearerToken();
+    $token = getBackupBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
         echo json_encode(['error' => 'Unauthorized']);

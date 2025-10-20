@@ -19,6 +19,8 @@ function getEmailTemplate($type, $data = []) {
             return getAdminNotificationTemplate($data, $baseUrl);
         case 'otp_email':
             return getOTPEmailTemplate($data, $baseUrl);
+        case 'backup_notification':
+            return getBackupNotificationTemplate($data, $baseUrl);
         default:
             return getDefaultTemplate($data, $baseUrl);
     }
@@ -547,6 +549,72 @@ function getDefaultTemplate($data, $baseUrl) {
     ";
     
     return getBaseTemplate('Notification - Poultry Hub Kenya', $content, $baseUrl);
+}
+
+function getBackupNotificationTemplate($data, $baseUrl) {
+    $backupType = $data['backup_type'] ?? 'unknown';
+    $status = $data['status'] ?? 'unknown';
+    $details = $data['details'] ?? [];
+    
+    $typeNames = [
+        'database' => 'Database',
+        'files' => 'System Files',
+        'system' => 'Full System'
+    ];
+    
+    $typeName = $typeNames[$backupType] ?? ucfirst($backupType);
+    $statusText = $status === 'success' ? 'completed successfully' : 'failed';
+    $statusColor = $status === 'success' ? '#28a745' : '#dc3545';
+    
+    $detailsHtml = '';
+    if (!empty($details)) {
+        $detailsHtml = '<div class="order-details"><h3 style="color: #2c5530; margin-top: 0;">Backup Details</h3>';
+        foreach ($details as $key => $value) {
+            $detailsHtml .= "
+                <div class='info-row'>
+                    <span class='info-label'>" . ucfirst(str_replace('_', ' ', $key)) . ":</span>
+                    <span class='info-value'>$value</span>
+                </div>
+            ";
+        }
+        $detailsHtml .= '</div>';
+    }
+    
+    $content = "
+        <h2 style='color: #2c5530; margin-top: 0;'>Backup Notification</h2>
+        <p>Dear Admin,</p>
+        <p>A backup operation has been performed on your Poultry Hub Kenya system.</p>
+        
+        <div class='order-details'>
+            <h3 style='color: #2c5530; margin-top: 0;'>Backup Summary</h3>
+            <div class='info-row'>
+                <span class='info-label'>Backup Type:</span>
+                <span class='info-value'>$typeName</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Status:</span>
+                <span class='info-value' style='color: $statusColor; font-weight: bold;'>" . ucfirst($status) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Timestamp:</span>
+                <span class='info-value'>" . date('F j, Y \a\t g:i A') . "</span>
+            </div>
+        </div>
+        
+        $detailsHtml
+        
+        <div style='text-align: center; margin: 30px 0;'>
+            <a href='$baseUrl/admin-dashboard' class='button'>View Admin Dashboard</a>
+        </div>
+        
+        <p>This is an automated notification from your backup system.</p>
+    ";
+    
+    $title = $status === 'success' ? 
+        "$typeName Backup Completed Successfully" : 
+        "$typeName Backup Failed";
+    
+    return getBaseTemplate("$title - Poultry Hub Kenya", $content, $baseUrl);
 }
 
 ?>

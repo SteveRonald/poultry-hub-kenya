@@ -10,7 +10,7 @@ $allowedOrigins = [
     'http://127.0.0.1:8081',
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
-    'http://192.168.137.1:8080',
+    'http://192.168.78.24:8080',
     'http://192.168.83.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.83.24:3000'
@@ -509,6 +509,77 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/backup_settings.php';
             handleTestBackupConnection();
+        }
+        break;
+        
+    case 'api/admin/backup/test-email':
+        if ($method === 'POST') {
+            include 'routes/backup_settings.php';
+            handleTestEmail();
+        }
+        break;
+        
+    case 'api/admin/backup/setup-windows-task':
+        if ($method === 'POST') {
+            include 'routes/backup_settings.php';
+            handleSetupWindowsTask();
+        }
+        break;
+        
+    case 'api/admin/backup/windows-task-status':
+        if ($method === 'GET') {
+            include 'routes/backup_settings.php';
+            handleWindowsTaskStatus();
+        }
+        break;
+        
+    case 'api/admin/backup/stop-windows-task':
+        if ($method === 'POST') {
+            include 'routes/backup_settings.php';
+            handleStopWindowsTask();
+        }
+        break;
+        
+    // Google Drive backup routes
+    case 'api/admin/google-drive/upload':
+        if ($method === 'POST') {
+            include 'routes/google_drive_backup.php';
+            handleGoogleDriveUpload();
+        }
+        break;
+        
+    case 'api/admin/google-drive/list':
+        if ($method === 'GET') {
+            include 'routes/google_drive_backup.php';
+            handleGoogleDriveList();
+        }
+        break;
+        
+    case 'api/admin/google-drive/delete':
+        if ($method === 'DELETE') {
+            include 'routes/google_drive_backup.php';
+            handleGoogleDriveDelete();
+        }
+        break;
+        
+    case 'api/admin/google-drive/test':
+        if ($method === 'GET') {
+            include 'routes/google_drive_backup.php';
+            handleGoogleDriveTest();
+        }
+        break;
+        
+    case 'api/admin/google-drive/logs':
+        if ($method === 'GET') {
+            include 'routes/google_drive_backup.php';
+            handleGoogleDriveLogs();
+        }
+        break;
+        
+    case 'api/admin/google-drive/folder-info':
+        if ($method === 'GET') {
+            include 'routes/google_drive_backup.php';
+            handleGoogleDriveFolderInfo();
         }
         break;
         

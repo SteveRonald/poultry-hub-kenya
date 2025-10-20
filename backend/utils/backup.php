@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/email_notifications.php';
 
 /**
  * Database backup utility
@@ -14,6 +15,9 @@ class BackupManager {
         $this->pdo = $pdo;
         $this->backupDir = __DIR__ . '/../../backups';
         $this->maxBackups = 30; // Keep last 30 backups
+        
+        // Set timezone to Nairobi (UTC+3)
+        date_default_timezone_set('Africa/Nairobi');
         
         // Create backup directory if it doesn't exist
         if (!is_dir($this->backupDir)) {
@@ -76,6 +80,14 @@ class BackupManager {
                 // Log the backup
                 $this->logBackup($filename, $type, 'success', 'Database backup completed successfully');
                 
+                // Send email notification
+                $emailNotifier = new EmailNotifications();
+                $emailNotifier->sendBackupNotification('database', 'success', [
+                    'filename' => $filename,
+                    'size' => $this->formatBytes(filesize($filepath)),
+                    'type' => ucfirst($type)
+                ]);
+                
                 return [
                     'success' => true,
                     'message' => 'Database backup created successfully',
@@ -85,6 +97,14 @@ class BackupManager {
                 ];
             } else {
                 $this->logBackup($filename, $type, 'error', 'Failed to create database backup');
+                
+                // Send email notification for failure
+                $emailNotifier = new EmailNotifications();
+                $emailNotifier->sendBackupNotification('database', 'error', [
+                    'type' => ucfirst($type),
+                    'error' => 'Failed to create database backup'
+                ]);
+                
                 return [
                     'success' => false,
                     'message' => 'Failed to create database backup'
@@ -93,6 +113,14 @@ class BackupManager {
             
         } catch (Exception $e) {
             $this->logBackup('', $type, 'error', 'Exception: ' . $e->getMessage());
+            
+            // Send email notification for exception
+            $emailNotifier = new EmailNotifications();
+            $emailNotifier->sendBackupNotification('database', 'error', [
+                'type' => ucfirst($type),
+                'error' => $e->getMessage()
+            ]);
+            
             return [
                 'success' => false,
                 'message' => 'Backup failed: ' . $e->getMessage()
@@ -105,6 +133,11 @@ class BackupManager {
      */
     public function createFileBackup($type = 'manual') {
         try {
+            // Check if ZIP extension is available
+            if (!extension_loaded('zip') || !class_exists('ZipArchive')) {
+                throw new Exception('ZIP extension is not available. Please enable the ZIP extension in PHP.');
+            }
+            
             $timestamp = date('Y-m-d_H-i-s');
             $filename = "files_backup_{$type}_{$timestamp}.zip";
             $filepath = $this->backupDir . '/' . $filename;
@@ -136,6 +169,14 @@ class BackupManager {
             // Log the backup
             $this->logBackup($filename, $type, 'success', 'File backup completed successfully');
             
+            // Send email notification
+            $emailNotifier = new EmailNotifications();
+            $emailNotifier->sendBackupNotification('files', 'success', [
+                'filename' => $filename,
+                'size' => $this->formatBytes(filesize($filepath)),
+                'type' => ucfirst($type)
+            ]);
+            
             return [
                 'success' => true,
                 'message' => 'File backup created successfully',
@@ -146,6 +187,14 @@ class BackupManager {
             
         } catch (Exception $e) {
             $this->logBackup('', $type, 'error', 'Exception: ' . $e->getMessage());
+            
+            // Send email notification for exception
+            $emailNotifier = new EmailNotifications();
+            $emailNotifier->sendBackupNotification('files', 'error', [
+                'type' => ucfirst($type),
+                'error' => $e->getMessage()
+            ]);
+            
             return [
                 'success' => false,
                 'message' => 'File backup failed: ' . $e->getMessage()
@@ -158,6 +207,11 @@ class BackupManager {
      */
     public function createSystemBackup($type = 'manual') {
         try {
+            // Check if ZIP extension is available
+            if (!extension_loaded('zip') || !class_exists('ZipArchive')) {
+                throw new Exception('ZIP extension is not available. Please enable the ZIP extension in PHP.');
+            }
+            
             $timestamp = date('Y-m-d_H-i-s');
             $filename = "system_backup_{$type}_{$timestamp}.zip";
             $filepath = $this->backupDir . '/' . $filename;
@@ -204,6 +258,14 @@ class BackupManager {
             // Log the backup
             $this->logBackup($filename, $type, 'success', 'System backup completed successfully');
             
+            // Send email notification
+            $emailNotifier = new EmailNotifications();
+            $emailNotifier->sendBackupNotification('system', 'success', [
+                'filename' => $filename,
+                'size' => $this->formatBytes(filesize($filepath)),
+                'type' => ucfirst($type)
+            ]);
+            
             return [
                 'success' => true,
                 'message' => 'System backup created successfully',
@@ -214,6 +276,14 @@ class BackupManager {
             
         } catch (Exception $e) {
             $this->logBackup('', $type, 'error', 'Exception: ' . $e->getMessage());
+            
+            // Send email notification for exception
+            $emailNotifier = new EmailNotifications();
+            $emailNotifier->sendBackupNotification('system', 'error', [
+                'type' => ucfirst($type),
+                'error' => $e->getMessage()
+            ]);
+            
             return [
                 'success' => false,
                 'message' => 'System backup failed: ' . $e->getMessage()
@@ -431,6 +501,19 @@ class BackupManager {
         // Implementation for file restore
         // This is a complex operation that should be done carefully
         throw new Exception('File restore not implemented yet');
+    }
+    
+    /**
+     * Format bytes to human readable format
+     */
+    private function formatBytes($bytes, $precision = 2) {
+        $units = array('B', 'KB', 'MB', 'GB', 'TB');
+        
+        for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
+            $bytes /= 1024;
+        }
+        
+        return round($bytes, $precision) . ' ' . $units[$i];
     }
 }
 ?>

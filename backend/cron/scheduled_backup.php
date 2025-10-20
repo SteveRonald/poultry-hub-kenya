@@ -5,16 +5,54 @@
  * Example cron entry: 0 2 * * * php /path/to/scheduled_backup.php
  */
 
+// Set timezone to Nairobi (UTC+3)
+date_default_timezone_set('Africa/Nairobi');
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/backup.php';
+require_once __DIR__ . '/../utils/google_drive_backup.php';
 
 try {
-    // Check if auto backup is enabled
-    $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'auto_backup_enabled'");
-    $autoBackupEnabled = $stmt->fetchColumn();
+    // Check which local backup types are enabled (new specific settings)
+    $localBackupTypes = [];
     
-    if (!$autoBackupEnabled || $autoBackupEnabled !== '1') {
-        echo "Auto backup is disabled. Exiting.\n";
+    $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'auto_local_database'");
+    if ($stmt->fetchColumn() === '1') {
+        $localBackupTypes[] = 'database';
+    }
+    
+    $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'auto_local_files'");
+    if ($stmt->fetchColumn() === '1') {
+        $localBackupTypes[] = 'files';
+    }
+    
+    $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'auto_local_system'");
+    if ($stmt->fetchColumn() === '1') {
+        $localBackupTypes[] = 'system';
+    }
+    
+    // Check which Google Drive upload types are enabled (new specific settings)
+    $gdriveUploadTypes = [];
+    
+    $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'auto_gdrive_database'");
+    if ($stmt->fetchColumn() === '1') {
+        $gdriveUploadTypes[] = 'database';
+    }
+    
+    $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'auto_gdrive_files'");
+    if ($stmt->fetchColumn() === '1') {
+        $gdriveUploadTypes[] = 'files';
+    }
+    
+    $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'auto_gdrive_system'");
+    if ($stmt->fetchColumn() === '1') {
+        $gdriveUploadTypes[] = 'system';
+    }
+    
+    // Note: Legacy settings have been removed in favor of specific backup type settings
+    
+    if (empty($localBackupTypes) && empty($gdriveUploadTypes)) {
+        echo "No backup types are enabled for automatic backup. Exiting.\n";
         exit(0);
     }
     
@@ -26,7 +64,7 @@ try {
     $stmt = $pdo->query("
         SELECT MAX(created_at) as last_backup 
         FROM backup_logs 
-        WHERE type = 'scheduled' AND status = 'success'
+        WHERE type = 'scheduled'
     ");
     $lastBackup = $stmt->fetchColumn();
     
@@ -65,33 +103,73 @@ try {
         exit(0);
     }
     
-    // Create backup
+    // Create local backups for each enabled type
     echo "Starting scheduled backup...\n";
     $backupManager = new BackupManager();
-    $result = $backupManager->createSystemBackup('scheduled');
+    $results = [];
     
-    if ($result['success']) {
-        echo "✅ Scheduled backup completed successfully: {$result['filename']}\n";
+    // Process local backups
+    foreach ($localBackupTypes as $backupType) {
+        echo "Creating local {$backupType} backup...\n";
         
-        // Send notification if enabled
-        $stmt = $pdo->query("SELECT setting_value FROM backup_settings WHERE setting_key = 'backup_notifications'");
-        $notificationsEnabled = $stmt->fetchColumn();
-        
-        if ($notificationsEnabled === '1') {
-            require_once __DIR__ . '/../utils/notifications.php';
-            $message = "Scheduled backup completed successfully: {$result['filename']} (Size: " . round($result['size'] / (1024 * 1024), 2) . " MB)";
-            notifyAllAdmins($message, 'backup');
+        switch ($backupType) {
+            case 'database':
+                $result = $backupManager->createDatabaseBackup('scheduled');
+                break;
+            case 'files':
+                $result = $backupManager->createFileBackup('scheduled');
+                break;
+            case 'system':
+                $result = $backupManager->createSystemBackup('scheduled');
+                break;
+            default:
+                echo "Unknown backup type: {$backupType}\n";
+                continue 2;
         }
         
+        $results[$backupType] = $result;
+        
+        if ($result['success']) {
+            echo "✅ {$backupType} backup completed successfully: {$result['filename']}\n";
+        } else {
+            echo "❌ {$backupType} backup failed: {$result['message']}\n";
+        }
+    }
+    
+    // Upload to Google Drive for enabled types
+    if (!empty($gdriveUploadTypes)) {
+        echo "📤 Uploading backups to Google Drive...\n";
+        try {
+            $googleDriveBackup = new GoogleDriveBackup();
+            
+            foreach ($results as $backupType => $result) {
+                // Only upload if this backup type is enabled for Google Drive
+                if ($result['success'] && in_array($backupType, $gdriveUploadTypes)) {
+                    echo "Uploading {$backupType} backup to Google Drive...\n";
+                    $uploadResult = $googleDriveBackup->uploadBackup($result['filepath'], $result['filename'], $backupType);
+                    
+                    if ($uploadResult['success']) {
+                        echo "✅ {$backupType} backup uploaded to Google Drive successfully\n";
+                    } else {
+                        echo "❌ {$backupType} backup Google Drive upload failed: {$uploadResult['message']}\n";
+                    }
+                } elseif ($result['success']) {
+                    echo "ℹ️ {$backupType} backup created locally but Google Drive upload not enabled for this type\n";
+                }
+            }
+        } catch (Exception $e) {
+            echo "❌ Google Drive upload error: {$e->getMessage()}\n";
+        }
+    }
+    
+    // Summary
+    $successCount = count(array_filter($results, function($result) { return $result['success']; }));
+    $totalCount = count($results);
+    
+    if ($successCount === $totalCount) {
+        echo "✅ All scheduled backups completed successfully ({$successCount}/{$totalCount})\n";
     } else {
-        echo "❌ Scheduled backup failed: {$result['message']}\n";
-        
-        // Send error notification
-        require_once __DIR__ . '/../utils/notifications.php';
-        $message = "Scheduled backup failed: {$result['message']}";
-        notifyAllAdmins($message, 'error');
-        
-        exit(1);
+        echo "⚠️  Scheduled backup completed with some failures ({$successCount}/{$totalCount} successful)\n";
     }
     
 } catch (Exception $e) {

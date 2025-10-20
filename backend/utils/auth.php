@@ -50,13 +50,32 @@ function validateJWT($token) {
 }
 
 function getBearerToken() {
-    $headers = getallheaders();
-    if (isset($headers['Authorization'])) {
-        $auth = $headers['Authorization'];
-        if (preg_match('/Bearer\s(\S+)/', $auth, $matches)) {
-            return $matches[1];
-        }
+    // Try PHP's getallheaders first (case can vary by server)
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
+
+    // Normalize header keys to lowercase for robust lookup
+    $normalizedHeaders = [];
+    foreach ($headers as $key => $value) {
+        $normalizedHeaders[strtolower($key)] = $value;
     }
+
+    // Preferred: Authorization header
+    $authHeader = $normalizedHeaders['authorization'] ?? null;
+
+    // Fallback 1: Apache/Nginx often forwards to HTTP_AUTHORIZATION
+    if (!$authHeader && isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
+    }
+
+    // Fallback 2: Some environments expose REDIRECT_HTTP_AUTHORIZATION
+    if (!$authHeader && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $authHeader = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+
+    if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+        return $matches[1];
+    }
+
     return null;
 }
 ?>

@@ -28,6 +28,7 @@ backend/config/email_config.php.backup
 backend/config/google_drive_tokens.json
 backend/logs/
 backend/backups/
+backups/
 
 # OAuth and API tokens
 **/google_drive_tokens.json
@@ -39,6 +40,10 @@ backend/backups/
 **/credentials.json
 **/*_key.txt
 **/*_secret.txt
+**/*_token.txt
+**/*admin_token*
+**/*session_token*
+**/*auth_token*
 
 # Editor directories and files
 .vscode/*

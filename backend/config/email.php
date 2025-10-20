@@ -9,7 +9,12 @@ use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
 function sendEmail($to, $subject, $message, $from = null) {
+    error_log("=== SEND EMAIL START ===");
+    error_log("To: {$to}");
+    error_log("Subject: {$subject}");
+    
     $config = getEmailConfig();
+    error_log("Email config loaded: " . json_encode($config['smtp']));
     
     if (!$from) {
         $from = $config['smtp']['from_email'];
@@ -52,16 +57,23 @@ function sendEmail($to, $subject, $message, $from = null) {
         $mail->Body    = $message;
         
         $mail->send();
+        error_log("=== EMAIL SENT SUCCESSFULLY ===");
         return true;
     } catch (Exception $e) {
         error_log("Email sending failed: {$mail->ErrorInfo}");
+        error_log("Exception details: " . $e->getMessage());
         
         // Fallback to basic mail() function if SMTP fails
+        error_log("Trying fallback mail() function...");
         $headers = "From: $from\r\n";
         $headers .= "Reply-To: $from\r\n";
         $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
         
-        return mail($to, $subject, $message, $headers);
+        $fallbackResult = mail($to, $subject, $message, $headers);
+        error_log("Fallback mail() result: " . ($fallbackResult ? 'SUCCESS' : 'FAILED'));
+        error_log("=== SEND EMAIL END ===");
+        
+        return $fallbackResult;
     }
 }
 

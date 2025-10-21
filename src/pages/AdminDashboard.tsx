@@ -966,7 +966,7 @@ const AdminDashboard = () => {
           {/* Tab Navigation */}
           <div className="bg-white rounded-lg shadow-md mb-6">
             <div className="border-b border-gray-200">
-              <nav className="flex flex-wrap space-x-2 sm:space-x-8 px-4 sm:px-6 overflow-x-auto">
+              <nav className="flex flex-wrap space-x-1 sm:space-x-2 px-2 sm:px-6 overflow-x-auto">
                 {[
                   { id: 'overview', label: 'Overview' },
                   { id: 'vendors', label: 'Vendor Approvals' },
@@ -982,27 +982,33 @@ const AdminDashboard = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
+                    className={`relative py-3 sm:py-4 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap rounded-t-lg transition-all duration-200 cursor-pointer group ${
                       activeTab === tab.id
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'border-primary text-primary bg-primary/5 shadow-sm'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm'
                     }`}
                   >
-                    {tab.label}
-                    {(tab.id === 'vendors' && stats?.pendingVendors > 0) && (
-                      <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                        {stats?.pendingVendors}
-                      </span>
-                    )}
-                    {(tab.id === 'products' && stats?.pendingProducts > 0) && (
-                      <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                        {stats?.pendingProducts}
-                      </span>
-                    )}
-                    {(tab.id === 'messages' && contactMessages.filter(msg => msg.status === 'new').length > 0) && (
-                      <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                        {contactMessages.filter(msg => msg.status === 'new').length}
-                      </span>
+                    <span className="flex items-center">
+                      {tab.label}
+                      {(tab.id === 'vendors' && stats?.pendingVendors > 0) && (
+                        <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                          {stats?.pendingVendors}
+                        </span>
+                      )}
+                      {(tab.id === 'products' && stats?.pendingProducts > 0) && (
+                        <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                          {stats?.pendingProducts}
+                        </span>
+                      )}
+                      {(tab.id === 'messages' && contactMessages.filter(msg => msg.status === 'new').length > 0) && (
+                        <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                          {contactMessages.filter(msg => msg.status === 'new').length}
+                        </span>
+                      )}
+                    </span>
+                    {/* Active tab indicator */}
+                    {activeTab === tab.id && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
                     )}
                   </button>
                 ))}

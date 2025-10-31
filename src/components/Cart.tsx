@@ -60,9 +60,17 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(`Orders created successfully! ${data.total_orders} order(s) placed.`);
+        const ordersCount = (data && (data.total_items ?? data.total_orders)) ?? 0;
+        // Show order success first
+        toast.success(`Orders created successfully! ${ordersCount} order(s) placed.`);
+        // Clear cart immediately in UI (backend also clears server-side)
+        await clearCart(true);
+        // Stagger a second toast so both are visible to the user
+        setTimeout(() => {
+          toast.success('Cart cleared.');
+        },3000);
         setShowCheckout(false);
-        setCheckoutData({ shipping_address: '', contact_phone: '', notes: '' });
+        setCheckoutData({ shipping_address: '', contact_phone: '', payment_method: 'mpesa', notes: '' });
         onClose();
       } else {
         toast.error(data.error || 'Failed to place order');
@@ -111,7 +119,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                   <div className="space-y-4">
                     {cartItems.map((item) => (
                       <Card key={item.cart_id} className="p-4">
-                        <div className="flex items-center space-x-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                           {/* Product Image */}
                           <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
                             {item.image_url ? (
@@ -135,11 +143,11 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                             <h3 className="font-semibold text-gray-900">{item.product_name}</h3>
                             <p className="text-sm text-gray-600 capitalize">{item.category}</p>
                             <p className="text-sm text-gray-500">Vendor: {item.vendor_name}</p>
-                            <p className="text-lg font-bold text-primary">KSH {parseFloat(item.price).toFixed(2)}</p>
+                            <p className="text-lg font-bold text-primary">KSH {Number(item.price).toFixed(2)}</p>
                           </div>
 
                           {/* Quantity Controls */}
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center gap-2">
                             <Button
                               size="sm"
                               variant="outline"
@@ -160,9 +168,9 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                           </div>
 
                           {/* Total Price */}
-                          <div className="text-right">
+                          <div className="text-left sm:text-right">
                             <p className="text-lg font-bold text-primary">
-                              KSH {parseFloat(item.total_price).toFixed(2)}
+                              KSH {Number(item.total_price).toFixed(2)}
                             </p>
                             <Button
                               size="sm"
@@ -189,10 +197,10 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                       <div className="flex justify-between items-center mb-6">
                         <span className="text-xl font-bold">Total Amount:</span>
                         <span className="text-2xl font-bold text-primary">
-                          KSH {parseFloat(cartSummary.total_amount).toFixed(2)}
+                          KSH {Number(cartSummary.total_amount).toFixed(2)}
                         </span>
                       </div>
-                      <div className="flex space-x-3">
+                      <div className="flex flex-col sm:flex-row gap-3">
                         <Button
                           onClick={() => setShowCheckout(true)}
                           className="flex-1 btn-primary"
@@ -202,7 +210,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                           Proceed to Checkout
                         </Button>
                         <Button
-                          onClick={clearCart}
+                          onClick={() => clearCart()}
                           variant="outline"
                           disabled={loading}
                         >
@@ -301,13 +309,13 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                         {cartItems.map((item) => (
                           <div key={item.cart_id} className="flex justify-between">
                             <span className="text-sm">{item.product_name} x {item.quantity}</span>
-                            <span className="text-sm font-medium">KSH {parseFloat(item.total_price).toFixed(2)}</span>
+                            <span className="text-sm font-medium">KSH {Number(item.total_price).toFixed(2)}</span>
                           </div>
                         ))}
                         <div className="border-t pt-2 mt-4">
                           <div className="flex justify-between text-lg font-bold">
                             <span>Total:</span>
-                            <span className="text-primary">KSH {parseFloat(cartSummary.total_amount).toFixed(2)}</span>
+                            <span className="text-primary">KSH {Number(cartSummary.total_amount).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -315,6 +323,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                   </Card>
 
                   <div className="flex space-x-3">
+                    
                     <Button
                       onClick={handleCheckout}
                       className="flex-1 btn-primary"

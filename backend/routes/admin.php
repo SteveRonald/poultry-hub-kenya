@@ -726,14 +726,16 @@ function handleVendorApproval() {
         return;
     }
     
-    // Get admin ID from JWT token
-    $payload = validateJWT($token);
-    if (!$payload) {
+    // Get admin ID from active session token
+    $stmt = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ? AND expires_at > NOW()");
+    $stmt->execute([$token]);
+    $session = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$session) {
         http_response_code(401);
-        echo json_encode(['error' => 'Invalid token']);
+        echo json_encode(['error' => 'Invalid or expired session']);
         return;
     }
-    $adminId = $payload['user_id'];
+    $adminId = $session['admin_id'];
     
     $input = json_decode(file_get_contents('php://input'), true);
     $vendorId = $input['vendor_id'] ?? null;

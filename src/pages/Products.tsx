@@ -43,10 +43,7 @@ const Products = () => {
       return;
     }
     
-    const success = await addToCart(productId, 1);
-    if (success) {
-      toast.success('Item added to cart!');
-    }
+    await addToCart(productId, 1); // Context handles toasts
   };
 
   // Get unique locations from products

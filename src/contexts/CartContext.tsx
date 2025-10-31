@@ -31,7 +31,7 @@ interface CartContextType {
   addToCart: (productId: string, quantity: number) => Promise<boolean>;
   updateCartItem: (cartId: number, quantity: number) => Promise<boolean>;
   removeFromCart: (cartId: number) => Promise<boolean>;
-  clearCart: () => Promise<boolean>;
+  clearCart: (silent?: boolean) => Promise<boolean>;
   refreshCart: () => Promise<void>;
 }
 
@@ -210,7 +210,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     }
   };
 
-  const clearCart = async (): Promise<boolean> => {
+  const clearCart = async (silent: boolean = false): Promise<boolean> => {
     const token = localStorage.getItem('token');
     if (!token) {
       toast.error('Please login to clear cart');
@@ -229,7 +229,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(data.message);
+        if (!silent) {
+          toast.success(data.message);
+        }
         await fetchCart(); // Refresh cart
         return true;
       } else {

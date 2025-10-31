@@ -206,92 +206,97 @@ function handleCreateOrder() {
         }
         
         $pdo->commit();
-        
-        // Send notification emails to vendors
-        $vendorEmails = [];
-        foreach ($createdOrders as $order) {
-            if (!isset($vendorEmails[$order['vendor_id']])) {
-                $vendorEmails[$order['vendor_id']] = [
-                    'email' => $order['vendor_email'],
-                    'name' => $order['vendor_name'],
-                    'orders' => []
-                ];
+
+        // Best-effort emails and notifications; do not fail the request if these error
+        try {
+            // Send notification emails to vendors
+            $vendorEmails = [];
+            foreach ($createdOrders as $order) {
+                if (!isset($vendorEmails[$order['vendor_id']])) {
+                    $vendorEmails[$order['vendor_id']] = [
+                        'email' => $order['vendor_email'],
+                        'name' => $order['vendor_name'],
+                        'orders' => []
+                    ];
+                }
+                $vendorEmails[$order['vendor_id']]['orders'][] = $order;
             }
-            $vendorEmails[$order['vendor_id']]['orders'][] = $order;
-        }
-        
-        foreach ($vendorEmails as $vendorId => $vendorData) {
-            // Prepare items for this vendor
-            $vendorItems = [];
-            foreach ($vendorData['orders'] as $order) {
-                $vendorItems[] = [
-                    'product_name' => $order['product_name'],
-                    'quantity' => $order['quantity'],
-                    'unit_price' => $order['product_price'],
-                    'total_amount' => $order['total_amount']
+
+            foreach ($vendorEmails as $vendorId => $vendorData) {
+                // Prepare items for this vendor
+                $vendorItems = [];
+                foreach ($vendorData['orders'] as $order) {
+                    $vendorItems[] = [
+                        'product_name' => $order['product_name'],
+                        'quantity' => $order['quantity'],
+                        'unit_price' => $order['product_price'],
+                        'total_amount' => $order['total_amount']
+                    ];
+                }
+
+                $vendorEmailData = [
+                    'order' => [
+                        'order_number' => $orderNumber,
+                        'customer_name' => $vendorData['orders'][0]['customer_name'],
+                        'created_at' => $vendorData['orders'][0]['created_at'],
+                        'shipping_address' => $vendorData['orders'][0]['shipping_address'],
+                        'contact_phone' => $vendorData['orders'][0]['contact_phone'],
+                        'items' => $vendorItems
+                    ],
+                    'vendor' => [
+                        'name' => $vendorData['name']
+                    ]
                 ];
+
+                sendStyledEmail($vendorData['email'], 'vendor_notification', $vendorEmailData);
             }
-            
-            $vendorEmailData = [
+
+            // Send order confirmation email to customer
+            $customerEmailData = [
                 'order' => [
                     'order_number' => $orderNumber,
-                    'customer_name' => $vendorData['orders'][0]['customer_name'],
-                    'created_at' => $vendorData['orders'][0]['created_at'],
-                    'shipping_address' => $vendorData['orders'][0]['shipping_address'],
-                    'contact_phone' => $vendorData['orders'][0]['contact_phone'],
-                    'items' => $vendorItems
+                    'status' => 'pending',
+                    'total_amount' => array_sum(array_column($createdOrders, 'total_amount')),
+                    'shipping_address' => $createdOrders[0]['shipping_address'],
+                    'contact_phone' => $createdOrders[0]['contact_phone'],
+                    'payment_method' => $createdOrders[0]['payment_method'],
+                    'created_at' => $createdOrders[0]['created_at'],
+                    'items' => []
                 ],
-                'vendor' => [
-                    'name' => $vendorData['name']
+                'customer' => [
+                    'name' => $createdOrders[0]['customer_name']
                 ]
             ];
-            
-            sendStyledEmail($vendorData['email'], 'vendor_notification', $vendorEmailData);
-        }
-        
-        // Send order confirmation email to customer
-        $customerEmailData = [
-            'order' => [
-                'order_number' => $orderNumber,
-                'status' => 'pending',
-                'total_amount' => array_sum(array_column($createdOrders, 'total_amount')),
-                'shipping_address' => $createdOrders[0]['shipping_address'],
-                'contact_phone' => $createdOrders[0]['contact_phone'],
-                'payment_method' => $createdOrders[0]['payment_method'],
-                'created_at' => $createdOrders[0]['created_at'],
-                'items' => []
-            ],
-            'customer' => [
-                'name' => $createdOrders[0]['customer_name']
-            ]
-        ];
-        
-        // Add items to customer email data
-        foreach ($createdOrders as $order) {
-            $customerEmailData['order']['items'][] = [
-                'product_name' => $order['product_name'],
-                'quantity' => $order['quantity'],
-                'total_amount' => $order['total_amount'],
-                'vendor_name' => $order['vendor_name']
-            ];
-        }
-        
-        sendStyledEmail($createdOrders[0]['customer_email'], 'order_confirmation', $customerEmailData);
 
-        // Create notifications for vendors and admins
-        require_once __DIR__ . '/../utils/notifications.php';
-        
-        // Notify vendors about new orders
-        foreach ($vendorEmails as $vendorId => $vendorData) {
-            $itemsCountForVendor = count($vendorData['orders']);
-            $message = "You have received a new order #{$orderNumber} with {$itemsCountForVendor} item(s). Please check your vendor dashboard.";
-            notifyVendor($vendorId, $message, 'order');
+            // Add items to customer email data
+            foreach ($createdOrders as $order) {
+                $customerEmailData['order']['items'][] = [
+                    'product_name' => $order['product_name'],
+                    'quantity' => $order['quantity'],
+                    'total_amount' => $order['total_amount'],
+                    'vendor_name' => $order['vendor_name']
+                ];
+            }
+
+            sendStyledEmail($createdOrders[0]['customer_email'], 'order_confirmation', $customerEmailData);
+
+            // Create notifications for vendors and admins
+            require_once __DIR__ . '/../utils/notifications.php';
+
+            // Notify vendors about new orders
+            foreach ($vendorEmails as $vendorId => $vendorData) {
+                $itemsCountForVendor = count($vendorData['orders']);
+                $message = "You have received a new order #{$orderNumber} with {$itemsCountForVendor} item(s). Please check your vendor dashboard.";
+                notifyVendor($vendorId, $message, 'order');
+            }
+
+            // Notify all admins about new orders
+            $totalItems = count($createdOrders);
+            $adminMessage = "New order #{$orderNumber} has been placed with {$totalItems} item(s). Total amount: KSH " . number_format(array_sum(array_column($createdOrders, 'total_amount')), 2);
+            notifyAllAdmins($adminMessage, 'order');
+        } catch (Exception $notificationError) {
+            error_log('Order created but notifications failed: ' . $notificationError->getMessage());
         }
-        
-        // Notify all admins about new orders
-        $totalItems = count($createdOrders);
-        $adminMessage = "New order #{$orderNumber} has been placed with {$totalItems} item(s). Total amount: KSH " . number_format(array_sum(array_column($createdOrders, 'total_amount')), 2);
-        notifyAllAdmins($adminMessage, 'order');
         
         echo json_encode([
             'success' => true,
@@ -302,7 +307,9 @@ function handleCreateOrder() {
         ]);
         
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         http_response_code(500);
         echo json_encode(['error' => 'Failed to create order: ' . $e->getMessage()]);
     }

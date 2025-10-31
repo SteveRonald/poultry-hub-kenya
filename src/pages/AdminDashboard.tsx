@@ -133,6 +133,33 @@ const AdminDashboard = () => {
     };
   }, []);
 
+  // Periodic auto-refresh to keep dashboard up to date
+  useEffect(() => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) return;
+    const refresh = () => {
+      Promise.all([
+        fetch(getApiUrl('/api/admin/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/admin/vendors'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/admin/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
+      ]).then(([stats, vendors, products, orders, contactMessages, commissionData]) => {
+        setStats(stats);
+        setVendors(Array.isArray(vendors) ? vendors : []);
+        setProducts(Array.isArray(products) ? products : []);
+        setOrders(Array.isArray(orders) ? orders : []);
+        setContactMessages(Array.isArray(contactMessages) ? contactMessages : []);
+        setCommissionData(commissionData);
+      }).catch(() => {
+        // ignore periodic errors; next cycle will try again
+      });
+    };
+    const intervalId = window.setInterval(refresh, 15000); // 15s
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   // Real-time notifications for contact messages
   useEffect(() => {
     const interval = setInterval(() => {
@@ -904,7 +931,7 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <Package className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Total Products</p>
-                  <p className="text-xl font-bold text-primary">{stats?.totalProducts || 'Loading...'}</p>
+                  <p className="text-xl font-bold text-primary">{stats ? (stats.totalProducts ?? 0) : 0}</p>
                 </div>
               </CardContent>
             </Card>
@@ -926,7 +953,7 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <ShoppingCart className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Total Orders</p>
-                  <p className="text-xl font-bold text-primary">{stats?.totalOrders || 'Loading...'}</p>
+                  <p className="text-xl font-bold text-primary">{stats ? (stats.totalOrders ?? 0) : 0}</p>
                 </div>
               </CardContent>
             </Card>

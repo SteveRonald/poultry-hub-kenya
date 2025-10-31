@@ -144,6 +144,29 @@ const VendorDashboard = () => {
     };
   }, []);
 
+  // Periodic auto-refresh to keep vendor dashboard updated
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const refresh = () => {
+      Promise.all([
+        fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+      ]).then(([stats, products, orders, earnings]) => {
+        setStats(stats);
+        setProducts(Array.isArray(products) ? products : []);
+        setOrders(Array.isArray(orders) ? orders : []);
+        setEarnings(earnings?.success ? earnings : null);
+      }).catch(() => {
+        // ignore periodic refresh errors
+      });
+    };
+    const intervalId = window.setInterval(refresh, 15000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';

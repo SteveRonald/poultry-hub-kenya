@@ -148,7 +148,7 @@ function handleGoogleDriveDelete() {
     }
     
     $input = json_decode(file_get_contents('php://input'), true);
-    $fileId = $input['file_id'] ?? null;
+    $fileId = $input['file_id'] ?? ($_GET['file_id'] ?? null);
     
     if (!$fileId) {
         http_response_code(400);
@@ -169,7 +169,7 @@ function handleGoogleDriveDelete() {
         
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['error' => 'Failed to delete Google Drive backup: ' . $e->getMessage()]);
+        echo json_encode(['error' => 'Failed to delete Google Drive backup', 'details' => $e->getMessage()]);
     }
 }
 

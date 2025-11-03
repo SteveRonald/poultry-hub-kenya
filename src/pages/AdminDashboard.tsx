@@ -156,7 +156,7 @@ const AdminDashboard = () => {
         // ignore periodic errors; next cycle will try again
       });
     };
-    const intervalId = window.setInterval(refresh, 15000); // 15s
+    const intervalId = window.setInterval(refresh, 60000); // 60s
     return () => window.clearInterval(intervalId);
   }, []);
 
@@ -909,7 +909,7 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <Users className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Total Vendors</p>
-                  <p className="text-xl font-bold text-primary">{stats?.totalVendors || 'Loading...'}</p>
+                  <p className="text-xl font-bold text-primary">{stats?.totalVendors || '0'}</p>
                 </div>
               </CardContent>
             </Card>

@@ -1,6 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Filter, ShoppingCart, Star, MapPin, Plus, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
@@ -16,6 +17,9 @@ import { getApiUrl, getImageUrl } from '../config/api';
 import AdvertisementBanner from '../components/AdvertisementBanner';
 
 const Products = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightedProductId = searchParams.get('product');
+  const productRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
@@ -66,6 +70,29 @@ const Products = () => {
     selectedCategory,
     selectedLocation
   );
+
+  // Scroll to and highlight product when product query parameter is present
+  useEffect(() => {
+    if (highlightedProductId && products.length > 0) {
+      // Find the product in the current products list
+      const product = products.find(p => p.id === highlightedProductId);
+      
+      if (product && productRefs.current[highlightedProductId]) {
+        // Scroll to the product with smooth behavior
+        setTimeout(() => {
+          productRefs.current[highlightedProductId]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+        }, 300); // Small delay to ensure products are rendered
+
+        // Show a toast notification
+        toast.success(`Product highlighted: ${product.name}`, {
+          duration: 3000,
+        });
+      }
+    }
+  }, [highlightedProductId, products]);
 
   const handleAddToCart = async (productId: string) => {
     if (!user) {
@@ -267,8 +294,26 @@ const Products = () => {
           {/* Products Grid */}
           {!isLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map(product => (
-                <Card key={product.id} className="card-hover overflow-hidden">
+              {products.map(product => {
+                const isHighlighted = highlightedProductId === product.id;
+                return (
+                <Card 
+                  key={product.id} 
+                  ref={(el) => { productRefs.current[product.id] = el; }}
+                  className={`card-hover overflow-hidden transition-all duration-500 ${
+                    isHighlighted 
+                      ? 'ring-4 ring-yellow-400 ring-offset-4 shadow-2xl scale-105 z-10 border-4 border-yellow-400' 
+                      : ''
+                  }`}
+                  style={{
+                    animation: isHighlighted ? 'pulse 2s ease-in-out' : undefined
+                  }}
+                >
+                  {isHighlighted && (
+                    <div className="absolute -top-2 -right-2 z-20 bg-yellow-400 text-black px-3 py-1 rounded-full text-xs font-bold shadow-lg animate-bounce">
+                      ADVERTISED PRODUCT
+                    </div>
+                  )}
                   <div className="relative h-48">
                     <img 
                       src={(() => {
@@ -339,7 +384,8 @@ const Products = () => {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
 

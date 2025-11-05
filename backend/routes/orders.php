@@ -145,11 +145,14 @@ function handleCreateOrder() {
         foreach ($orderItems as $item) {
             $totalAmount = $item['price'] * $item['quantity'];
             
+            // Check if order came from an advertisement (via session/cookie)
+            $advertisementId = $input['advertisement_id'] ?? $_COOKIE['ad_click'] ?? null;
+            
             $stmt = $pdo->prepare("
                 INSERT INTO orders (
                     order_number, user_id, product_id, quantity, vendor_id, total_amount, 
-                    shipping_address, contact_phone, payment_method, notes, order_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    shipping_address, contact_phone, payment_method, notes, order_type, advertisement_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $orderType = $isDirectOrder ? 'direct' : 'cart';
@@ -165,7 +168,8 @@ function handleCreateOrder() {
                 $input['contact_phone'],
                 $input['payment_method'],
                 $input['notes'] ?? null,
-                $orderType
+                $orderType,
+                $advertisementId
             ]);
             
             $orderId = $pdo->lastInsertId();

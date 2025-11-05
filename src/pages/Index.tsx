@@ -1,13 +1,45 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Users, ShieldCheck, TrendingUp, Star, ChevronRight } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import AdvertisementBanner from '../components/AdvertisementBanner';
+import { getApiUrl } from '../config/api';
 
 const Index = () => {
+  const [advertisements, setAdvertisements] = useState<any[]>([]);
+  const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetchAdvertisements();
+  }, []);
+
+  const fetchAdvertisements = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/advertisements?limit=3&page_location=homepage'));
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setAdvertisements(data);
+        // Show all ads initially (up to 3)
+        const initialAds = new Set(data.slice(0, 3).map((ad: any) => ad.id));
+        setVisibleAds(initialAds);
+      }
+    } catch (error) {
+      console.error('Failed to fetch advertisements:', error);
+    }
+  };
+
+  const handleAdClose = (adId: string) => {
+    setVisibleAds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(adId);
+      return newSet;
+    });
+  };
+
   const features = [
     {
       icon: <Users className="h-8 w-8 text-accent" />,
@@ -65,9 +97,16 @@ const Index = () => {
     }
   ];
 
+  // Check if there's a premium ad (top banner) to add padding
+  const hasPremiumAd = advertisements.some(ad => 
+    visibleAds.has(ad.id) && ad.tier === 'premium'
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      {/* Add padding-top if premium ad is displayed at top */}
+      {hasPremiumAd && <div style={{ height: '90px' }} />}
       
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-primary to-secondary text-white py-20">
@@ -111,6 +150,22 @@ const Index = () => {
           </div>
         </div>
       </section>
+
+      {/* Advertisements - Floating Overlays (Premium: top banner, Basic: bottom-right popup) */}
+      {advertisements.length > 0 && (
+        <>
+          {advertisements.map((ad) => (
+            visibleAds.has(ad.id) && (
+              <AdvertisementBanner
+                key={ad.id}
+                advertisement={ad}
+                onClose={() => handleAdClose(ad.id)}
+                pageLocation="homepage"
+              />
+            )
+          ))}
+        </>
+      )}
 
       {/* Features Section */}
       <section className="py-16 bg-white">

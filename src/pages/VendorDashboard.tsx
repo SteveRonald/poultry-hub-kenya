@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -11,6 +11,8 @@ import { Badge } from '../components/ui/badge';
 import { getApiUrl, getImageUrl } from '../config/api';
 import VendorAnalytics from '../components/VendorAnalytics';
 import AIProductAssistant from '../components/AIProductAssistant';
+import AdvertisementManager from '../components/AdvertisementManager';
+import CreateAdvertisementForm from '../components/CreateAdvertisementForm';
 import { useToast } from '../hooks/use-toast';
 import {
   AlertDialog,
@@ -31,6 +33,7 @@ const VendorDashboard = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [earnings, setEarnings] = useState<any>(null);
+  const [advertisements, setAdvertisements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [productForm, setProductForm] = useState<any>({ 
     name: '', 
@@ -87,11 +90,13 @@ const VendorDashboard = () => {
         } 
       }).then(r => r.json()),
       fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([stats, products, orders, earnings]) => {
+      fetch(getApiUrl('/api/vendor/advertisements'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([stats, products, orders, earnings, ads]) => {
       setStats(stats);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
       setEarnings(earnings?.success ? earnings : null);
+      setAdvertisements(Array.isArray(ads) ? ads : []);
       setLoading(false);
     }).catch((error) => {
       if (import.meta.env.DEV) {
@@ -100,6 +105,7 @@ const VendorDashboard = () => {
       setProducts([]);
       setOrders([]);
       setEarnings(null);
+      setAdvertisements([]);
       setLoading(false);
     });
     
@@ -780,7 +786,7 @@ const VendorDashboard = () => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
             <Card>
               <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
@@ -821,6 +827,20 @@ const VendorDashboard = () => {
               <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
+                    <p className="text-xs sm:text-sm text-gray-600">Total Spent on Ads</p>
+                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-orange-600">
+                      KSH {advertisements.reduce((sum: number, ad: any) => sum + (parseFloat(ad.price) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <DollarSign className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-orange-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-3 sm:p-4 md:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="text-xs sm:text-sm text-gray-600">Pending Orders</p>
                     <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats ? (stats.pendingOrders || 0) : 'Loading...'}</p>
                   </div>
@@ -840,6 +860,7 @@ const VendorDashboard = () => {
                   { id: 'overview', label: 'Overview' },
                   { id: 'products', label: 'My Products' },
                   { id: 'orders', label: 'Orders' },
+                  { id: 'advertisements', label: 'Advertisements' },
                   { id: 'earnings', label: 'Earnings' },
                   { id: 'analytics', label: 'Analytics' },
                   { id: 'ai-assistant', label: 'AI Assistant' },
@@ -1178,6 +1199,13 @@ const VendorDashboard = () => {
                       )}
                     </CardContent>
                   </Card>
+                </div>
+              )}
+
+              {/* Advertisements Tab */}
+              {activeTab === 'advertisements' && (
+                <div className="space-y-6">
+                  <AdvertisementManager />
                 </div>
               )}
 

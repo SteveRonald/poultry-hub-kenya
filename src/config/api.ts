@@ -48,24 +48,33 @@ export const getApiUrl = (endpoint: string) => {
 export const getImageUrl = (imageUrl: string) => {
   if (!imageUrl) return '';
   
-  // If it's already a network URL or external URL, return as is
-  if (imageUrl.startsWith('http://192.168.') || 
-      imageUrl.startsWith('http://10.') || 
-      imageUrl.startsWith('http://172.') ||
-      imageUrl.startsWith('https://') ||
-      imageUrl.includes('ngrok')) {
+  // If it's already a full URL (http/https), return as is (after localhost conversion if needed)
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    // Convert localhost to current host if needed
+    if (imageUrl.includes('localhost') || imageUrl.includes('127.0.0.1')) {
+      const host = window.location.hostname;
+      const protocol = window.location.protocol;
+      if (host !== 'localhost' && host !== '127.0.0.1') {
+        return imageUrl.replace(/https?:\/\/[^\/]+/, `${protocol}//${host}`);
+      }
+    }
     return imageUrl;
   }
   
-  // If it's a localhost URL, convert to network URL
-  if (imageUrl.includes('localhost')) {
+  // If it's a relative path starting with /, construct full URL
+  if (imageUrl.startsWith('/')) {
+    const protocol = window.location.protocol;
     const host = window.location.hostname;
-    if (host !== 'localhost' && host !== '127.0.0.1') {
-      return imageUrl.replace('localhost', host);
-    }
+    const port = window.location.port ? `:${window.location.port}` : '';
+    return `${protocol}//${host}${port}${imageUrl}`;
   }
   
-  return imageUrl;
+  // If it's just a filename, prepend uploads path
+  // This handles cases where just the filename is stored
+  const protocol = window.location.protocol;
+  const host = window.location.hostname;
+  const port = window.location.port ? `:${window.location.port}` : '';
+  return `${protocol}//${host}${port}/poultry-hub-kenya/uploads/products/${imageUrl}`;
 };
 
 

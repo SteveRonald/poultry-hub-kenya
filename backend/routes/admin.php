@@ -116,6 +116,13 @@ function handleAdminStats() {
         require_once __DIR__ . '/../utils/commission.php';
         $platformCommission = getPlatformTotalCommission();
         
+        // Get advertisement revenue (total paid by vendors for ads)
+        $stmt = $pdo->query("SELECT COALESCE(SUM(price), 0) as total FROM advertisements WHERE status IN ('pending', 'active', 'expired')");
+        $adRevenue = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+        
+        // Total platform revenue = commission + advertisement revenue
+        $totalPlatformRevenue = floatval($platformCommission) + floatval($adRevenue);
+        
         // Get total users
         $stmt = $pdo->query("SELECT COUNT(*) as total FROM user_profiles");
         $totalUsers = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
@@ -130,7 +137,9 @@ function handleAdminStats() {
             'totalProducts' => intval($totalProducts),
             'pendingProducts' => intval($pendingProducts),
             'totalOrders' => intval($totalOrders),
-            'totalRevenue' => floatval($platformCommission),
+            'totalRevenue' => $totalPlatformRevenue,
+            'commissionRevenue' => floatval($platformCommission),
+            'advertisementRevenue' => floatval($adRevenue),
             'totalUsers' => intval($totalUsers),
             'totalAdmins' => intval($totalAdmins)
         ]);

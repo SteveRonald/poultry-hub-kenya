@@ -10,8 +10,8 @@ $allowedOrigins = [
     'http://127.0.0.1:8081',
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
-    'http://192.168.163.24:8080',
-    'http://192.168.163.24:8080',
+    'http://192.168.137.1:8080',
+    'http://192.168.167.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.14.176:3000'
 ];
@@ -580,6 +580,84 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/google_drive_backup.php';
             handleGoogleDriveFolderInfo();
+        }
+        break;
+        
+    // Advertisement routes
+    case 'api/advertisements':
+        if ($method === 'GET') {
+            include 'routes/advertisements.php';
+            handleGetActiveAdvertisements();
+        }
+        break;
+        
+    case 'api/vendor/advertisements':
+        if ($method === 'GET') {
+            include 'routes/advertisements.php';
+            handleGetVendorAdvertisements();
+        } elseif ($method === 'POST') {
+            include 'routes/advertisements.php';
+            handleCreateAdvertisement();
+        } elseif ($method === 'PUT') {
+            include 'routes/advertisements.php';
+            handleUpdateVendorAdvertisement();
+        } elseif ($method === 'DELETE') {
+            include 'routes/advertisements.php';
+            handleDeleteAdvertisement();
+        }
+        break;
+        
+    case 'api/vendor/advertisements/analytics':
+        if ($method === 'GET') {
+            include 'routes/advertisements.php';
+            $adId = $_GET['ad_id'] ?? null;
+            if ($adId) {
+                handleGetAdvertisementAnalytics($adId);
+            } else {
+                http_response_code(400);
+                echo json_encode(['error' => 'ad_id parameter required']);
+            }
+        }
+        break;
+        
+    case 'api/admin/advertisements':
+        if ($method === 'GET') {
+            include 'routes/advertisements.php';
+            handleGetAdminAdvertisements();
+        } elseif ($method === 'PUT') {
+            include 'routes/advertisements.php';
+            handleUpdateAdminAdvertisement();
+        } elseif ($method === 'DELETE') {
+            include 'routes/advertisements.php';
+            handleDeleteAdvertisement();
+        }
+        break;
+        
+    case 'api/admin/advertisements/approve':
+        if ($method === 'POST') {
+            include 'routes/advertisements.php';
+            handleApproveAdvertisement();
+        }
+        break;
+        
+    case 'api/admin/advertisements/reject':
+        if ($method === 'POST') {
+            include 'routes/advertisements.php';
+            handleRejectAdvertisement();
+        }
+        break;
+        
+    case 'api/advertisements/track-view':
+        if ($method === 'POST') {
+            include 'routes/advertisements.php';
+            handleTrackAdView();
+        }
+        break;
+        
+    case 'api/advertisements/track-click':
+        if ($method === 'POST') {
+            include 'routes/advertisements.php';
+            handleTrackAdClick();
         }
         break;
         

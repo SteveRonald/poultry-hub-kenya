@@ -5,16 +5,82 @@
  */
 
 /**
- * Calculate commission for an order
+ * Get vendor lifetime sales (cumulative sales from all delivered orders)
  */
-function calculateCommission($totalAmount) {
+function getVendorLifetimeSales($vendorId) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("SELECT lifetime_sales FROM vendors WHERE id = ?");
+        $stmt->execute([$vendorId]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ? floatval($result['lifetime_sales']) : 0.00;
+    } catch (Exception $e) {
+        error_log("Error getting vendor lifetime sales: " . $e->getMessage());
+        return 0.00;
+    }
+}
+
+/**
+ * Update vendor lifetime sales
+ */
+function updateVendorLifetimeSales($vendorId, $orderAmount) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE vendors 
+            SET lifetime_sales = lifetime_sales + ? 
+            WHERE id = ?
+        ");
+        $stmt->execute([$orderAmount, $vendorId]);
+        return true;
+    } catch (Exception $e) {
+        error_log("Error updating vendor lifetime sales: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Check if vendor has exceeded commission threshold
+ */
+function hasExceededCommissionThreshold($vendorId, $threshold = 10000) {
+    $lifetimeSales = getVendorLifetimeSales($vendorId);
+    return $lifetimeSales >= $threshold;
+}
+
+/**
+ * Calculate commission for an order
+ * Returns commission only if vendor has exceeded KSh 10,000 threshold
+ */
+function calculateCommission($totalAmount, $vendorId = null) {
     $commissionRate = 0.10; // 10% platform commission
     $vendorRate = 0.90;     // 90% vendor earnings
+    $threshold = 10000;     // KSh 10,000 threshold
     
+    // If vendor_id is provided, check threshold
+    if ($vendorId !== null) {
+        $lifetimeSales = getVendorLifetimeSales($vendorId);
+        
+        // If vendor hasn't reached threshold, no commission
+        if ($lifetimeSales < $threshold) {
+            return [
+                'total_amount' => floatval($totalAmount),
+                'commission_amount' => 0.00,
+                'vendor_amount' => floatval($totalAmount), // Vendor keeps 100%
+                'threshold_reached' => false,
+                'lifetime_sales' => $lifetimeSales,
+                'threshold' => $threshold
+            ];
+        }
+    }
+    
+    // Vendor has exceeded threshold, apply commission
     return [
         'total_amount' => floatval($totalAmount),
         'commission_amount' => round($totalAmount * $commissionRate, 2),
-        'vendor_amount' => round($totalAmount * $vendorRate, 2)
+        'vendor_amount' => round($totalAmount * $vendorRate, 2),
+        'threshold_reached' => true
     ];
 }
 
@@ -41,8 +107,45 @@ function processCommission($orderId, $vendorId, $totalAmount) {
             return ['success' => false, 'message' => 'Commission already processed for this order'];
         }
         
-        // Calculate commission amounts
-        $commission = calculateCommission($totalAmount);
+        // Get vendor lifetime sales before this order
+        $lifetimeSalesBefore = getVendorLifetimeSales($vendorId);
+        
+        // Calculate commission amounts (checks threshold internally)
+        $commission = calculateCommission($totalAmount, $vendorId);
+        
+        // Get order details including advertisement_id
+        $stmt = $pdo->prepare("
+            SELECT o.order_number, o.user_id, o.advertisement_id, v.farm_name, u.full_name as customer_name
+            FROM orders o 
+            JOIN vendors v ON o.vendor_id = v.id
+            JOIN user_profiles u ON o.user_id = u.id
+            WHERE o.id = ?
+        ");
+        $stmt->execute([$orderId]);
+        $orderDetails = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Update vendor lifetime sales (always update, even if no commission)
+        updateVendorLifetimeSales($vendorId, $totalAmount);
+        
+        // If vendor hasn't reached threshold, no commission to process
+        if (!$commission['threshold_reached']) {
+            // Update advertisement revenue if order came from an ad (even without commission)
+            if ($orderDetails && isset($orderDetails['advertisement_id']) && $orderDetails['advertisement_id']) {
+                require_once __DIR__ . '/../routes/advertisements.php';
+                updateAdRevenue($orderDetails['advertisement_id'], $totalAmount);
+            }
+            
+            // Still update lifetime sales, but don't create commission records
+            if (!$inTransaction) {
+                $pdo->commit();
+            }
+            return [
+                'success' => true,
+                'message' => 'Order processed. No commission applied (vendor below KSh 10,000 threshold)',
+                'commission' => $commission,
+                'lifetime_sales' => $lifetimeSalesBefore + $totalAmount
+            ];
+        }
         
         // Generate UUIDs
         $platformCommissionId = generateUUID();
@@ -78,6 +181,12 @@ function processCommission($orderId, $vendorId, $totalAmount) {
             $commission['vendor_amount']
         ]);
         
+        // Update advertisement revenue if order came from an ad
+        if ($orderDetails && isset($orderDetails['advertisement_id']) && $orderDetails['advertisement_id']) {
+            require_once __DIR__ . '/../routes/advertisements.php';
+            updateAdRevenue($orderDetails['advertisement_id'], $commission['total_amount']);
+        }
+        
         // Only commit if we started the transaction
         if (!$inTransaction) {
             $pdo->commit();
@@ -85,17 +194,6 @@ function processCommission($orderId, $vendorId, $totalAmount) {
         
         // Send notifications about commission processing
         require_once __DIR__ . '/notifications.php';
-        
-        // Get order and vendor details for notifications
-        $stmt = $pdo->prepare("
-            SELECT o.order_number, o.user_id, v.farm_name, u.full_name as customer_name
-            FROM orders o 
-            JOIN vendors v ON o.vendor_id = v.id
-            JOIN user_profiles u ON o.user_id = u.id
-            WHERE o.id = ?
-        ");
-        $stmt->execute([$orderId]);
-        $orderDetails = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($orderDetails) {
             // Notify vendor about earnings

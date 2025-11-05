@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, ShoppingCart, Star, MapPin, Plus, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -13,6 +13,7 @@ import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
+import AdvertisementBanner from '../components/AdvertisementBanner';
 
 const Products = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,8 +29,37 @@ const Products = () => {
     notes: ''
   });
   const [submitting, setSubmitting] = useState(false);
+  const [advertisements, setAdvertisements] = useState<any[]>([]);
+  const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
   const { addToCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
+
+  useEffect(() => {
+    fetchAdvertisements();
+  }, []);
+
+  const fetchAdvertisements = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/advertisements?limit=3&page_location=products'));
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setAdvertisements(data);
+        // Show all ads initially (up to 3)
+        const initialAds = new Set(data.slice(0, 3).map((ad: any) => ad.id));
+        setVisibleAds(initialAds);
+      }
+    } catch (error) {
+      console.error('Failed to fetch advertisements:', error);
+    }
+  };
+
+  const handleAdClose = (adId: string) => {
+    setVisibleAds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(adId);
+      return newSet;
+    });
+  };
 
   const { data: products = [], isLoading, error } = useProducts(
     searchTerm || undefined,
@@ -126,10 +156,17 @@ const Products = () => {
     }
   };
 
+  // Check if there's a premium ad (top banner) to add padding
+  const hasPremiumAd = advertisements.some(ad => 
+    visibleAds.has(ad.id) && ad.tier === 'premium'
+  );
+
   if (error) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
+        {/* Add padding-top if premium ad is displayed at top */}
+        {hasPremiumAd && <div style={{ height: '90px' }} />}
         <div className="py-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto text-center">
             <h1 className="text-3xl font-bold text-primary mb-4">Error Loading Products</h1>
@@ -144,7 +181,8 @@ const Products = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+      {/* Add padding-top if premium ad is displayed at top */}
+      {hasPremiumAd && <div style={{ height: '120px' }} />}
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
@@ -152,6 +190,22 @@ const Products = () => {
             <h1 className="text-3xl font-bold text-primary mb-2">Browse Products</h1>
             <p className="text-gray-600">Find quality poultry products from trusted farmers across Kenya</p>
           </div>
+
+          {/* Advertisements - Floating Overlays (Premium: top banner, Basic: bottom-right popup) */}
+          {advertisements.length > 0 && (
+            <>
+              {advertisements.map((ad) => (
+                visibleAds.has(ad.id) && (
+                  <AdvertisementBanner
+                    key={ad.id}
+                    advertisement={ad}
+                    onClose={() => handleAdClose(ad.id)}
+                    pageLocation="products"
+                  />
+                )
+              ))}
+            </>
+          )}
 
           {/* Filters */}
           <div className="bg-white p-6 rounded-lg shadow-md mb-8">

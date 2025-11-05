@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3 } from 'lucide-react';
+import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3, DollarSign } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
 import Analytics from '../components/Analytics';
 import BackupManagement from '../components/BackupManagement';
+import AdminAdvertisementManager from '../components/AdminAdvertisementManager';
 import { useAdmin } from '../contexts/AdminContext';
 
 const AdminDashboard = () => {
@@ -964,7 +965,16 @@ const AdminDashboard = () => {
                   <TrendingUp className="h-6 w-6 text-accent mx-auto mb-2" />
                   <p className="text-sm text-gray-600">Platform Revenue</p>
                   <p className="text-lg font-bold text-primary">KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
-                  <p className="text-xs text-gray-500 mt-1">10% commission from delivered orders</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {stats?.commissionRevenue || stats?.advertisementRevenue ? (
+                      <>
+                        Commission: KSH {stats?.commissionRevenue?.toFixed(2) || '0.00'} | 
+                        Ads: KSH {stats?.advertisementRevenue?.toFixed(2) || '0.00'}
+                      </>
+                    ) : (
+                      '10% commission + ad revenue'
+                    )}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -999,6 +1009,7 @@ const AdminDashboard = () => {
                   { id: 'vendors', label: 'Vendor Approvals' },
                   { id: 'products', label: 'Product Approvals' },
                   { id: 'orders', label: 'All Orders' },
+                  { id: 'advertisements', label: 'Advertisements' },
                   { id: 'users', label: 'User Management' },
                   { id: 'messages', label: 'Contact Messages' },
                   { id: 'commission', label: 'Commission' },
@@ -1301,6 +1312,12 @@ const AdminDashboard = () => {
               )}
 
               {/* Orders Tab */}
+              {activeTab === 'advertisements' && (
+                <div className="space-y-6">
+                  <AdminAdvertisementManager />
+                </div>
+              )}
+
               {activeTab === 'orders' && (
                 <div className="space-y-6">
                   <h2 className="text-xl font-semibold text-primary">All Orders</h2>
@@ -1646,8 +1663,8 @@ const AdminDashboard = () => {
                   
                   {commissionData ? (
                     <>
-                      {/* Commission Overview Cards */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Revenue Overview Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card>
                           <CardContent className="p-6">
                             <div className="text-center">
@@ -1662,14 +1679,37 @@ const AdminDashboard = () => {
                         <Card>
                           <CardContent className="p-6">
                             <div className="text-center">
-                              <Users className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-                              <h3 className="text-lg font-semibold text-orange-900 mb-2">Vendor Earnings (90%)</h3>
-                              <p className="text-3xl font-bold text-orange-600">KSH {commissionData.vendor_earnings_total?.toFixed(2) || '0.00'}</p>
-                              <p className="text-sm text-orange-700 mt-1">Total paid to vendors</p>
+                              <DollarSign className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                              <h3 className="text-lg font-semibold text-purple-900 mb-2">Advertisement Revenue</h3>
+                              <p className="text-3xl font-bold text-purple-600">KSH {stats?.advertisementRevenue?.toFixed(2) || '0.00'}</p>
+                              <p className="text-sm text-purple-700 mt-1">Total paid by vendors for ads</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
+                        <Card>
+                          <CardContent className="p-6">
+                            <div className="text-center">
+                              <BarChart3 className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                              <h3 className="text-lg font-semibold text-blue-900 mb-2">Total Platform Revenue</h3>
+                              <p className="text-3xl font-bold text-blue-600">KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
+                              <p className="text-sm text-blue-700 mt-1">Commission + Ad Revenue</p>
                             </div>
                           </CardContent>
                         </Card>
                       </div>
+
+                      {/* Vendor Earnings Card */}
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="text-center">
+                            <Users className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+                            <h3 className="text-lg font-semibold text-orange-900 mb-2">Vendor Earnings (90%)</h3>
+                            <p className="text-3xl font-bold text-orange-600">KSH {commissionData.vendor_earnings_total?.toFixed(2) || '0.00'}</p>
+                            <p className="text-sm text-orange-700 mt-1">Total paid to vendors</p>
+                          </div>
+                        </CardContent>
+                      </Card>
 
                       {/* How Commission Works */}
                       <Card>
@@ -1679,10 +1719,13 @@ const AdminDashboard = () => {
                         <CardContent>
                           <div className="bg-blue-50 p-4 rounded-lg">
                             <div className="space-y-2 text-sm text-blue-800">
-                              <p>• <strong>Commission Rate:</strong> 10% of each delivered order</p>
-                              <p>• <strong>Vendor Share:</strong> 90% of each delivered order</p>
+                              <p>• <strong>Commission Threshold:</strong> KSh 10,000 lifetime sales per vendor</p>
+                              <p>• <strong>Before Threshold:</strong> No commission - vendor keeps 100% of sales</p>
+                              <p>• <strong>After Threshold:</strong> 10% platform commission, 90% vendor earnings</p>
                               <p>• <strong>Processing:</strong> Commission is calculated automatically when order status changes to "delivered"</p>
-                              <p>• <strong>Platform Revenue:</strong> Accumulated 10% commission from all delivered orders</p>
+                              <p>• <strong>Commission Revenue:</strong> Accumulated 10% commission from orders after threshold</p>
+                              <p>• <strong>Advertisement Revenue:</strong> Total revenue from paid advertisements (Basic: KSh 128/day, Premium: KSh 300/day)</p>
+                              <p>• <strong>Total Platform Revenue:</strong> Commission Revenue + Advertisement Revenue</p>
                             </div>
                           </div>
                         </CardContent>

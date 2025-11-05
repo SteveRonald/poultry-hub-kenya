@@ -1,0 +1,416 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { X, ExternalLink } from 'lucide-react';
+import { getApiUrl } from '../config/api';
+
+interface Advertisement {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_images: string;
+  product_price: number;
+  ad_image: string;
+  ad_title: string;
+  tier: 'basic' | 'premium';
+  content_duration: number;
+  page_location?: string;
+  previous_price?: number | null;
+  current_price?: number | null;
+}
+
+interface AdvertisementBannerProps {
+  advertisement: Advertisement;
+  onClose?: () => void;
+  pageLocation?: string;
+}
+
+const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
+  advertisement,
+  onClose,
+  pageLocation = 'homepage'
+}) => {
+  const [isVisible, setIsVisible] = useState(true);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [viewTracked, setViewTracked] = useState(false);
+  const adRef = useRef<HTMLDivElement>(null);
+  const viewStartTime = useRef<number | null>(null);
+  const viewTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const [sessionId] = useState(() => {
+    // Get or create session ID
+    let sessionId = sessionStorage.getItem('session_id');
+    if (!sessionId) {
+      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      sessionStorage.setItem('session_id', sessionId);
+    }
+    return sessionId;
+  });
+
+  // Get user ID from auth context if available
+  const userId = localStorage.getItem('user_id') || null;
+
+  // Check if ad is video or static (for viewability tracking)
+  const isVideo = advertisement.ad_image?.endsWith('.mp4') || 
+                  advertisement.ad_image?.endsWith('.webm') || 
+                  advertisement.ad_image?.endsWith('.mov');
+
+  // Minimum viewable time: 2 seconds for video, 1 second for static (IAB/MRC standards)
+  const minViewableTime = isVideo ? 2000 : 1000;
+
+  // Calculate display duration based on tier
+  const displayDuration = advertisement.tier === 'premium' 
+    ? Math.min(advertisement.content_duration || 60, 60) 
+    : Math.min(Math.max(advertisement.content_duration || 15, 15), 30);
+
+  // Track viewability using Intersection Observer API (IAB/MRC compliant)
+  useEffect(() => {
+    if (!adRef.current || viewTracked) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            // Ad is at least 50% visible
+            if (!viewStartTime.current) {
+              viewStartTime.current = Date.now();
+            }
+
+            // Track view after minimum viewable time
+            if (!viewTimerRef.current) {
+              viewTimerRef.current = setTimeout(async () => {
+                try {
+                  await fetch(getApiUrl('/api/advertisements/track-view'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      advertisement_id: advertisement.id,
+                      session_id: sessionId,
+                      user_id: userId,
+                      page_location: pageLocation
+                    })
+                  });
+                  setViewTracked(true);
+                } catch (error) {
+                  console.error('Failed to track ad view:', error);
+                }
+              }, minViewableTime);
+            }
+          } else {
+            // Ad is not visible, reset timer
+            if (viewTimerRef.current) {
+              clearTimeout(viewTimerRef.current);
+              viewTimerRef.current = null;
+            }
+            viewStartTime.current = null;
+          }
+        });
+      },
+      {
+        threshold: 0.5, // At least 50% of ad must be visible
+        rootMargin: '0px'
+      }
+    );
+
+    observer.observe(adRef.current);
+
+    return () => {
+      observer.disconnect();
+      if (viewTimerRef.current) {
+        clearTimeout(viewTimerRef.current);
+      }
+    };
+  }, [advertisement.id, sessionId, userId, pageLocation, minViewableTime, viewTracked]);
+
+  // Auto-dismiss timer for basic tier ads
+  useEffect(() => {
+    if (advertisement.tier === 'basic' && isVisible) {
+      setTimeRemaining(displayDuration);
+      const timer = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleClose();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [advertisement.tier, displayDuration, isVisible]);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  const handleClick = async () => {
+    // Track click
+    try {
+      await fetch(getApiUrl('/api/advertisements/track-click'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          advertisement_id: advertisement.id,
+          session_id: sessionId,
+          user_id: userId
+        })
+      });
+
+      // Set cookie to track ad click for order attribution
+      document.cookie = `ad_click=${advertisement.id}; path=/; max-age=${60 * 60 * 24}`; // 24 hours
+    } catch (error) {
+      console.error('Failed to track ad click:', error);
+    }
+
+    // Navigate to product (Link component will handle this)
+  };
+
+  if (!isVisible) {
+    return null;
+  }
+
+  const productImage = advertisement.ad_image || 
+    (advertisement.product_images ? JSON.parse(advertisement.product_images)[0] : null) ||
+    '/placeholder.svg';
+
+  // Premium ads: Top fixed banner using Leaderboard standard (728×90 px)
+  // Responsive: scales down on mobile while maintaining aspect ratio
+  if (advertisement.tier === 'premium') {
+    return (
+      <div
+        ref={adRef}
+        className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-50 to-orange-50 border-b-2 border-yellow-400 shadow-lg"
+        style={{ 
+          height: '90px',
+          minHeight: '90px'
+        }}
+      >
+        <div className="w-full h-full max-w-[728px] mx-auto px-2 sm:px-4">
+          <div className="flex items-center gap-2 sm:gap-4 h-full">
+            {/* Premium Badge */}
+            <div className="bg-yellow-400 text-black px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold whitespace-nowrap flex-shrink-0">
+              PREMIUM AD
+            </div>
+
+            {/* Ad Content */}
+            <Link
+              to={`/products?product=${advertisement.product_id}`}
+              onClick={handleClick}
+              className="flex-1 flex items-center gap-2 sm:gap-4 h-full hover:opacity-90 transition-opacity min-w-0"
+            >
+              {/* Image - Standard Leaderboard aspect ratio (responsive) */}
+              <div 
+                className="rounded overflow-hidden flex-shrink-0"
+                style={{
+                  width: '120px',
+                  height: '70px',
+                  minWidth: '120px',
+                  minHeight: '70px'
+                }}
+              >
+                {(() => {
+                  const isVideo = productImage?.endsWith('.mp4') || 
+                                 productImage?.endsWith('.webm') || 
+                                 productImage?.endsWith('.mov') ||
+                                 productImage?.includes('video');
+                  return isVideo ? (
+                    <video
+                      src={productImage}
+                      className="w-full h-full object-cover"
+                      muted
+                      preload="metadata"
+                    />
+                  ) : (
+                    <img
+                      src={productImage}
+                      alt={advertisement.ad_title || advertisement.product_name}
+                      className="w-full h-full object-cover"
+                    />
+                  );
+                })()}
+              </div>
+
+              {/* Text Content */}
+              <div className="flex-1 min-w-0 flex flex-col justify-center h-full">
+                {advertisement.ad_title && (
+                  <h3 className="font-semibold text-xs sm:text-sm md:text-base text-gray-900 truncate leading-tight">
+                    {advertisement.ad_title}
+                  </h3>
+                )}
+                <p className="text-[10px] sm:text-xs md:text-sm text-gray-700 truncate leading-tight mt-0.5">
+                  {advertisement.product_name}
+                </p>
+                <div className="flex items-center gap-1 sm:gap-2 mt-1 flex-wrap">
+                  {/* Price Display with Discount */}
+                  <div className="flex flex-col">
+                    {advertisement.previous_price && advertisement.current_price ? (
+                      <>
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <span className="text-[10px] sm:text-xs text-gray-500 line-through">
+                            KSh {advertisement.previous_price.toLocaleString()}
+                          </span>
+                          <span className="text-xs sm:text-sm md:text-base font-bold text-green-600">
+                            KSh {advertisement.current_price.toLocaleString()}
+                          </span>
+                        </div>
+                        <span className="text-[9px] sm:text-xs text-green-600 font-semibold">
+                          Save KSh {(advertisement.previous_price - advertisement.current_price).toLocaleString()}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs sm:text-sm md:text-base font-bold text-primary">
+                        KSh {advertisement.product_price?.toLocaleString() || 'N/A'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] sm:text-xs text-primary font-semibold flex items-center gap-1 bg-primary/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded whitespace-nowrap">
+                    Order Now <ExternalLink className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  </span>
+                </div>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Basic ads: Bottom-right corner popup using Medium Rectangle standard (300×250 px)
+  // Responsive: scales down on mobile while maintaining aspect ratio
+  return (
+    <div
+      ref={adRef}
+      className="fixed bottom-4 right-4 z-50 bg-white rounded-lg shadow-2xl border-2 border-blue-300 overflow-hidden animate-slide-up"
+      style={{ 
+        width: '400px',
+        height: '250px',
+        maxWidth: 'calc(100vw - 2rem)',
+        animation: 'slideUp 0.3s ease-out'
+      }}
+    >
+      <style>{`
+        @keyframes slideUp {
+          from {
+            transform: translateY(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        @media (max-width: 640px) {
+          .ad-basic-popup {
+            width: min(300px, calc(100vw - 2rem));
+            height: min(250px, calc((100vw - 2rem) * 1.2));
+            aspect-ratio: 300 / 250;
+          }
+        }
+      `}</style>
+
+      {/* Close Button */}
+      <button
+        onClick={handleClose}
+        className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5 transition-colors"
+        aria-label="Close advertisement"
+        title="Close advertisement"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      {/* Timer */}
+      {timeRemaining > 0 && (
+        <div className="absolute top-2 left-2 z-10 bg-black/50 text-white px-2 py-1 rounded text-xs">
+          {timeRemaining}s
+        </div>
+      )}
+
+      {/* Advertisement Content - Medium Rectangle layout */}
+      <Link
+        to={`/products?product=${advertisement.product_id}`}
+        onClick={handleClick}
+        className="block h-full"
+      >
+        <div className="relative flex flex-col h-full">
+          {/* Image - Top portion of rectangle */}
+          <div 
+            className="flex-shrink-0 overflow-hidden bg-gray-100"
+            style={{
+              height: '60%',
+              minHeight: '150px'
+            }}
+          >
+            {(() => {
+              const isVideo = productImage?.endsWith('.mp4') || 
+                             productImage?.endsWith('.webm') || 
+                             productImage?.endsWith('.mov') ||
+                             productImage?.includes('video');
+              return isVideo ? (
+                <video
+                  src={productImage}
+                  className="w-full h-full object-cover"
+                  muted
+                  preload="metadata"
+                />
+              ) : (
+                <img
+                  src={productImage}
+                  alt={advertisement.ad_title || advertisement.product_name}
+                  className="w-full h-full object-cover"
+                />
+              );
+            })()}
+          </div>
+
+          {/* Content - Bottom portion of rectangle */}
+          <div className="flex-1 p-3 flex flex-col justify-between min-w-0 bg-white">
+            <div>
+              {advertisement.ad_title && (
+                <h3 className="font-semibold text-sm mb-1 text-gray-900 line-clamp-2 leading-tight">
+                  {advertisement.ad_title}
+                </h3>
+              )}
+              <p className="text-xs text-gray-700 mb-2 line-clamp-1 leading-tight">
+                {advertisement.product_name}
+              </p>
+            </div>
+            <div className="flex items-center justify-between mt-auto gap-2">
+              {/* Price Display with Discount */}
+              <div className="flex flex-col min-w-0">
+                {advertisement.previous_price && advertisement.current_price ? (
+                  <>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs text-gray-500 line-through">
+                        KSh {advertisement.previous_price.toLocaleString()}
+                      </span>
+                      <span className="text-sm font-bold text-green-600">
+                        KSh {advertisement.current_price.toLocaleString()}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-green-600 font-semibold">
+                      Save KSh {(advertisement.previous_price - advertisement.current_price).toLocaleString()}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-sm font-bold text-primary">
+                    KSh {advertisement.product_price?.toLocaleString() || 'N/A'}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-primary font-semibold flex items-center gap-1 bg-primary/10 px-2 py-1 rounded whitespace-nowrap flex-shrink-0">
+                Order Now <ExternalLink className="h-3 w-3" />
+              </span>
+            </div>
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+};
+
+export default AdvertisementBanner;
+

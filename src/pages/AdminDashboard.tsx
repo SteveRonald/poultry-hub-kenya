@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3, DollarSign } from 'lucide-react';
+import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3, DollarSign, Menu } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import NotificationsMenu from '../components/NotificationsMenu';
+import DashboardSidebar from '../components/DashboardSidebar';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -64,6 +65,7 @@ const AdminDashboard = () => {
     phone: ''
   });
   const [profileSubmitting, setProfileSubmitting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // Delete confirmation states
   const [showDeleteContactModal, setShowDeleteContactModal] = useState(false);
@@ -1068,88 +1070,119 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-              <h1 className="text-2xl lg:text-3xl font-bold text-primary">
-                Welcome back, {admin?.full_name || 'Admin'}! Manage your marketplace.
-              </h1>
-              <div className="flex items-center space-x-4">
-                <div className="bg-white rounded-lg shadow-md px-4 py-2 border border-gray-200">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">Notifications:</span>
-                    <NotificationsMenu isAdmin={true} />
+      
+      <div className="flex">
+        {/* Sidebar */}
+        <DashboardSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          type="admin"
+          stats={{
+            pendingVendors: stats?.pendingVendors || 0,
+            pendingProducts: stats?.pendingProducts || 0,
+            newMessages: contactMessages.filter(msg => msg.status === 'new').length || 0
+          }}
+          isMobileOpen={sidebarOpen}
+          onMobileClose={() => setSidebarOpen(false)}
+        />
+
+        {/* Main Content */}
+        <div className="flex-1 w-full lg:ml-64">
+          <div className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-6rem)] overflow-y-auto">
+            {/* Mobile Header with Menu Button */}
+            <div className="lg:hidden mb-6 flex items-center justify-between">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+              <div className="flex items-center space-x-2">
+                <NotificationsMenu isAdmin={true} />
+              </div>
+            </div>
+
+            {/* Header */}
+            <div className="mb-6 sm:mb-8 px-2 sm:px-0">
+              <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
+                <div>
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">Admin Dashboard</h1>
+                  <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {admin?.full_name || 'Admin'}! Manage your marketplace.</p>
+                </div>
+                <div className="hidden lg:flex items-center space-x-2 sm:space-x-4">
+                  <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
+                    <div className="flex items-center space-x-1 sm:space-x-2">
+                      <span className="text-xs sm:text-sm text-gray-600">Notifications:</span>
+                      <NotificationsMenu isAdmin={true} />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 mb-8">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4 mb-6 sm:mb-8">
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <Users className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Vendors</p>
-                  <p className="text-xl font-bold text-primary">{stats?.totalVendors || '0'}</p>
+                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Total Vendors</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.totalVendors || '0'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <div className="h-6 w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <div className="h-5 w-5 sm:h-6 sm:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
                     <span className="text-xs text-yellow-800 font-bold">{stats?.pendingVendors || '0'}</span>
                   </div>
-                  <p className="text-sm text-gray-600">Pending Vendors</p>
-                  <p className="text-xl font-bold text-primary">{stats?.pendingVendors || '0'}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">Pending Vendors</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.pendingVendors || '0'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <Package className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Products</p>
-                  <p className="text-xl font-bold text-primary">{stats ? (stats.totalProducts ?? 0) : 0}</p>
+                  <Package className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Total Products</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats ? (stats.totalProducts ?? 0) : 0}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <div className="h-6 w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <div className="h-5 w-5 sm:h-6 sm:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
                     <span className="text-xs text-yellow-800 font-bold">{stats?.pendingProducts || '0'}</span>
                   </div>
-                  <p className="text-sm text-gray-600">Pending Products</p>
-                  <p className="text-xl font-bold text-primary">{stats?.pendingProducts || '0'}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">Pending Products</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.pendingProducts || '0'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <ShoppingCart className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Orders</p>
-                  <p className="text-xl font-bold text-primary">{stats ? (stats.totalOrders ?? 0) : 0}</p>
+                  <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Total Orders</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats ? (stats.totalOrders ?? 0) : 0}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <TrendingUp className="h-6 w-6 text-accent mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Platform Revenue</p>
-                  <p className="text-lg font-bold text-primary">KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Platform Revenue</p>
+                  <p className="text-sm sm:text-lg font-bold text-primary">KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
+                  <p className="text-xs text-gray-500 mt-1 hidden lg:block">
                     {stats?.commissionRevenue || stats?.advertisementRevenue ? (
                       <>
                         Commission: KSH {stats?.commissionRevenue?.toFixed(2) || '0.00'} | 
@@ -1164,81 +1197,29 @@ const AdminDashboard = () => {
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <Users className="h-6 w-6 text-blue-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Users</p>
-                  <p className="text-xl font-bold text-primary">{stats?.totalUsers || 'Loading...'}</p>
+                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Total Users</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.totalUsers || 'Loading...'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
-                  <Users className="h-6 w-6 text-purple-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600">Total Admins</p>
-                  <p className="text-xl font-bold text-primary">{stats?.totalAdmins || 'Loading...'}</p>
+                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mx-auto mb-1 sm:mb-2" />
+                  <p className="text-xs sm:text-sm text-gray-600">Total Admins</p>
+                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.totalAdmins || 'Loading...'}</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Tab Navigation */}
+          {/* Content Area */}
           <div className="bg-white rounded-lg shadow-md mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="flex flex-wrap space-x-1 sm:space-x-2 px-2 sm:px-6 overflow-x-auto">
-                {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'vendors', label: 'Vendor Approvals' },
-                  { id: 'products', label: 'Product Approvals' },
-                  { id: 'orders', label: 'All Orders' },
-                  { id: 'advertisements', label: 'Advertisements' },
-                  { id: 'users', label: 'User Management' },
-                  { id: 'messages', label: 'Contact Messages' },
-                  { id: 'sms', label: 'SMS Logs' },
-                  { id: 'commission', label: 'Commission' },
-                  { id: 'analytics', label: 'Analytics' },
-                  { id: 'backup', label: 'Backup' },
-                  { id: 'profile', label: 'Profile' }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`relative py-3 sm:py-4 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap rounded-t-lg transition-all duration-200 cursor-pointer group ${
-                      activeTab === tab.id
-                        ? 'border-primary text-primary bg-primary/5 shadow-sm'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm'
-                    }`}
-                  >
-                    <span className="flex items-center">
-                      {tab.label}
-                      {(tab.id === 'vendors' && stats?.pendingVendors > 0) && (
-                        <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                          {stats?.pendingVendors}
-                        </span>
-                      )}
-                      {(tab.id === 'products' && stats?.pendingProducts > 0) && (
-                        <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                          {stats?.pendingProducts}
-                        </span>
-                      )}
-                      {(tab.id === 'messages' && contactMessages.filter(msg => msg.status === 'new').length > 0) && (
-                        <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                          {contactMessages.filter(msg => msg.status === 'new').length}
-                        </span>
-                      )}
-                    </span>
-                    {/* Active tab indicator */}
-                    {activeTab === tab.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
-                    )}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
@@ -1427,71 +1408,90 @@ const AdminDashboard = () => {
                 <div className="space-y-6">
                   <h2 className="text-xl font-semibold text-primary">Product Approvals</h2>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Vendor</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Category</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Price</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Submitted</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.isArray(products) && products.map(product => (
-                          <tr key={product.id} className="border-b border-gray-100">
-                            <td className="py-3 px-4 font-medium">{product.name}</td>
-                            <td className="py-3 px-4">{product.vendor}</td>
-                            <td className="py-3 px-4 capitalize">{product.category}</td>
-                            <td className="py-3 px-4">KSH {product.price}</td>
-                            <td className="py-3 px-4">{product.submissionDate}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex space-x-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => viewProduct(product)}
-                                  title="View product details"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                {product.status === 'approved' ? (
-                                  <Button 
-                                    size="sm" 
-                                    variant="destructive"
-                                    onClick={() => handleDisapproveProduct(product.id)}
-                                    disabled={actionLoading === `disapprove-product-${product.id}`}
-                                  >
-                                    {actionLoading === `disapprove-product-${product.id}` ? (
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Product</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Vendor</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Category</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Price</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Submitted</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {Array.isArray(products) && products.map(product => (
+                              <tr key={product.id} className="hover:bg-gray-50">
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900 max-w-[150px] sm:max-w-none truncate" title={product.name}>
+                                    {product.name}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 max-w-[120px] sm:max-w-none truncate" title={product.vendor}>
+                                    {product.vendor}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900 capitalize hidden md:table-cell">{product.category}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">KSH {product.price}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{product.submissionDate}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex flex-wrap sm:flex-nowrap gap-1 sm:gap-2">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => viewProduct(product)}
+                                      title="View product details"
+                                      className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                      <span className="hidden sm:inline ml-1">View</span>
+                                    </Button>
+                                    {product.status === 'approved' ? (
+                                      <Button 
+                                        size="sm" 
+                                        variant="destructive"
+                                        onClick={() => handleDisapproveProduct(product.id)}
+                                        disabled={actionLoading === `disapprove-product-${product.id}`}
+                                        className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                      >
+                                        {actionLoading === `disapprove-product-${product.id}` ? (
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        ) : (
+                                          <>
+                                            <X className="h-4 w-4" />
+                                            <span className="hidden sm:inline ml-1">Disapprove</span>
+                                          </>
+                                        )}
+                                      </Button>
                                     ) : (
-                                      <X className="h-4 w-4" />
+                                      <Button 
+                                        size="sm" 
+                                        className="bg-green-600 hover:bg-green-700 text-white h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                        onClick={() => handleApproveProduct(product.id)}
+                                        disabled={actionLoading === `approve-product-${product.id}`}
+                                      >
+                                        {actionLoading === `approve-product-${product.id}` ? (
+                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        ) : (
+                                          <>
+                                            <Check className="h-4 w-4" />
+                                            <span className="hidden sm:inline ml-1">Approve</span>
+                                          </>
+                                        )}
+                                      </Button>
                                     )}
-                                    Disapprove
-                                  </Button>
-                                ) : (
-                                <Button 
-                                  size="sm" 
-                                  className="bg-green-600 hover:bg-green-700 text-white"
-                                  onClick={() => handleApproveProduct(product.id)}
-                                    disabled={actionLoading === `approve-product-${product.id}`}
-                                >
-                                    {actionLoading === `approve-product-${product.id}` ? (
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                    ) : (
-                                  <Check className="h-4 w-4" />
-                                    )}
-                                    Approve
-                                </Button>
-                                )}
-                              </div>
-                            </td>
+                                  </div>
+                                </td>
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1507,62 +1507,81 @@ const AdminDashboard = () => {
                 <div className="space-y-6">
                   <h2 className="text-xl font-semibold text-primary">All Orders</h2>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order ID</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Customer</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Vendor</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Amount</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order Date</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Last Updated</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.isArray(orders) && orders.map(order => (
-                          <tr key={order.id} className="border-b border-gray-100">
-                            <td className="py-3 px-4">#{order.id}</td>
-                            <td className="py-3 px-4">{order.customer}</td>
-                            <td className="py-3 px-4">{order.vendor}</td>
-                            <td className="py-3 px-4">{order.product}</td>
-                            <td className="py-3 px-4">KSH {order.amount}</td>
-                            <td className="py-3 px-4">
-                              <Badge className={getStatusColor(order.status)}>
-                                {order.status}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">{order.date}</td>
-                            <td className="py-3 px-4">{order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex space-x-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => viewOrder(order)}
-                                >
-                                  View Details
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => {
-                                    setOrderToDelete(order);
-                                    setShowDeleteOrderModal(true);
-                                  }}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </td>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order ID</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Customer</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Vendor</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Product</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Order Date</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Last Updated</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {Array.isArray(orders) && orders.map(order => (
+                              <tr key={order.id} className="hover:bg-gray-50">
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 max-w-[120px] sm:max-w-none truncate" title={order.customer}>
+                                    {order.customer}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
+                                  <div className="max-w-[120px] truncate" title={order.vendor}>
+                                    {order.vendor}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 max-w-[150px] sm:max-w-none truncate" title={order.product}>
+                                    {order.product}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">KSH {order.amount}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                                    {order.status}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{order.date}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
+                                  {order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex flex-wrap sm:flex-nowrap gap-1 sm:gap-2">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => viewOrder(order)}
+                                      className="text-xs sm:text-sm"
+                                    >
+                                      View Details
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => {
+                                        setOrderToDelete(order);
+                                        setShowDeleteOrderModal(true);
+                                      }}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </td>
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1572,78 +1591,105 @@ const AdminDashboard = () => {
                 <div className="space-y-6">
                   <h2 className="text-xl font-semibold text-primary">User Management</h2>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Name</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Phone</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Role</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Joined</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.isArray(users) && users.map(user => (
-                          <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4">{user.full_name}</td>
-                            <td className="py-3 px-4">{user.email}</td>
-                            <td className="py-3 px-4">{user.phone || 'N/A'}</td>
-                            <td className="py-3 px-4">
-                              <Badge className={user.role === 'admin' ? 'bg-purple-100 text-purple-800' : user.role === 'vendor' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
-                                {user.role}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge className={(user.account_status || 'active') === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                                {user.account_status || 'active'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">{new Date(user.created_at).toLocaleDateString()}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex space-x-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => handleEditUser(user)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant={(user.account_status || 'active') === 'active' ? 'destructive' : 'default'}
-                                  onClick={() => handleToggleAccountStatus(user.id, user.account_status || 'active')}
-                                  disabled={togglingStatus === user.id || user.id === admin?.id}
-                                  className={(user.account_status || 'active') === 'disabled' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
-                                >
-                                  {togglingStatus === user.id ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                  ) : (user.account_status || 'active') === 'active' ? (
-                                    'Disable'
-                                  ) : (
-                                    'Enable'
-                                  )}
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="destructive"
-                                  onClick={() => handleDeleteUser(user.id)}
-                                  disabled={actionLoading === `delete-user-${user.id}`}
-                                >
-                                  {actionLoading === `delete-user-${user.id}` ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </div>
-                            </td>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Name</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Email</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Phone</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Role</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Joined</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {Array.isArray(users) && users.map(user => (
+                              <tr key={user.id} className="hover:bg-gray-50">
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900 max-w-[150px] sm:max-w-none truncate" title={user.full_name}>
+                                    {user.full_name}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 max-w-[180px] sm:max-w-none truncate" title={user.email}>
+                                    {user.email}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">{user.phone || 'N/A'}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <Badge className={`text-xs ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : user.role === 'vendor' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                                    {user.role}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <Badge className={`text-xs ${(user.account_status || 'active') === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    {user.account_status || 'active'}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{new Date(user.created_at).toLocaleDateString()}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex flex-wrap sm:flex-nowrap gap-1 sm:gap-2">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => handleEditUser(user)}
+                                      className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                      title="Edit user"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                      <span className="hidden sm:inline ml-1">Edit</span>
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant={(user.account_status || 'active') === 'active' ? 'destructive' : 'default'}
+                                      onClick={() => handleToggleAccountStatus(user.id, user.account_status || 'active')}
+                                      disabled={togglingStatus === user.id || user.id === admin?.id}
+                                      className={`h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3 ${(user.account_status || 'active') === 'disabled' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+                                      title={user.account_status === 'active' ? 'Disable user' : 'Enable user'}
+                                    >
+                                      {togglingStatus === user.id ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                      ) : (user.account_status || 'active') === 'active' ? (
+                                        <>
+                                          <X className="h-4 w-4" />
+                                          <span className="hidden sm:inline ml-1">Disable</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Check className="h-4 w-4" />
+                                          <span className="hidden sm:inline ml-1">Enable</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="destructive"
+                                      onClick={() => handleDeleteUser(user.id)}
+                                      disabled={actionLoading === `delete-user-${user.id}`}
+                                      className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                      title="Delete user"
+                                    >
+                                      {actionLoading === `delete-user-${user.id}` ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                      ) : (
+                                        <>
+                                          <Trash2 className="h-4 w-4" />
+                                          <span className="hidden sm:inline ml-1">Delete</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                </td>
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Edit User Modal */}
@@ -2237,8 +2283,9 @@ const AdminDashboard = () => {
               )}
             </div>
           </div>
+          </div>
         </div>
-        
+
         {/* Confirmation Dialog */}
         {confirmDialog.show && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -2278,7 +2325,6 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
-      </div>
 
       {/* View Product Modal */}
       {showViewProductModal && selectedProduct && (
@@ -2906,6 +2952,7 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
+      </div>
 
       <Footer />
     </div>

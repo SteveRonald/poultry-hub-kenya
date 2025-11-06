@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign } from 'lucide-react';
+import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign, Menu } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import NotificationsMenu from '../components/NotificationsMenu';
+import DashboardSidebar from '../components/DashboardSidebar';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -56,6 +57,7 @@ const VendorDashboard = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // Profile edit form state
   const [profileFormData, setProfileFormData] = useState({
@@ -945,70 +947,98 @@ const VendorDashboard = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      <div className="py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-6 sm:mb-8 px-2 sm:px-0">
-            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-              <div>
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">Vendor Dashboard</h1>
-                <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.name || user?.email || 'Vendor'}!</p>
+      <div className="flex">
+        {/* Sidebar */}
+        <DashboardSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          type="vendor"
+          stats={{
+            pendingOrders: stats?.pendingOrders || 0,
+            totalOrders: stats?.totalOrders || 0
+          }}
+          isMobileOpen={sidebarOpen}
+          onMobileClose={() => setSidebarOpen(false)}
+        />
+
+        {/* Main Content */}
+        <div className="flex-1 w-full lg:ml-64">
+          <div className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-6rem)] overflow-y-auto">
+            {/* Mobile Header with Menu Button */}
+            <div className="lg:hidden mb-6 flex items-center justify-between">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+              <div className="flex items-center space-x-2">
+                <NotificationsMenu />
               </div>
-              <div className="flex items-center space-x-2 sm:space-x-4">
-                <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
-                  <div className="flex items-center space-x-1 sm:space-x-2">
-                    <span className="text-xs sm:text-sm text-gray-600">Notifications:</span>
-                    <NotificationsMenu />
+            </div>
+
+            {/* Header */}
+            <div className="mb-6 sm:mb-8 px-2 sm:px-0">
+              <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
+                <div>
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">Vendor Dashboard</h1>
+                  <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.name || user?.email || 'Vendor'}!</p>
+                </div>
+                <div className="hidden lg:flex items-center space-x-2 sm:space-x-4">
+                  <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
+                    <div className="flex items-center space-x-1 sm:space-x-2">
+                      <span className="text-xs sm:text-sm text-gray-600">Notifications:</span>
+                      <NotificationsMenu />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
             <Card>
-              <CardContent className="p-3 sm:p-4 md:p-6">
+              <CardContent className="p-4 sm:p-5 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-600">Total Products</p>
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats ? (stats.totalProducts || 0) : 'Loading...'}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Products</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary truncate">{stats ? (stats.totalProducts || 0) : 'Loading...'}</p>
                   </div>
-                  <Package className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
+                  <Package className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent flex-shrink-0 ml-2" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4 md:p-6">
+              <CardContent className="p-4 sm:p-5 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-600">Total Orders</p>
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats ? (stats.totalOrders || 0) : 'Loading...'}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Orders</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary truncate">{stats ? (stats.totalOrders || 0) : 'Loading...'}</p>
                   </div>
-                  <Users className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
+                  <Users className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent flex-shrink-0 ml-2" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4 md:p-6">
+              <CardContent className="p-4 sm:p-5 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-600">Total Sales</p>
-                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-primary">KSH {stats ? (stats.totalRevenue || 0) : 'Loading...'}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Sales</p>
+                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-primary truncate">KSH {stats ? (stats.totalRevenue || 0) : 'Loading...'}</p>
                   </div>
-                  <BarChart3 className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent" />
+                  <BarChart3 className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-accent flex-shrink-0 ml-2" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4 md:p-6">
+              <CardContent className="p-4 sm:p-5 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-600">Total Spent on Ads</p>
-                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-orange-600">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Spent on Ads</p>
+                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-orange-600 truncate">
                       {(() => {
                         if (!Array.isArray(advertisements)) {
                           return 'KSh 0.00';
@@ -1021,19 +1051,19 @@ const VendorDashboard = () => {
                       })()}
                     </p>
                   </div>
-                  <DollarSign className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-orange-600" />
+                  <DollarSign className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-orange-600 flex-shrink-0 ml-2" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4 md:p-6">
+              <CardContent className="p-4 sm:p-5 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-600">Pending Orders</p>
-                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary">{stats ? (stats.pendingOrders || 0) : 'Loading...'}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1">Pending Orders</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-primary truncate">{stats ? (stats.pendingOrders || 0) : 'Loading...'}</p>
                   </div>
-                  <div className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <div className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0 ml-2">
                     <span className="text-xs sm:text-sm text-yellow-800 font-bold">{stats ? (stats.pendingOrders || 0) : '...'}</span>
                   </div>
                 </div>
@@ -1041,42 +1071,9 @@ const VendorDashboard = () => {
             </Card>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="bg-white rounded-lg shadow-md mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="flex flex-wrap space-x-1 sm:space-x-2 px-2 sm:px-6 overflow-x-auto">
-                {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'products', label: 'My Products' },
-                  { id: 'orders', label: 'Orders' },
-                  { id: 'advertisements', label: 'Advertisements' },
-                  { id: 'earnings', label: 'Earnings' },
-                  { id: 'analytics', label: 'Analytics' },
-                  { id: 'ai-assistant', label: 'AI Assistant' },
-                  { id: 'profile', label: 'Profile' }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`relative py-3 sm:py-4 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap rounded-t-lg transition-all duration-200 cursor-pointer group ${
-                      activeTab === tab.id
-                        ? 'border-primary text-primary bg-primary/5 shadow-sm'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm'
-                    }`}
-                  >
-                    <span className="flex items-center">
-                      {tab.label}
-                    </span>
-                    {/* Active tab indicator */}
-                    {activeTab === tab.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
-                    )}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            <div className="p-6">
+          {/* Content Area */}
+          <div className="bg-white rounded-lg shadow-md mb-6 w-full">
+            <div className="p-4 sm:p-6 w-full">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
@@ -1091,12 +1088,12 @@ const VendorDashboard = () => {
                     </Button>
                   </div>
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <Card>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 w-full">
+                    <Card className="flex flex-col">
                       <CardHeader>
                         <CardTitle className="text-lg">Latest Orders</CardTitle>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="flex-1">
                         <div className="space-y-3">
                           {orders.slice(0, 3).map(order => (
                             <div key={order.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
@@ -1116,11 +1113,11 @@ const VendorDashboard = () => {
                       </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="flex flex-col">
                       <CardHeader>
                         <CardTitle className="text-lg">Top Products</CardTitle>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="flex-1">
                         <div className="space-y-3">
                           {(products || []).slice(0, 3).map(product => (
                             <div key={product.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
@@ -1140,14 +1137,14 @@ const VendorDashboard = () => {
                       </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="flex flex-col">
                       <CardHeader>
                         <CardTitle className="text-lg flex items-center">
                           <Bell className="h-5 w-5 mr-2 text-primary" />
                           Notifications
                         </CardTitle>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="flex-1">
                         <div className="space-y-3">
                           <div className="text-center">
                             <NotificationsMenu />
@@ -1178,122 +1175,152 @@ const VendorDashboard = () => {
                     </Button>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Price</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Stock</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Orders</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(products || []).map(product => (
-                          <tr key={product.id} className="border-b border-gray-100">
-                            <td className="py-3 px-4">{product.name}</td>
-                            <td className="py-3 px-4">KSH {product.price}</td>
-                            <td className="py-3 px-4">{product.stock_quantity || 0}</td>
-                            <td className="py-3 px-4">
-                              <Badge className={product.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}>
-                                {product.is_active ? 'Active' : 'Inactive'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">{product.order_count || 0}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex space-x-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => viewProduct(product)}
-                                  title="View product details"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => editProduct(product)}
-                                  title="Edit product"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => confirmDeleteProduct(product.id)}
-                                  title="Delete product"
-                                  className="text-red-600 hover:text-red-700 hover:border-red-300"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Product</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Price</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Orders</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {(products || []).map(product => (
+                              <tr key={product.id} className="hover:bg-gray-50">
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900 max-w-[150px] sm:max-w-none truncate" title={product.name}>
+                                    {product.name}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">KSH {product.price}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">{product.stock_quantity || 0}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <Badge className={`text-xs ${product.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}`}>
+                                    {product.is_active ? 'Active' : 'Inactive'}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">{product.order_count || 0}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex flex-wrap sm:flex-nowrap gap-1 sm:gap-2">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => viewProduct(product)}
+                                      title="View product details"
+                                      className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                      <span className="hidden sm:inline ml-1">View</span>
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => editProduct(product)}
+                                      title="Edit product"
+                                      className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                      <span className="hidden sm:inline ml-1">Edit</span>
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => confirmDeleteProduct(product.id)}
+                                      title="Delete product"
+                                      className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3 text-red-600 hover:text-red-700 hover:border-red-300"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      <span className="hidden sm:inline ml-1">Delete</span>
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Orders Tab */}
               {activeTab === 'orders' && (
-                <div className="space-y-6">
-                  <h2 className="text-xl font-semibold text-primary">Order Management</h2>
+                <div className="space-y-6 w-full">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-primary">Order Management</h2>
+                  </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order ID</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Customer</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Quantity</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Total</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order Date</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Last Updated</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(orders || []).map(order => (
-                          <tr key={order.id} className="border-b border-gray-100">
-                            <td className="py-3 px-4">#{order.id}</td>
-                            <td className="py-3 px-4">{order.customer}</td>
-                            <td className="py-3 px-4">{order.product}</td>
-                            <td className="py-3 px-4">{order.quantity}</td>
-                            <td className="py-3 px-4">KSH {order.total}</td>
-                            <td className="py-3 px-4">
-                              <Badge className={getStatusColor(order.status)}>
-                                {order.status}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">{order.date}</td>
-                            <td className="py-3 px-4">{order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}</td>
-                            <td className="py-3 px-4">
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => viewOrder(order)}
-                              >
-                                View Details
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order ID</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Customer</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Product</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Quantity</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Total</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Order Date</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Last Updated</th>
+                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {(orders || []).map(order => (
+                              <tr key={order.id} className="hover:bg-gray-50">
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 max-w-[120px] sm:max-w-none truncate" title={order.customer}>
+                                    {order.customer}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 max-w-[150px] sm:max-w-none truncate" title={order.product}>
+                                    {order.product}
+                                  </div>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">{order.quantity}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">KSH {order.total}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                  <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                                    {order.status}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{order.date}</td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
+                                  {order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}
+                                </td>
+                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => viewOrder(order)}
+                                    className="text-xs sm:text-sm"
+                                  >
+                                    View
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Earnings Tab */}
               {activeTab === 'earnings' && (
-                <div className="space-y-6">
+                <div className="space-y-6 w-full">
                   <h2 className="text-xl font-semibold text-primary">Earnings Breakdown</h2>
                   
                   {/* Total Earnings Summary */}
@@ -1331,7 +1358,7 @@ const VendorDashboard = () => {
                   </div>
 
                   {/* Advertisement Revenue and Earnings */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                     <Card>
                       <CardContent className="p-4">
                         <div className="text-center">
@@ -1364,21 +1391,23 @@ const VendorDashboard = () => {
                         <CardTitle>Revenue by Advertisement</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="border-b">
-                                <th className="text-left py-2">Advertisement</th>
-                                <th className="text-left py-2">Revenue Generated</th>
+                        <div className="overflow-x-auto -mx-4 sm:mx-0">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Advertisement</th>
+                                <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Revenue Generated</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="bg-white divide-y divide-gray-200">
                               {earnings.ad_revenue_breakdown.map((ad: any, index: number) => (
-                                <tr key={ad.ad_id || index} className="border-b">
-                                  <td className="py-2 text-sm">
-                                    {ad.ad_title || `Ad #${ad.ad_id}`}
+                                <tr key={ad.ad_id || index} className="hover:bg-gray-50">
+                                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                    <div className="max-w-[200px] sm:max-w-none truncate" title={ad.ad_title || `Ad #${ad.ad_id}`}>
+                                      {ad.ad_title || `Ad #${ad.ad_id}`}
+                                    </div>
                                   </td>
-                                  <td className="py-2 text-sm font-medium text-green-600">
+                                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
                                     KSH {parseFloat(ad.revenue_generated || 0).toFixed(2)}
                                   </td>
                                 </tr>
@@ -1409,32 +1438,39 @@ const VendorDashboard = () => {
                     </CardHeader>
                     <CardContent>
                       {earnings?.earnings_breakdown?.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="border-b">
-                                <th className="text-left py-2">Order Date</th>
-                                <th className="text-left py-2">Product</th>
-                                <th className="text-left py-2">Order Total</th>
-                                <th className="text-left py-2">Commission (10%)</th>
-                                <th className="text-left py-2">Your Earnings (90%)</th>
+                        <div className="overflow-x-auto -mx-4 sm:mx-0">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order Date</th>
+                                <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider">Product</th>
+                                <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order Total</th>
+                                <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Commission (10%)</th>
+                                <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Your Earnings</th>
                               </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="bg-white divide-y divide-gray-200">
                               {earnings.earnings_breakdown.map((earning: any, index: number) => (
-                                <tr key={index} className="border-b">
-                                  <td className="py-2 text-sm">
+                                <tr key={index} className="hover:bg-gray-50">
+                                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {new Date(earning.order_date).toLocaleDateString()}
                                   </td>
-                                  <td className="py-2 text-sm">{earning.product_name}</td>
-                                  <td className="py-2 text-sm font-medium">
+                                  <td className="px-3 sm:px-4 py-3 text-sm text-gray-900">
+                                    <div className="max-w-[150px] sm:max-w-none truncate" title={earning.product_name}>
+                                      {earning.product_name}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                                     KSH {parseFloat(earning.order_total).toFixed(2)}
                                   </td>
-                                  <td className="py-2 text-sm text-red-600">
+                                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-red-600 hidden md:table-cell">
                                     -KSH {parseFloat(earning.commission_amount).toFixed(2)}
                                   </td>
-                                  <td className="py-2 text-sm text-green-600 font-medium">
+                                  <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-green-600 font-medium">
                                     KSH {parseFloat(earning.net_amount).toFixed(2)}
+                                    <div className="text-xs text-gray-500 md:hidden mt-1">
+                                      Commission: -KSH {parseFloat(earning.commission_amount).toFixed(2)}
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -1564,13 +1600,12 @@ const VendorDashboard = () => {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Add Product Modal */}
       {showAddProductModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-primary">Add New Product</h2>
                 <button 
@@ -1648,7 +1683,7 @@ const VendorDashboard = () => {
               )}
 
               <form onSubmit={handleSubmitProduct} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label htmlFor="product-name" className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
                     <input
@@ -1780,7 +1815,7 @@ const VendorDashboard = () => {
                   {productForm.image_urls && productForm.image_urls.length > 0 && (
                     <div className="mt-4">
                       <p className="text-sm font-medium text-gray-700 mb-2">Uploaded Images:</p>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4">
                         {productForm.image_urls.map((url: string, index: number) => (
                           <div key={index} className="relative group">
                             <img
@@ -1837,11 +1872,11 @@ const VendorDashboard = () => {
 
       {/* View Product Modal */}
       {showViewProductModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-primary">Product Details</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
+              <div className="flex justify-between items-center mb-4 sm:mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-primary">Product Details</h2>
                 <button
                   onClick={() => setShowViewProductModal(false)}
                   className="text-gray-400 hover:text-gray-600"
@@ -1857,7 +1892,7 @@ const VendorDashboard = () => {
                 {selectedProduct.image_urls && JSON.parse(selectedProduct.image_urls).length > 0 && (
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Product Images</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                       {JSON.parse(selectedProduct.image_urls).map((url: string, index: number) => (
                         <div key={index} className="relative">
                           <img
@@ -1876,7 +1911,7 @@ const VendorDashboard = () => {
                 )}
 
                 {/* Product Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
                     <p className="text-lg font-semibold text-gray-900">{selectedProduct.name}</p>
@@ -1935,9 +1970,9 @@ const VendorDashboard = () => {
 
       {/* Edit Product Modal */}
       {showEditProductModal && editingProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-primary">Edit Product</h2>
                 <button
@@ -1951,7 +1986,7 @@ const VendorDashboard = () => {
               </div>
 
               <form onSubmit={handleUpdateProduct} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label htmlFor="edit-product-name" className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
                     <input
@@ -2070,7 +2105,7 @@ const VendorDashboard = () => {
                   {productForm.image_urls && productForm.image_urls.length > 0 && (
                     <div className="mt-4">
                       <p className="text-sm font-medium text-gray-700 mb-2">Current Images:</p>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4">
                         {productForm.image_urls.map((url: string, index: number) => (
                           <div key={index} className="relative group">
                             <img
@@ -2127,11 +2162,11 @@ const VendorDashboard = () => {
 
       {/* View Order Details Modal */}
       {showViewOrderModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-primary">Order Details</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
+              <div className="flex justify-between items-center mb-4 sm:mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-primary">Order Details</h2>
                 <button
                   onClick={() => setShowViewOrderModal(false)}
                   className="text-gray-400 hover:text-gray-600"
@@ -2145,7 +2180,7 @@ const VendorDashboard = () => {
               <div className="space-y-6">
                 {/* Order Header */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
                       <p className="text-lg font-semibold text-gray-900">{selectedOrder.order_number}</p>
@@ -2167,7 +2202,7 @@ const VendorDashboard = () => {
                 {selectedOrder.product_images && JSON.parse(selectedOrder.product_images).length > 0 && (
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Product Images</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4">
                       {JSON.parse(selectedOrder.product_images).map((url: string, index: number) => (
                         <div key={index} className="relative">
                           <img
@@ -2188,7 +2223,7 @@ const VendorDashboard = () => {
                 {/* Customer Information */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-primary">Customer Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                       <p className="text-gray-900">{selectedOrder.customer}</p>
@@ -2215,7 +2250,7 @@ const VendorDashboard = () => {
                 {/* Product Information */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-primary">Product Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
                       <p className="text-lg font-semibold text-gray-900">{selectedOrder.product}</p>
@@ -2242,7 +2277,7 @@ const VendorDashboard = () => {
                 </div>
 
                 {/* Payment & Status Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-primary">Payment Information</h3>
                     <div className="space-y-3">
@@ -2289,7 +2324,7 @@ const VendorDashboard = () => {
                 {/* Status Update Section */}
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold text-primary mb-4">Update Order Status</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
                       <Button
                         key={status}
@@ -2499,7 +2534,8 @@ const VendorDashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
+      </div>
+      </div>
       <Footer />
     </div>
   );

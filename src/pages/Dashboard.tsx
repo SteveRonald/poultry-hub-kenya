@@ -3,10 +3,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import DashboardSidebar from '../components/DashboardSidebar';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Eye, Package, ShoppingCart, TrendingUp, X } from 'lucide-react';
+import { Eye, Package, ShoppingCart, TrendingUp, X, Menu } from 'lucide-react';
 import { getApiUrl } from '../config/api';
 
 const Dashboard = () => {
@@ -26,6 +27,7 @@ const Dashboard = () => {
   const [showShippingUpdateModal, setShowShippingUpdateModal] = useState(false);
   const [newShippingAddress, setNewShippingAddress] = useState('');
   const [updatingShipping, setUpdatingShipping] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -183,15 +185,40 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-6 sm:mb-8 px-2 sm:px-0">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">
-              Welcome back, {user.name || user.email || 'User'}!
-            </h1>
-            <p className="text-gray-600 mt-2 text-sm sm:text-base">Manage your orders and profile</p>
-          </div>
+      <div className="flex">
+        {/* Sidebar */}
+        <DashboardSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          type="customer"
+          stats={{
+            pendingOrders: stats.pendingOrders || 0,
+            totalOrders: stats.totalOrders || 0
+          }}
+          isMobileOpen={sidebarOpen}
+          onMobileClose={() => setSidebarOpen(false)}
+        />
+
+        {/* Main Content */}
+        <div className="flex-1 w-full lg:ml-64">
+          <div className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-6rem)] overflow-y-auto">
+            {/* Mobile Header with Menu Button */}
+            <div className="lg:hidden mb-4">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Header */}
+            <div className="mb-6 sm:mb-8 px-2 sm:px-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">
+                Welcome back, {user.name || user.email || 'User'}!
+              </h1>
+              <p className="text-gray-600 mt-2 text-sm sm:text-base">Manage your orders and profile</p>
+            </div>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -238,36 +265,8 @@ const Dashboard = () => {
             </Card>
           </div>
 
-          {/* Tab Navigation */}
+          {/* Content Area */}
           <div className="bg-white rounded-lg shadow-md mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="flex flex-wrap space-x-1 sm:space-x-2 px-2 sm:px-6">
-                {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'orders', label: 'My Orders' },
-                  { id: 'profile', label: 'Profile' }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`relative py-3 sm:py-4 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap rounded-t-lg transition-all duration-200 cursor-pointer group ${
-                      activeTab === tab.id
-                        ? 'border-primary text-primary bg-primary/5 shadow-sm'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm'
-                    }`}
-                  >
-                    <span className="flex items-center">
-                      {tab.label}
-                    </span>
-                    {/* Active tab indicator */}
-                    {activeTab === tab.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
-                    )}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
             <div className="p-4 sm:p-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
@@ -338,95 +337,105 @@ const Dashboard = () => {
                 <div className="space-y-6">
                   <h2 className="text-xl font-semibold text-primary">My Orders</h2>
 
-                  {/* Mobile-friendly orders display */}
-                  <div className="block sm:hidden space-y-4">
-                    {orders.map(order => (
-                      <Card key={order.order_number} className="p-4">
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-medium text-sm">#{order.order_number}</p>
-                              <p className="text-xs text-gray-500">Ordered: {new Date(order.created_at).toLocaleDateString()}</p>
-                              <p className="text-xs text-gray-500">Updated: {new Date(order.last_status_updated || order.created_at).toLocaleString()}</p>
-                            </div>
-                            <Badge className={getStatusColor(order.status)}>
-                              {order.status}
-                            </Badge>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="text-sm text-gray-600">Quantity</p>
-                              <p className="font-medium">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-gray-600">Total</p>
-                              <p className="font-medium">KSH {order.total_amount}</p>
-                            </div>
-                          </div>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => viewOrder(order)}
-                            className="w-full"
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-
-                  {/* Desktop table */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order Number</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Quantity</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Total</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Order Date</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Last Updated</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                  {orders.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>No orders yet</p>
+                      <p className="text-sm mt-2">Your orders will appear here once you make a purchase</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Mobile-friendly orders display */}
+                      <div className="block sm:hidden space-y-4">
                         {orders.map(order => (
-                          <tr key={order.order_number} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="py-3 px-4 font-medium">#{order.order_number}</td>
-                            <td className="py-3 px-4">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</td>
-                            <td className="py-3 px-4">KSH {order.total_amount}</td>
-                            <td className="py-3 px-4">
-                              <Badge className={getStatusColor(order.status)}>
-                                {order.status}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4">{new Date(order.created_at).toLocaleDateString()}</td>
-                            <td className="py-3 px-4">{new Date(order.last_status_updated || order.created_at).toLocaleString()}</td>
-                            <td className="py-3 px-4">
+                          <Card key={order.order_number} className="p-4">
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-medium text-sm">#{order.order_number}</p>
+                                  <p className="text-xs text-gray-500">Ordered: {new Date(order.created_at).toLocaleDateString()}</p>
+                                  <p className="text-xs text-gray-500">Updated: {new Date(order.last_status_updated || order.created_at).toLocaleString()}</p>
+                                </div>
+                                <Badge className={getStatusColor(order.status)}>
+                                  {order.status}
+                                </Badge>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <p className="text-sm text-gray-600">Quantity</p>
+                                  <p className="font-medium">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm text-gray-600">Total</p>
+                                  <p className="font-medium">KSH {order.total_amount}</p>
+                                </div>
+                              </div>
                               <Button 
                                 size="sm" 
                                 variant="outline"
                                 onClick={() => viewOrder(order)}
+                                className="w-full"
                               >
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Details
                               </Button>
-                            </td>
-                          </tr>
+                            </div>
+                          </Card>
                         ))}
-                      </tbody>
-                    </table>
-                    {orders.length === 0 && (
-                      <div className="text-center py-12 text-gray-500">
-                        <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p>No orders yet</p>
-                        <p className="text-sm mt-2">Your orders will appear here once you make a purchase</p>
                       </div>
-                    )}
-                  </div>
-          </div>
+
+                      {/* Desktop table */}
+                      <div className="overflow-x-auto -mx-4 sm:mx-0">
+                        <div className="inline-block min-w-full align-middle">
+                          <div className="overflow-hidden">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order Number</th>
+                                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Quantity</th>
+                                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Total</th>
+                                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Order Date</th>
+                                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Last Updated</th>
+                                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {orders.map(order => (
+                                  <tr key={order.order_number} className="hover:bg-gray-50">
+                                    <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.order_number}</td>
+                                    <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</td>
+                                    <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">KSH {order.total_amount}</td>
+                                    <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                                      <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                                        {order.status}
+                                      </Badge>
+                                    </td>
+                                    <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{new Date(order.created_at).toLocaleDateString()}</td>
+                                    <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
+                                      {new Date(order.last_status_updated || order.created_at).toLocaleString()}
+                                    </td>
+                                    <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        onClick={() => viewOrder(order)}
+                                        className="text-xs sm:text-sm"
+                                      >
+                                        <Eye className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                                        <span className="hidden sm:inline">View Details</span>
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
 
               {/* Profile Tab */}
@@ -773,8 +782,8 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+        </div>
       </div>
-
       <Footer />
     </div>
   );

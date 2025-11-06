@@ -201,10 +201,18 @@ function handleAdminCommissionData() {
         ");
         $vendorEarnings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        // Calculate total paid to vendors - sum all net_amount from vendor_earnings
+        $stmt = $pdo->query("
+            SELECT COALESCE(SUM(net_amount), 0) as total_paid
+            FROM vendor_earnings
+            WHERE status = 'confirmed'
+        ");
+        $vendorEarningsTotal = $stmt->fetch(PDO::FETCH_ASSOC)['total_paid'] ?? 0;
+        
         echo json_encode([
             'success' => true,
             'platform_commission' => $platformCommission,
-            'vendor_earnings_total' => $platformCommission * 9, // 90% of platform commission
+            'vendor_earnings_total' => floatval($vendorEarningsTotal), // Total actually paid to vendors
             'commission_breakdown' => $commissionBreakdown,
             'vendor_earnings' => $vendorEarnings
         ]);
@@ -390,7 +398,9 @@ function handleUpdateOrderStatus() {
     }
     
     $input = json_decode(file_get_contents('php://input'), true);
-    $orderId = $_GET['id'] ?? null;
+    // Sanitize order ID from GET parameter
+    require_once __DIR__ . '/../utils/security.php';
+    $orderId = isset($_GET['id']) ? sanitizeInput($_GET['id']) : null;
     
     if (!$orderId || !isset($input['status'])) {
         http_response_code(400);
@@ -427,7 +437,36 @@ function handleUpdateOrderStatus() {
             SET status = ?, status_notes = ?, updated_at = NOW(), last_status_updated = NOW()
             WHERE id = ?
         ");
-        $stmt->execute([$newStatus, $statusNotes, $orderId]);
+        $result = $stmt->execute([$newStatus, $statusNotes, $orderId]);
+        
+        // Check if update was successful
+        $rowsAffected = $stmt->rowCount();
+        if ($rowsAffected === 0) {
+            // Check if order exists but status is already the same
+            $stmt = $pdo->prepare("SELECT status FROM orders WHERE id = ?");
+            $stmt->execute([$orderId]);
+            $existingOrder = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$existingOrder) {
+                $pdo->rollBack();
+                http_response_code(404);
+                echo json_encode(['error' => 'Order not found']);
+                return;
+            } else if ($existingOrder['status'] === $newStatus) {
+                // Status is already set to this value, commit and return success
+                $pdo->commit();
+                echo json_encode([
+                    'success' => true, 
+                    'message' => 'Order status is already set to ' . $newStatus
+                ]);
+                return;
+            } else {
+                $pdo->rollBack();
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to update order status']);
+                return;
+            }
+        }
         
         // Update payment status based on order status
         $paymentStatus = 'pending';
@@ -444,17 +483,77 @@ function handleUpdateOrderStatus() {
         ");
         $stmt->execute([$paymentStatus, $orderId]);
         
+        // Get current status before update to handle reversals
+        $oldStatus = $order['status'];
+        
+        // If changing FROM delivered to another status, reverse commission/earnings
+        if ($oldStatus === 'delivered' && $newStatus !== 'delivered') {
+            // Check if earnings exist for this order
+            $stmt = $pdo->prepare("SELECT id FROM vendor_earnings WHERE order_id = ?");
+            $stmt->execute([$orderId]);
+            $existingEarning = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($existingEarning) {
+                // Delete vendor earnings and platform commission records
+                $stmt = $pdo->prepare("DELETE FROM vendor_earnings WHERE order_id = ?");
+                $stmt->execute([$orderId]);
+                
+                $stmt = $pdo->prepare("DELETE FROM platform_commissions WHERE order_id = ?");
+                $stmt->execute([$orderId]);
+                
+                // Reverse lifetime sales update (subtract the amount)
+                $stmt = $pdo->prepare("
+                    UPDATE vendors 
+                    SET lifetime_sales = lifetime_sales - ? 
+                    WHERE id = ?
+                ");
+                $stmt->execute([$order['total_amount'], $order['vendor_id']]);
+                
+                error_log("Reversed commission/earnings for order {$orderId} (status changed from delivered to {$newStatus})");
+            }
+        }
+        
         // Process commission if status is 'delivered'
         if ($newStatus === 'delivered') {
-            $commissionResult = processCommission(
-                $orderId,
-                $order['vendor_id'],
-                $order['total_amount']
-            );
-            
-            if (!$commissionResult['success']) {
+            try {
+                // Check if commission already processed (to avoid duplicates)
+                $stmt = $pdo->prepare("SELECT id FROM vendor_earnings WHERE order_id = ?");
+                $stmt->execute([$orderId]);
+                $existingEarning = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$existingEarning) {
+                    // Verify order is actually delivered before processing commission
+                    $stmt = $pdo->prepare("
+                        SELECT o.total_amount, o.status, o.advertisement_id
+                        FROM orders o
+                        WHERE o.id = ? AND o.status = 'delivered'
+                    ");
+                    $stmt->execute([$orderId]);
+                    $deliveredOrder = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($deliveredOrder) {
+                        $commissionResult = processCommission(
+                            $orderId,
+                            $order['vendor_id'],
+                            $deliveredOrder['total_amount']
+                        );
+                        
+                        if (!$commissionResult['success']) {
+                            // Log the error but don't fail the order status update
+                            error_log("Commission processing failed for order {$orderId}: " . $commissionResult['message']);
+                        } else {
+                            error_log("Commission processed successfully for order {$orderId}");
+                        }
+                    } else {
+                        error_log("Order {$orderId} status update to delivered failed or order not found");
+                    }
+                } else {
+                    error_log("Commission already processed for order {$orderId}, skipping");
+                }
+            } catch (Exception $commissionError) {
                 // Log the error but don't fail the order status update
-                error_log("Commission processing failed: " . $commissionResult['message']);
+                error_log("Exception during commission processing for order {$orderId}: " . $commissionError->getMessage());
+                error_log("Stack trace: " . $commissionError->getTraceAsString());
             }
         }
         
@@ -490,7 +589,126 @@ function handleUpdateOrderStatus() {
         
         // Always commit the transaction
         $pdo->commit();
+        
+        // Send success response FIRST before any background operations
         echo json_encode(['success' => true, 'message' => 'Order status updated successfully']);
+        
+        // Flush output to ensure response is sent immediately
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        
+        // Send SMS notifications (best-effort, don't fail status update)
+        try {
+            require_once __DIR__ . '/../services/sms/SMSService.php';
+            require_once __DIR__ . '/../services/sms/SMSTemplates.php';
+            
+            $smsService = new SMSService();
+            
+            // Get order details for SMS
+            $stmt = $pdo->prepare("
+                SELECT o.*, u.full_name as customer_name, u.phone as customer_phone, u.email as customer_email, p.vendor_id
+                FROM orders o
+                JOIN user_profiles u ON o.user_id = u.id
+                JOIN products p ON o.product_id = p.id
+                WHERE o.id = ?
+            ");
+            $stmt->execute([$orderId]);
+            $orderForSMS = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($orderForSMS) {
+                // Send SMS to customer
+                if (!empty($orderForSMS['customer_phone'])) {
+                    $customerSMSMessage = SMSTemplates::getOrderStatusUpdateCustomer([
+                        'id' => $orderForSMS['order_number'],
+                        'customer_name' => $orderForSMS['customer_name'],
+                        'status' => $newStatus
+                    ]);
+                    
+                    $smsService->sendSMS($orderForSMS['customer_phone'], $customerSMSMessage, [
+                        'recipient_type' => 'customer',
+                        'related_order_id' => $orderId,
+                        'related_user_id' => $orderForSMS['user_id']
+                    ]);
+                }
+                
+                // Send SMS to vendor
+                $stmt = $pdo->prepare("SELECT phone FROM vendors WHERE id = ?");
+                $stmt->execute([$orderForSMS['vendor_id']]);
+                $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($vendor && !empty($vendor['phone'])) {
+                    $vendorSMSMessage = SMSTemplates::getOrderStatusUpdateVendor([
+                        'id' => $orderForSMS['order_number'],
+                        'status' => $newStatus
+                    ]);
+                    
+                    $smsService->sendSMS($vendor['phone'], $vendorSMSMessage, [
+                        'recipient_type' => 'vendor',
+                        'related_order_id' => $orderId,
+                        'related_user_id' => $orderForSMS['vendor_id']
+                    ]);
+                }
+                
+                // Send delivery confirmation SMS if status is 'delivered'
+                if ($newStatus === 'delivered') {
+                    // Customer delivery confirmation
+                    if (!empty($orderForSMS['customer_phone'])) {
+                        $deliverySMSMessage = SMSTemplates::getDeliveryConfirmationCustomer([
+                            'id' => $orderForSMS['order_number'],
+                            'customer_name' => $orderForSMS['customer_name'],
+                            'total_amount' => $orderForSMS['total_amount']
+                        ]);
+                        
+                        $smsService->sendSMS($orderForSMS['customer_phone'], $deliverySMSMessage, [
+                            'recipient_type' => 'customer',
+                            'related_order_id' => $orderId,
+                            'related_user_id' => $orderForSMS['user_id']
+                        ]);
+                    }
+                    
+                    // Vendor delivery confirmation
+                    if ($vendor && !empty($vendor['phone'])) {
+                        $vendorDeliverySMSMessage = SMSTemplates::getDeliveryConfirmationVendor([
+                            'id' => $orderForSMS['order_number'],
+                            'total_amount' => $orderForSMS['total_amount']
+                        ]);
+                        
+                        $smsService->sendSMS($vendor['phone'], $vendorDeliverySMSMessage, [
+                            'recipient_type' => 'vendor',
+                            'related_order_id' => $orderId,
+                            'related_user_id' => $orderForSMS['vendor_id']
+                        ]);
+                    }
+                }
+            }
+        } catch (Exception $smsError) {
+            error_log('Order status updated but SMS sending failed: ' . $smsError->getMessage());
+            // Don't fail the status update if SMS fails
+        }
+        
+        // Update ad revenue AFTER response is sent (for ad orders only)
+        // This is done outside the transaction and after response is sent so it never blocks
+        if ($newStatus === 'delivered') {
+            try {
+                // Check if this is an ad order
+                $stmt = $pdo->prepare("SELECT advertisement_id, total_amount FROM orders WHERE id = ?");
+                $stmt->execute([$orderId]);
+                $orderCheck = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($orderCheck && $orderCheck['advertisement_id']) {
+                    // Update ad revenue in a separate, non-blocking operation
+                    require_once __DIR__ . '/../routes/advertisements.php';
+                    $adRevenueUpdated = updateAdRevenue($orderCheck['advertisement_id'], $orderCheck['total_amount']);
+                    if (!$adRevenueUpdated) {
+                        error_log("Warning: Failed to update ad revenue for ad {$orderCheck['advertisement_id']} after order {$orderId} was delivered");
+                    }
+                }
+            } catch (Exception $adRevenueError) {
+                // Log but don't fail - order status update already succeeded and response already sent
+                error_log("Error updating ad revenue after order status update: " . $adRevenueError->getMessage());
+            }
+        }
         
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
@@ -498,6 +716,15 @@ function handleUpdateOrderStatus() {
         }
         http_response_code(500);
         error_log("Error updating order status: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        error_log("Exception updating order status: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
         echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
     }
 }

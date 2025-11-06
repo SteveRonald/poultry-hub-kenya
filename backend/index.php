@@ -1,4 +1,7 @@
 <?php
+// Set timezone to Nairobi (UTC+3) for consistent date/time handling
+date_default_timezone_set('Africa/Nairobi');
+
 header('Content-Type: application/json');
 // Restrict CORS to specific origins for security
 $allowedOrigins = [
@@ -6,10 +9,12 @@ $allowedOrigins = [
     'http://localhost:8081',
     'http://localhost:8082',
     'http://localhost:3000',
+    'http://localhost:5173', // Vite default port
     'http://127.0.0.1:8080',
     'http://127.0.0.1:8081',
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173', // Vite default port
     'http://192.168.137.1:8080',
     'http://192.168.167.24:8081',
     'http://192.168.83.24:8082',
@@ -24,7 +29,8 @@ if ($productionDomains) {
 }
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$defaultOrigin = getenv('DEFAULT_CORS_ORIGIN') ?: 'http://localhost:8082';
+// Default to Vite's default port (5173) or allow from environment
+$defaultOrigin = getenv('DEFAULT_CORS_ORIGIN') ?: 'http://localhost:5173';
 
 if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
     header('Access-Control-Allow-Origin: ' . $origin);
@@ -179,6 +185,20 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/analytics.php';
             handleAdminAnalytics();
+        }
+        break;
+        
+    case 'api/admin/sms/logs':
+        if ($method === 'GET') {
+            include 'routes/sms.php';
+            handleGetSMSLogs();
+        }
+        break;
+        
+    case 'api/admin/sms/stats':
+        if ($method === 'GET') {
+            include 'routes/sms.php';
+            handleGetSMSStats();
         }
         break;
         

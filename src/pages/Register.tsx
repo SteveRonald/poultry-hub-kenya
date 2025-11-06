@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
@@ -28,6 +28,23 @@ const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    // Check if there's a pending order in sessionStorage
+    const pendingOrder = sessionStorage.getItem('pending_order');
+    if (pendingOrder) {
+      try {
+        const orderContext = JSON.parse(pendingOrder);
+        // Show a message that they can complete their order after registration
+        if (orderContext.source === 'advertisement') {
+          toast.info('Please register to complete your order from the advertisement');
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+  }, []);
 
   const handleChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -55,7 +72,26 @@ const Register = () => {
           ? 'Registration successful! Your account is pending approval.' 
           : 'Registration successful!'
       );
-      navigate('/dashboard');
+      
+      // Check for pending order or redirect parameter
+      const pendingOrder = sessionStorage.getItem('pending_order');
+      const redirectParam = searchParams.get('redirect');
+      const productParam = searchParams.get('product');
+      const adParam = searchParams.get('ad');
+      
+      if (pendingOrder || (redirectParam && productParam)) {
+        // Restore order context and redirect to products page
+        if (productParam) {
+          const redirectUrl = adParam 
+            ? `/products?product=${productParam}&ad=${adParam}`
+            : `/products?product=${productParam}`;
+          navigate(redirectUrl);
+        } else {
+          navigate('/products');
+        }
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       toast.error('Registration failed. Please try again.');
     } finally {

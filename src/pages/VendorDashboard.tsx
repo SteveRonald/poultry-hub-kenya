@@ -26,7 +26,7 @@ import {
 } from '../components/ui/alert-dialog';
 
 const VendorDashboard = () => {
-  const { user, fetchUser } = useAuth();
+  const { user, fetchUser, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<any>(null);
@@ -78,38 +78,185 @@ const VendorDashboard = () => {
   const dragOverItem = useRef<number | null>(null);
 
   useEffect(() => {
+    // Always wait for auth to finish loading first
+    if (authLoading) {
+      return;
+    }
+    
     const token = localStorage.getItem('token');
-    if (!token) return;
+    
+    // If no token at all, redirect to login
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+    
+    // After auth finishes loading, check if we have a user
+    // If no user but token exists, try to fetch user first
+    if (!user) {
+      // Token exists but no user - this might happen when navigating back
+      // Try to fetch user from AuthContext
+      fetchUser().then(() => {
+        // After fetchUser completes, this useEffect will run again
+        // because user is in the dependency array
+      }).catch(() => {
+        // If fetchUser fails, check if token is still valid
+        const currentToken = localStorage.getItem('token');
+        if (!currentToken) {
+          window.location.href = '/login';
+        }
+      });
+      return;
+    }
+    
+    // Only proceed if user is a vendor
+    if (user.role !== 'vendor') {
+      window.location.href = '/login';
+      return;
+    }
+    
+    // Skip if already loading to prevent duplicate requests
+    // But only if we already have some data (to avoid infinite loading)
+    if (loading && (stats || products.length > 0 || orders.length > 0)) {
+      return;
+    }
+    
     setLoading(true);
+    if (import.meta.env.DEV) {
+      console.log('Fetching vendor dashboard data...');
+    }
+    
+    // Wrap each fetch in a try-catch to handle errors gracefully
+    const safeFetch = async (url: string, name: string) => {
+      try {
+        const response = await fetch(url, { 
+          headers: { Authorization: `Bearer ${token}` } 
+        });
+        if (import.meta.env.DEV) {
+          console.log(`${name} API response:`, response.status);
+        }
+        return response;
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error(`${name} API fetch error:`, error);
+        }
+        return null;
+      }
+    };
+    
     Promise.all([
-      fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
-        headers: { 
-          Authorization: `Bearer ${token}`
-        } 
-      }).then(r => r.json()),
-      fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch(getApiUrl('/api/vendor/advertisements'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([stats, products, orders, earnings, ads]) => {
+      safeFetch(getApiUrl('/api/vendor/stats'), 'Stats'),
+      safeFetch(getApiUrl('/api/vendor/products'), 'Products'),
+      safeFetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), 'Orders'),
+      safeFetch(getApiUrl('/api/vendor/earnings'), 'Earnings'),
+      safeFetch(getApiUrl('/api/vendor/advertisements'), 'Advertisements'),
+    ]).then(async ([statsRes, productsRes, ordersRes, earningsRes, adsRes]) => {
+      if (import.meta.env.DEV) {
+        console.log('API responses received:', {
+          stats: statsRes?.status || 'failed',
+          products: productsRes?.status || 'failed',
+          orders: ordersRes?.status || 'failed',
+          earnings: earningsRes?.status || 'failed',
+          ads: adsRes?.status || 'failed'
+        });
+      }
+      
+      // Check if all requests returned 401 - token is expired
+      const all401 = statsRes?.status === 401 && productsRes?.status === 401 && 
+                    ordersRes?.status === 401 && earningsRes?.status === 401 && 
+                    adsRes?.status === 401;
+      
+      if (all401) {
+        // All requests failed with 401 - token is expired
+        if (import.meta.env.DEV) {
+          console.warn('All API requests returned 401 - token expired');
+        }
+        setLoading(false);
+        // Let AuthContext handle token removal
+        return;
+      }
+      
+      // Handle responses - parse JSON safely
+      const parseResponse = async (res: Response | null, name: string) => {
+        if (!res) return null;
+        if (res.status === 401) {
+          // 401 error - don't log as error, just return null
+          if (import.meta.env.DEV) {
+            console.warn(`${name} API returned 401 (unauthorized)`);
+          }
+          return null;
+        }
+        if (!res.ok) {
+          if (import.meta.env.DEV) {
+            console.warn(`${name} API failed with status:`, res.status);
+          }
+          return null;
+        }
+        try {
+          return await res.json();
+        } catch (e) {
+          if (import.meta.env.DEV) {
+            console.error(`Failed to parse ${name} JSON:`, e);
+          }
+          return null;
+        }
+      };
+      
+      // Parse all responses
+      const [stats, products, orders, earnings, ads] = await Promise.all([
+        parseResponse(statsRes, 'Stats'),
+        parseResponse(productsRes, 'Products'),
+        parseResponse(ordersRes, 'Orders'),
+        parseResponse(earningsRes, 'Earnings'),
+        parseResponse(adsRes, 'Advertisements'),
+      ]);
+      
       setStats(stats);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
       setEarnings(earnings?.success ? earnings : null);
-      setAdvertisements(Array.isArray(ads) ? ads : []);
+      
+      // Ensure advertisements is always an array and log for debugging
+      if (Array.isArray(ads)) {
+        setAdvertisements(ads);
+        if (import.meta.env.DEV && ads.length > 0) {
+          const adsArray = ads as any[];
+          console.log('Advertisements loaded:', adsArray.length);
+          console.log('First ad:', adsArray[0]);
+          console.log('First ad price:', adsArray[0].price, 'type:', typeof adsArray[0].price);
+          const totalSpent = adsArray.reduce((sum: number, ad: any) => {
+            const price = ad?.price ? parseFloat(String(ad.price)) : 0;
+            return sum + (isNaN(price) ? 0 : price);
+          }, 0);
+          console.log('Total spent calculation:', totalSpent);
+        }
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn('Advertisements response is not an array:', ads);
+        }
+        setAdvertisements([]);
+      }
       setLoading(false);
     }).catch((error) => {
       if (import.meta.env.DEV) {
         console.error('Failed to fetch vendor data:', error);
       }
-      setProducts([]);
-      setOrders([]);
-      setEarnings(null);
-      setAdvertisements([]);
+      // Always set loading to false, even on error
       setLoading(false);
+      // Only show error toast if it's not a 401 (401 is handled by AuthContext)
+      if (!error?.message?.includes('401')) {
+        toast({
+          title: "Error",
+          description: "Failed to load some dashboard data. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
     });
-    
-    // Listen for order status updates from other tabs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user]);
+  
+  // Listen for order status updates from other tabs
+  useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'orderStatusUpdate' && e.newValue) {
         try {
@@ -150,28 +297,7 @@ const VendorDashboard = () => {
     };
   }, []);
 
-  // Periodic auto-refresh to keep vendor dashboard updated
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const refresh = () => {
-      Promise.all([
-        fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
-      ]).then(([stats, products, orders, earnings]) => {
-        setStats(stats);
-        setProducts(Array.isArray(products) ? products : []);
-        setOrders(Array.isArray(orders) ? orders : []);
-        setEarnings(earnings?.success ? earnings : null);
-      }).catch(() => {
-        // ignore periodic refresh errors
-      });
-    };
-    const intervalId = window.setInterval(refresh, 15000);
-    return () => window.clearInterval(intervalId);
-  }, []);
+  // Auto-refresh has been removed - user will manually refresh the page when needed
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -274,30 +400,45 @@ const VendorDashboard = () => {
         body: JSON.stringify({ status: newStatus, status_notes: statusNotes }),
       });
       
-      if (response.ok) {
+      // Check if response is OK before parsing JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        // If JSON parsing fails but status is OK, assume success
+        if (response.ok) {
+          data = { success: true, message: 'Order status updated successfully' };
+        } else {
+          data = { error: 'Failed to parse response' };
+        }
+      }
+      
+      if (response.ok && data.success !== false) {
+        // Refresh orders and earnings after status update
+        const token = localStorage.getItem('token');
+        if (token) {
+          // Refresh orders
+          fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
+            headers: { Authorization: `Bearer ${token}` } 
+          })
+            .then(r => r.json())
+            .then(ordersData => setOrders(Array.isArray(ordersData) ? ordersData : []));
+          
+          // Refresh earnings if order was delivered
+          if (newStatus === 'delivered') {
+            setTimeout(() => {
+              fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(earningsData => setEarnings(earningsData?.success ? earningsData : null));
+            }, 500);
+          }
+        }
+        
         toast({
           title: "Order Status Updated",
           description: `Order status has been updated to ${newStatus}.`,
           variant: "success",
         });
-        
-        // Small delay to ensure database transaction is committed
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Refresh orders data to ensure consistency
-        const res = await fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { 
-          headers: { 
-            Authorization: `Bearer ${token}`
-          } 
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (import.meta.env.DEV) {
-            console.log('Refreshed orders after status update:', data);
-            console.log('Order that was updated:', data.find((order: any) => order.id === orderId));
-          }
-          setOrders(Array.isArray(data) ? data : []);
-        }
         
         // Refresh stats to update pending orders count
         const statsRes = await fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } });
@@ -431,8 +572,21 @@ const VendorDashboard = () => {
 
   const fetchProducts = async () => {
     const token = localStorage.getItem('token');
+    if (!token) {
+      setProducts([]);
+      return;
+    }
     try {
       const res = await fetch(getApiUrl('/api/vendor/products'), { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        // Token expired - only remove if it's still the same token (not already removed)
+        const currentToken = localStorage.getItem('token');
+        if (currentToken === token) {
+          localStorage.removeItem('token');
+          fetchUser(); // Trigger auth refresh
+        }
+        return;
+      }
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -445,8 +599,21 @@ const VendorDashboard = () => {
 
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
+    if (!token) {
+      setOrders([]);
+      return;
+    }
     try {
       const res = await fetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        // Token expired - only remove if it's still the same token (not already removed)
+        const currentToken = localStorage.getItem('token');
+        if (currentToken === token) {
+          localStorage.removeItem('token');
+          fetchUser(); // Trigger auth refresh
+        }
+        return;
+      }
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -459,8 +626,21 @@ const VendorDashboard = () => {
 
   const fetchEarnings = async () => {
     const token = localStorage.getItem('token');
+    if (!token) {
+      setEarnings(null);
+      return;
+    }
     try {
       const res = await fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        // Token expired - only remove if it's still the same token (not already removed)
+        const currentToken = localStorage.getItem('token');
+        if (currentToken === token) {
+          localStorage.removeItem('token');
+          fetchUser(); // Trigger auth refresh
+        }
+        return;
+      }
       const data = await res.json();
       if (res.ok) {
         setEarnings(data);
@@ -637,7 +817,7 @@ const VendorDashboard = () => {
   const openEditProfileModal = () => {
     if (user) {
       setProfileFormData({
-        full_name: user.name || user.full_name || '',
+        full_name: user.name || '',
         email: user.email || '',
         phone: user.phone || '',
         farm_name: user.vendorData?.farm_name || '',
@@ -772,7 +952,7 @@ const VendorDashboard = () => {
             <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
               <div>
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">Vendor Dashboard</h1>
-                <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.full_name || user?.email || 'Vendor'}!</p>
+                <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.name || user?.email || 'Vendor'}!</p>
               </div>
               <div className="flex items-center space-x-2 sm:space-x-4">
                 <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
@@ -829,7 +1009,16 @@ const VendorDashboard = () => {
                   <div>
                     <p className="text-xs sm:text-sm text-gray-600">Total Spent on Ads</p>
                     <p className="text-sm sm:text-lg md:text-2xl font-bold text-orange-600">
-                      KSH {advertisements.reduce((sum: number, ad: any) => sum + (parseFloat(ad.price) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {(() => {
+                        if (!Array.isArray(advertisements)) {
+                          return 'KSh 0.00';
+                        }
+                        const total = advertisements.reduce((sum: number, ad: any) => {
+                          const price = ad?.price ? parseFloat(String(ad.price)) : 0;
+                          return sum + (isNaN(price) ? 0 : price);
+                        }, 0);
+                        return `KSh ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                      })()}
                     </p>
                   </div>
                   <DollarSign className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-orange-600" />
@@ -1141,6 +1330,66 @@ const VendorDashboard = () => {
                     </Card>
                   </div>
 
+                  {/* Advertisement Revenue and Earnings */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600">Ad Revenue (Gross)</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            KSH {earnings?.ad_revenue?.toFixed(2) || '0.00'}
+                          </p>
+                          <p className="text-xs text-gray-500">Total from advertisements</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600">Ad Earnings (Net)</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            KSH {earnings?.ad_earnings?.toFixed(2) || '0.00'}
+                          </p>
+                          <p className="text-xs text-gray-500">After commission deduction</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Per-Ad Revenue Breakdown */}
+                  {earnings?.ad_revenue_breakdown && earnings.ad_revenue_breakdown.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Revenue by Advertisement</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left py-2">Advertisement</th>
+                                <th className="text-left py-2">Revenue Generated</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {earnings.ad_revenue_breakdown.map((ad: any, index: number) => (
+                                <tr key={ad.ad_id || index} className="border-b">
+                                  <td className="py-2 text-sm">
+                                    {ad.ad_title || `Ad #${ad.ad_id}`}
+                                  </td>
+                                  <td className="py-2 text-sm font-medium text-green-600">
+                                    KSH {parseFloat(ad.revenue_generated || 0).toFixed(2)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {/* Commission Explanation */}
                   <Card>
                     <CardContent className="p-4">
@@ -1265,7 +1514,7 @@ const VendorDashboard = () => {
                           </div>
                           <div className="space-y-2">
                             <label className="block text-sm font-medium text-gray-700">Name</label>
-                            <p className="text-gray-900">{user?.name || user?.full_name || 'Not provided'}</p>
+                            <p className="text-gray-900">{user?.name || user?.name || 'Not provided'}</p>
                           </div>
                           <div className="space-y-2 sm:col-span-2 lg:col-span-1">
                             <label className="block text-sm font-medium text-gray-700">Phone</label>

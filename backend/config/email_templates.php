@@ -1,5 +1,44 @@
 <?php
 
+/**
+ * Format date for email display in Africa/Nairobi timezone
+ * Ensures consistent timezone handling across all emails
+ */
+function formatEmailDate($dateString) {
+    // Ensure timezone is set to Nairobi
+    $currentTimezone = date_default_timezone_get();
+    $wasDifferent = ($currentTimezone !== 'Africa/Nairobi');
+    
+    if ($wasDifferent) {
+        date_default_timezone_set('Africa/Nairobi');
+    }
+    
+    try {
+        // Create DateTime object and set timezone explicitly
+        $date = new DateTime($dateString);
+        $date->setTimezone(new DateTimeZone('Africa/Nairobi'));
+        
+        // Format the date
+        $formatted = $date->format('F j, Y \a\t g:i A');
+    } catch (Exception $e) {
+        // Fallback to strtotime if DateTime fails
+        $timestamp = strtotime($dateString);
+        if ($timestamp !== false) {
+            $formatted = date('F j, Y \a\t g:i A', $timestamp);
+        } else {
+            // If all else fails, return the original string
+            $formatted = $dateString;
+        }
+    }
+    
+    // Restore original timezone if it was different
+    if ($wasDifferent) {
+        date_default_timezone_set($currentTimezone);
+    }
+    
+    return $formatted;
+}
+
 function getEmailTemplate($type, $data = []) {
     // Dynamic base URL based on environment
     $baseUrl = getenv('BASE_URL') ?: 
@@ -21,12 +60,44 @@ function getEmailTemplate($type, $data = []) {
             return getOTPEmailTemplate($data, $baseUrl);
         case 'backup_notification':
             return getBackupNotificationTemplate($data, $baseUrl);
+        case 'contact_notification':
+            return getContactNotificationTemplate($data, $baseUrl);
+        case 'contact_confirmation':
+            return getContactConfirmationTemplate($data, $baseUrl);
         default:
             return getDefaultTemplate($data, $baseUrl);
     }
 }
 
+function getLogoPath() {
+    // Get the logo file path - try multiple possible locations
+    $possiblePaths = [
+        __DIR__ . '/../../public/logo.png',
+        __DIR__ . '/../../../public/logo.png',
+        $_SERVER['DOCUMENT_ROOT'] . '/poultry-hub-kenya/public/logo.png',
+        $_SERVER['DOCUMENT_ROOT'] . '/public/logo.png',
+        dirname(__DIR__, 2) . '/public/logo.png'
+    ];
+    
+    foreach ($possiblePaths as $logoPath) {
+        $realPath = realpath($logoPath);
+        if ($realPath && file_exists($realPath)) {
+            error_log("Logo found at: " . $realPath);
+            return $realPath;
+        }
+    }
+    
+    error_log("Logo not found in any of the expected paths");
+    return null;
+}
+
 function getBaseTemplate($title, $content, $baseUrl) {
+    // Use CID reference for logo - will be embedded by PHPMailer
+    // Reduced size from 200px to 120px for better email client compatibility
+    // The logo will be embedded as an inline attachment with CID 'logo'
+    $logoHtml = "<img src='cid:logo' alt='Poultry Hub Kenya Logo' class='header-logo' width='120' style='max-width: 120px; width: 120px; height: auto; margin: 0 auto 10px; display: block; border: 0; outline: none; text-decoration: none;' />";
+    $subtitleHtml = "<p style='margin: 0; opacity: 0.9; font-size: 16px;'>Your Trusted Poultry Partner</p>";
+    
     return "
     <!DOCTYPE html>
     <html lang='en'>
@@ -52,10 +123,17 @@ function getBaseTemplate($title, $content, $baseUrl) {
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             }
             .header {
-                background: linear-gradient(135deg, #2c5530 0%, #4a7c59 100%);
+                background-color: #1a4d2e;
                 color: white;
                 padding: 30px 20px;
                 text-align: center;
+            }
+            .header-logo {
+                max-width: 120px;
+                width: 120px;
+                height: auto;
+                margin: 0 auto 10px;
+                display: block;
             }
             .header h1 {
                 margin: 0;
@@ -71,11 +149,11 @@ function getBaseTemplate($title, $content, $baseUrl) {
                 padding: 30px 20px;
             }
             .order-details {
-                background-color: #f8f9fa;
+                background-color: #f5f5f5;
                 border-radius: 6px;
                 padding: 20px;
                 margin: 20px 0;
-                border-left: 4px solid #2c5530;
+                border-left: 4px solid #1a4d2e;
             }
             .order-item {
                 display: flex;
@@ -89,14 +167,14 @@ function getBaseTemplate($title, $content, $baseUrl) {
             }
             .item-name {
                 font-weight: 600;
-                color: #2c5530;
+                color: #1a4d2e;
             }
             .item-details {
                 font-size: 14px;
                 color: #6c757d;
             }
             .total-section {
-                background-color: #2c5530;
+                background-color: #1a4d2e;
                 color: white;
                 padding: 20px;
                 border-radius: 6px;
@@ -118,8 +196,8 @@ function getBaseTemplate($title, $content, $baseUrl) {
                 letter-spacing: 0.5px;
             }
             .status-pending {
-                background-color: #fff3cd;
-                color: #856404;
+                background-color: #fff9c4;
+                color: #333333;
             }
             .status-confirmed {
                 background-color: #d1ecf1;
@@ -142,7 +220,7 @@ function getBaseTemplate($title, $content, $baseUrl) {
                 color: #721c24;
             }
             .info-section {
-                background-color: #f8f9fa;
+                background-color: #f5f5f5;
                 border-radius: 6px;
                 padding: 20px;
                 margin: 20px 0;
@@ -159,13 +237,13 @@ function getBaseTemplate($title, $content, $baseUrl) {
             }
             .info-label {
                 font-weight: 600;
-                color: #2c5530;
+                color: #1a4d2e;
             }
             .info-value {
                 color: #495057;
             }
             .footer {
-                background-color: #2c5530;
+                background-color: #1a4d2e;
                 color: white;
                 padding: 20px;
                 text-align: center;
@@ -180,7 +258,7 @@ function getBaseTemplate($title, $content, $baseUrl) {
             }
             .button {
                 display: inline-block;
-                background-color: #2c5530;
+                background-color: #1a4d2e;
                 color: white;
                 padding: 12px 24px;
                 text-decoration: none;
@@ -189,7 +267,7 @@ function getBaseTemplate($title, $content, $baseUrl) {
                 margin: 20px 0;
             }
             .button:hover {
-                background-color: #1e3a21;
+                background-color: #0f2e1a;
             }
             .highlight {
                 background-color: #fff3cd;
@@ -219,14 +297,14 @@ function getBaseTemplate($title, $content, $baseUrl) {
     <body>
         <div class='container'>
             <div class='header'>
-                <h1>🐔 Poultry Hub Kenya</h1>
-                <p>Your Trusted Poultry Partner</p>
+                $logoHtml
+                $subtitleHtml
             </div>
             <div class='content'>
                 $content
             </div>
             <div class='footer'>
-                <p>© 2025 Poultry Hub Kenya. All rights reserved.</p>
+                <p>&copy; 2025 Poultry Hub Kenya. All rights reserved.</p>
                 <p>Visit us at <a href='$baseUrl'>$baseUrl</a></p>
                 <p>For support, contact us at support@poultryhubkenya.com</p>
             </div>
@@ -262,19 +340,19 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
     }
     
     $content = "
-        <h2 style='color: #2c5530; margin-top: 0;'>Order Confirmation</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Order Confirmation</h2>
         <p>Dear {$customer['name']},</p>
         <p>Thank you for your order! We have received your order and it is being processed.</p>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Order Details</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Order Details</h3>
             <div class='info-row'>
                 <span class='info-label'>Order Number: </span>
                 <span class='info-value'>#{$order['order_number']}</span>
             </div>
             <div class='info-row'>
                 <span class='info-label'>Order Date: </span>
-                <span class='info-value'>" . date('F j, Y \a\t g:i A', strtotime($order['created_at'])) . "</span>
+                <span class='info-value'>" . formatEmailDate($order['created_at']) . "</span>
             </div>
             <div class='info-row'>
                 <span class='info-label'>Status: </span>
@@ -283,17 +361,12 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
         </div>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Order Items</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Order Items</h3>
             $itemsHtml
         </div>
         
-        <div class='total-section'>
-            <div>Total Amount </div>
-            <div class='total-amount'>KSH " . number_format($order['total_amount'], 2) . "</div>
-        </div>
-        
         <div class='info-section'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Shipping Information</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Shipping Information</h3>
             <div class='info-row'>
                 <span class='info-label'>Address:</span>
                 <span class='info-value'>{$order['shipping_address']}</span>
@@ -308,11 +381,16 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
             </div>
         </div>
         
+        <div class='total-section'>
+            <div>Total Amount </div>
+            <div class='total-amount'>KSH " . number_format($order['total_amount'], 2) . "</div>
+        </div>
+        
         <div class='highlight'>
-            <strong>📋 What's Next?</strong><br>
-            • Your order is being reviewed by our team<br>
-            • You will receive updates as your order progresses<br>
-            • You can track your order status in your dashboard
+            <strong>What&apos;s Next?</strong><br>
+            &bull; Your order is being reviewed by our team<br>
+            &bull; You will receive updates as your order progresses<br>
+            &bull; You can track your order status in your dashboard
         </div>
         
         <div style='text-align: center; margin: 30px 0;'>
@@ -346,12 +424,12 @@ function getOrderStatusUpdateTemplate($data, $baseUrl) {
     $statusMessage = $statusMessages[$newStatus] ?? 'Your order status has been updated.';
     
     $content = "
-        <h2 style='color: #2c5530; margin-top: 0;'>Order Status Update</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Order Status Update</h2>
         <p>Dear {$customer['name']},</p>
         <p>We have an update regarding your order #{$order['order_number']}.</p>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Status Update</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Status Update</h3>
             <div class='info-row'>
                 <span class='info-label'>Order Number:</span>
                 <span class='info-value'>#{$order['order_number']}</span>
@@ -367,7 +445,7 @@ function getOrderStatusUpdateTemplate($data, $baseUrl) {
         </div>
         
         <div class='success'>
-            <strong>✅ $statusMessage</strong>
+            <strong>$statusMessage</strong>
         </div>
         
         <div style='text-align: center; margin: 30px 0;'>
@@ -406,12 +484,12 @@ function getVendorNotificationTemplate($data, $baseUrl) {
     }
     
     $content = "
-        <h2 style='color: #2c5530; margin-top: 0;'>New Order Received</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>New Order Received</h2>
         <p>Dear {$vendor['name']},</p>
         <p>You have received a new order for your products!</p>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Order Information</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Order Information</h3>
             <div class='info-row'>
                 <span class='info-label'>Order Number:</span>
                 <span class='info-value'>#{$order['order_number']}</span>
@@ -422,7 +500,7 @@ function getVendorNotificationTemplate($data, $baseUrl) {
             </div>
             <div class='info-row'>
                 <span class='info-label'>Order Date:</span>
-                <span class='info-value'>" . date('F j, Y \a\t g:i A', strtotime($order['created_at'])) . "</span>
+                <span class='info-value'>" . formatEmailDate($order['created_at']) . "</span>
             </div>
             <div class='info-row'>
                 <span class='info-label'>Shipping Address:</span>
@@ -435,7 +513,7 @@ function getVendorNotificationTemplate($data, $baseUrl) {
         </div>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Order Items</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Order Items</h3>
             $itemsHtml
         </div>
         
@@ -445,10 +523,10 @@ function getVendorNotificationTemplate($data, $baseUrl) {
         </div>
         
         <div class='highlight'>
-            <strong>📋 Action Required:</strong><br>
-            • Please review the order details in your vendor dashboard<br>
-            • Confirm the order and update its status<br>
-            • Prepare the items for shipping
+            <strong>Action Required:</strong><br>
+            &bull; Please review the order details in your vendor dashboard<br>
+            &bull; Confirm the order and update its status<br>
+            &bull; Prepare the items for shipping
         </div>
         
         <div style='text-align: center; margin: 30px 0;'>
@@ -465,12 +543,12 @@ function getAdminNotificationTemplate($data, $baseUrl) {
     $order = $data['order'];
     
     $content = "
-        <h2 style='color: #2c5530; margin-top: 0;'>New Order Notification</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>New Order Notification</h2>
         <p>Dear Admin,</p>
         <p>A new order has been placed on the platform.</p>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Order Summary</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Order Summary</h3>
             <div class='info-row'>
                 <span class='info-label'>Order Number:</span>
                 <span class='info-value'>#{$order['order_number']}</span>
@@ -485,7 +563,7 @@ function getAdminNotificationTemplate($data, $baseUrl) {
             </div>
             <div class='info-row'>
                 <span class='info-label'>Order Date:</span>
-                <span class='info-value'>" . date('F j, Y \a\t g:i A', strtotime($order['created_at'])) . "</span>
+                <span class='info-value'>" . formatEmailDate($order['created_at']) . "</span>
             </div>
         </div>
         
@@ -504,29 +582,29 @@ function getOTPEmailTemplate($data, $baseUrl) {
     $userName = $data['user_name'] ?? 'User';
     
     $content = "
-        <h2 style='color: #2c5530; margin-top: 0;'>Password Reset Request</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Password Reset Request</h2>
         <p>Dear $userName,</p>
         <p>You have requested to reset your password for your Poultry Hub Kenya account.</p>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Your OTP Code</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Your OTP Code</h3>
             <div style='text-align: center; margin: 20px 0;'>
-                <div style='background-color: #2c5530; color: white; padding: 20px; border-radius: 8px; display: inline-block;'>
+                <div style='background-color: #1a4d2e; color: white; padding: 20px; border-radius: 8px; display: inline-block;'>
                     <div style='font-size: 32px; font-weight: bold; letter-spacing: 8px;'>$otp</div>
                 </div>
             </div>
         </div>
         
         <div class='warning'>
-            <strong>⚠️ Important Security Information:</strong><br>
-            • This OTP code will expire in 10 minutes<br>
-            • Do not share this code with anyone<br>
-            • If you did not request this password reset, please ignore this email<br>
-            • Our team will never ask for your OTP code
+            <strong>Important Security Information:</strong><br>
+            &bull; This OTP code will expire in 10 minutes<br>
+            &bull; Do not share this code with anyone<br>
+            &bull; If you did not request this password reset, please ignore this email<br>
+            &bull; Our team will never ask for your OTP code
         </div>
         
         <div class='highlight'>
-            <strong>🔐 How to use this OTP:</strong><br>
+            <strong>How to use this OTP:</strong><br>
             1. Go to the password reset page<br>
             2. Enter your email address<br>
             3. Enter the OTP code above<br>
@@ -542,7 +620,7 @@ function getOTPEmailTemplate($data, $baseUrl) {
 
 function getDefaultTemplate($data, $baseUrl) {
     $content = "
-        <h2 style='color: #2c5530; margin-top: 0;'>Notification from Poultry Hub Kenya</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Notification from Poultry Hub Kenya</h2>
         <p>Hello,</p>
         <p>This is a notification from Poultry Hub Kenya.</p>
         <p>Thank you for using our platform!</p>
@@ -568,7 +646,7 @@ function getBackupNotificationTemplate($data, $baseUrl) {
     
     $detailsHtml = '';
     if (!empty($details)) {
-        $detailsHtml = '<div class="order-details"><h3 style="color: #2c5530; margin-top: 0;">Backup Details</h3>';
+        $detailsHtml = '<div class="order-details"><h3 style="color: #1a4d2e; margin-top: 0;">Backup Details</h3>';
         foreach ($details as $key => $value) {
             $detailsHtml .= "
                 <div class='info-row'>
@@ -581,12 +659,12 @@ function getBackupNotificationTemplate($data, $baseUrl) {
     }
     
     $content = "
-        <h2 style='color: #2c5530; margin-top: 0;'>Backup Notification</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Backup Notification</h2>
         <p>Dear Admin,</p>
         <p>A backup operation has been performed on your Poultry Hub Kenya system.</p>
         
         <div class='order-details'>
-            <h3 style='color: #2c5530; margin-top: 0;'>Backup Summary</h3>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Backup Summary</h3>
             <div class='info-row'>
                 <span class='info-label'>Backup Type:</span>
                 <span class='info-value'>$typeName</span>
@@ -597,7 +675,7 @@ function getBackupNotificationTemplate($data, $baseUrl) {
             </div>
             <div class='info-row'>
                 <span class='info-label'>Timestamp:</span>
-                <span class='info-value'>" . date('F j, Y \a\t g:i A') . "</span>
+                <span class='info-value'>" . formatEmailDate(date('Y-m-d H:i:s')) . "</span>
             </div>
         </div>
         
@@ -615,6 +693,92 @@ function getBackupNotificationTemplate($data, $baseUrl) {
         "$typeName Backup Failed";
     
     return getBaseTemplate("$title - Poultry Hub Kenya", $content, $baseUrl);
+}
+
+function getContactNotificationTemplate($data, $baseUrl) {
+    $contactData = $data['contact'];
+    
+    $content = "
+        <h2 style='color: #1a4d2e; margin-top: 0;'>New Contact Message Received</h2>
+        <p>Dear Admin,</p>
+        <p>A new contact message has been submitted through the website contact form.</p>
+        
+        <div class='order-details'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Contact Information</h3>
+            <div class='info-row'>
+                <span class='info-label'>Name:</span>
+                <span class='info-value'>" . htmlspecialchars($contactData['name']) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Email:</span>
+                <span class='info-value'>" . htmlspecialchars($contactData['email']) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Phone:</span>
+                <span class='info-value'>" . htmlspecialchars($contactData['phone'] ?? 'Not provided') . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Subject:</span>
+                <span class='info-value'>" . htmlspecialchars($contactData['subject']) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Category:</span>
+                <span class='info-value'>" . htmlspecialchars($contactData['category'] ?? 'General') . "</span>
+            </div>
+        </div>
+        
+        <div class='info-section'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Message</h3>
+            <p style='white-space: pre-wrap;'>" . nl2br(htmlspecialchars($contactData['message'])) . "</p>
+        </div>
+        
+        <div style='text-align: center; margin: 30px 0;'>
+            <a href='$baseUrl/admin-dashboard' class='button'>View in Admin Dashboard</a>
+        </div>
+        
+        <p>This message was sent from the Poultry Hub Kenya contact form.</p>
+    ";
+    
+    return getBaseTemplate('New Contact Message - Poultry Hub Kenya', $content, $baseUrl);
+}
+
+function getContactConfirmationTemplate($data, $baseUrl) {
+    $contactData = $data['contact'];
+    
+    $content = "
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Thank You for Contacting Us!</h2>
+        <p>Dear " . htmlspecialchars($contactData['name']) . ",</p>
+        <p>We have received your message and will get back to you within 24 hours.</p>
+        
+        <div class='order-details'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Your Message</h3>
+            <div class='info-row'>
+                <span class='info-label'>Subject:</span>
+                <span class='info-value'>" . htmlspecialchars($contactData['subject']) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Category:</span>
+                <span class='info-value'>" . htmlspecialchars($contactData['category'] ?? 'General') . "</span>
+            </div>
+        </div>
+        
+        <div class='info-section'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Message Content</h3>
+            <p style='white-space: pre-wrap;'>" . nl2br(htmlspecialchars($contactData['message'])) . "</p>
+        </div>
+        
+        <div class='highlight'>
+            <strong>What happens next?</strong><br>
+            &bull; Our team will review your message<br>
+            &bull; We will respond to you within 24 hours<br>
+            &bull; Check your email for our response
+        </div>
+        
+        <p>If you have any urgent inquiries, please feel free to contact us directly.</p>
+        <p>Thank you for choosing Poultry Hub Kenya!</p>
+    ";
+    
+    return getBaseTemplate('Contact Form Confirmation - Poultry Hub Kenya', $content, $baseUrl);
 }
 
 ?>

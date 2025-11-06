@@ -141,6 +141,28 @@ const Products = () => {
 
     try {
       const token = localStorage.getItem('token');
+      
+      // Get advertisement_id from URL params or sessionStorage
+      const adParam = searchParams.get('ad');
+      const pendingOrder = sessionStorage.getItem('pending_order');
+      let advertisementId = adParam;
+      
+      if (!advertisementId && pendingOrder) {
+        try {
+          const orderContext = JSON.parse(pendingOrder);
+          if (orderContext.advertisement_id && orderContext.product_id === selectedProduct.id) {
+            advertisementId = orderContext.advertisement_id;
+          }
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      }
+      
+      // Clear pending order from sessionStorage after use
+      if (pendingOrder) {
+        sessionStorage.removeItem('pending_order');
+      }
+      
       const response = await fetch(getApiUrl('/api/orders'), {
         method: 'POST',
         headers: {
@@ -153,14 +175,40 @@ const Products = () => {
           shipping_address: quickOrderData.shipping_address.trim(),
           contact_phone: quickOrderData.contact_phone.trim(),
           payment_method: quickOrderData.payment_method,
-          notes: quickOrderData.notes.trim() || 'Quick order from products page'
+          notes: quickOrderData.notes.trim() || 'Quick order from products page',
+          ...(advertisementId && { advertisement_id: advertisementId })
         })
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        // If JSON parsing fails but response is OK, order might still be created
+        if (response.ok) {
+          toast.warning('Order may have been placed, but we could not confirm. Please check your orders.');
+          setShowQuickOrderModal(false);
+          setSelectedProduct(null);
+          setQuickOrderData({
+            quantity: 1,
+            shipping_address: '',
+            contact_phone: '',
+            payment_method: 'mpesa',
+            notes: ''
+          });
+          return;
+        } else {
+          throw jsonError;
+        }
+      }
 
-      if (response.ok) {
-        toast.success(`Order placed successfully! Order Number: ${data.order_number}`);
+      if (response.ok && data.success !== false) {
+        // Show appropriate message based on email status
+        if (data.customer_email_sent === false) {
+          toast.warning(data.message || 'Order sent successfully, but we could not send the confirmation email.');
+        } else {
+          toast.success(data.message || `Order placed successfully! Order Number: ${data.order_number}`);
+        }
         setShowQuickOrderModal(false);
         setSelectedProduct(null);
         setQuickOrderData({
@@ -171,13 +219,19 @@ const Products = () => {
           notes: ''
         });
       } else {
-        toast.error(data.error || 'Failed to place order');
+        // Order creation failed
+        toast.error(data.error || data.message || 'Failed to place order. Please try again.');
       }
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('Error placing order:', error);
       }
-      toast.error('Failed to place order');
+      // Network error or other exception - don't assume order failed
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('An error occurred while placing your order. Please check your orders to confirm if it was placed.');
+      }
     } finally {
       setSubmitting(false);
     }

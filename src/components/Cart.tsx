@@ -57,12 +57,31 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
         body: JSON.stringify(checkoutData)
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        // If JSON parsing fails but response is OK, order might still be created
+        if (response.ok) {
+          toast.warning('Order may have been placed, but we could not confirm. Please check your orders.');
+          await clearCart(true);
+          setShowCheckout(false);
+          setCheckoutData({ shipping_address: '', contact_phone: '', payment_method: 'mpesa', notes: '' });
+          onClose();
+          return;
+        } else {
+          throw jsonError;
+        }
+      }
 
-      if (response.ok) {
+      if (response.ok && data.success !== false) {
         const ordersCount = (data && (data.total_items ?? data.total_orders)) ?? 0;
-        // Show order success first
-        toast.success(`Orders created successfully! ${ordersCount} order(s) placed.`);
+        // Show appropriate message based on email status
+        if (data.customer_email_sent === false) {
+          toast.warning(data.message || `Order sent successfully, but we could not send the confirmation email. ${ordersCount} order(s) placed.`);
+        } else {
+          toast.success(data.message || `Orders created successfully! ${ordersCount} order(s) placed.`);
+        }
         // Clear cart immediately in UI (backend also clears server-side)
         await clearCart(true);
         // Stagger a second toast so both are visible to the user
@@ -73,11 +92,18 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
         setCheckoutData({ shipping_address: '', contact_phone: '', payment_method: 'mpesa', notes: '' });
         onClose();
       } else {
-        toast.error(data.error || 'Failed to place order');
+        // Order creation failed
+        toast.error(data.error || data.message || 'Failed to place order. Please try again.');
       }
     } catch (error) {
       console.error('Error placing order:', error);
-      toast.error('Failed to place order');
+      // Network error or other exception - don't assume order failed
+      // Check if we can determine order status from error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('An error occurred while placing your order. Please check your orders to confirm if it was placed.');
+      }
     } finally {
       setSubmitting(false);
     }

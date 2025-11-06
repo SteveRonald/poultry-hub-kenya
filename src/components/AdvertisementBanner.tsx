@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { X, ExternalLink } from 'lucide-react';
 import { getApiUrl } from '../config/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Advertisement {
   id: string;
@@ -35,6 +36,8 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
   const adRef = useRef<HTMLDivElement>(null);
   const viewStartTime = useRef<number | null>(null);
   const viewTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const navigate = useNavigate();
+  const { user } = useAuth();
   
   const [sessionId] = useState(() => {
     // Get or create session ID
@@ -147,7 +150,9 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
     }
   };
 
-  const handleClick = async () => {
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    
     // Track click
     try {
       await fetch(getApiUrl('/api/advertisements/track-click'), {
@@ -166,7 +171,25 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
       console.error('Failed to track ad click:', error);
     }
 
-    // Navigate to product (Link component will handle this)
+    // Check if user is logged in
+    if (!user) {
+      // Store order context for after login/register
+      const orderContext = {
+        product_id: advertisement.product_id,
+        advertisement_id: advertisement.id,
+        quantity: 1,
+        source: 'advertisement',
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem('pending_order', JSON.stringify(orderContext));
+      
+      // Redirect to login with return URL
+      navigate(`/login?redirect=/products&product=${advertisement.product_id}&ad=${advertisement.id}`);
+      return;
+    }
+
+    // User is logged in, navigate to product page
+    navigate(`/products?product=${advertisement.product_id}&ad=${advertisement.id}`);
   };
 
   if (!isVisible) {
@@ -197,10 +220,9 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
             </div>
 
             {/* Ad Content */}
-            <Link
-              to={`/products?product=${advertisement.product_id}`}
+            <div
               onClick={handleClick}
-              className="flex-1 flex items-center gap-2 sm:gap-4 h-full hover:opacity-90 transition-opacity min-w-0"
+              className="flex-1 flex items-center gap-2 sm:gap-4 h-full hover:opacity-90 transition-opacity min-w-0 cursor-pointer"
             >
               {/* Image - Standard Leaderboard aspect ratio (responsive) */}
               <div 
@@ -272,7 +294,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
                   </span>
                 </div>
               </div>
-            </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -330,10 +352,9 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
       )}
 
       {/* Advertisement Content - Medium Rectangle layout */}
-      <Link
-        to={`/products?product=${advertisement.product_id}`}
+      <div
         onClick={handleClick}
-        className="block h-full"
+        className="block h-full cursor-pointer"
       >
         <div className="relative flex flex-col h-full">
           {/* Image - Top portion of rectangle */}
@@ -407,7 +428,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
             </div>
           </div>
         </div>
-      </Link>
+      </div>
     </div>
   );
 };

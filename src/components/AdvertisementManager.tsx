@@ -81,6 +81,7 @@ const AdvertisementManager: React.FC = () => {
     current_price: ''
   });
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [activeAdTab, setActiveAdTab] = useState<'active' | 'inactive'>('active');
 
   useEffect(() => {
     fetchAdvertisements();
@@ -277,6 +278,26 @@ const AdvertisementManager: React.FC = () => {
         </Button>
       </div>
 
+      {/* Total Revenue Summary */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <div className="text-center">
+            <DollarSign className="h-8 w-8 text-green-600 mx-auto mb-2" />
+            <p className="text-sm text-gray-600 mb-1">Total Revenue Generated from Ads</p>
+            <p className="text-3xl font-bold text-green-600">
+              KSh {(() => {
+                const total = advertisements.reduce((sum, ad) => sum + (parseFloat(ad.revenue_generated) || 0), 0);
+                return total.toLocaleString('en-US', { 
+                  minimumFractionDigits: total > 0 ? 2 : 0, 
+                  maximumFractionDigits: 2 
+                });
+              })()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">From all advertisements</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Analytics Summary */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
@@ -325,20 +346,6 @@ const AdvertisementManager: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Revenue Generated</p>
-                <p className="text-2xl font-bold">
-                  KSh {advertisements.reduce((sum, ad) => sum + (ad.revenue_generated || 0), 0).toLocaleString()}
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
                 <p className="text-sm text-gray-600">Active Ads</p>
                 <p className="text-2xl font-bold">
                   {advertisements.filter(ad => ad.status === 'active').length}
@@ -350,9 +357,61 @@ const AdvertisementManager: React.FC = () => {
         </Card>
       </div>
 
+      {/* Tab Navigation for Active/Inactive Ads */}
+      <div className="mb-6 border-b border-gray-200">
+        <nav className="flex space-x-1">
+          <button
+            onClick={() => setActiveAdTab('active')}
+            className={`relative py-3 px-4 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200 cursor-pointer ${
+              activeAdTab === 'active'
+                ? 'border-primary text-primary bg-primary/5'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Active Ads ({advertisements.filter(ad => ad.status === 'active').length})
+            {activeAdTab === 'active' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveAdTab('inactive')}
+            className={`relative py-3 px-4 border-b-2 font-medium text-sm whitespace-nowrap transition-all duration-200 cursor-pointer ${
+              activeAdTab === 'inactive'
+                ? 'border-primary text-primary bg-primary/5'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Inactive Ads ({advertisements.filter(ad => ad.status !== 'active').length})
+            {activeAdTab === 'inactive' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"></div>
+            )}
+          </button>
+        </nav>
+      </div>
+
       {/* Advertisements List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {advertisements.map((ad) => {
+      {(() => {
+        const filteredAds = advertisements.filter(ad => 
+          activeAdTab === 'active' ? ad.status === 'active' : ad.status !== 'active'
+        );
+        
+        if (filteredAds.length === 0) {
+          return (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <p className="text-gray-500 text-lg">
+                  {activeAdTab === 'active' 
+                    ? 'No active advertisements. Create one to get started!' 
+                    : 'No inactive advertisements.'}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        }
+        
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredAds.map((ad) => {
           // Get image/video URL - same logic as AdvertisementBanner
           const productImage = ad.ad_image || 
             (ad.product_images ? (typeof ad.product_images === 'string' ? JSON.parse(ad.product_images)[0] : ad.product_images[0]) : null) ||
@@ -451,9 +510,15 @@ const AdvertisementManager: React.FC = () => {
                     <span className="font-medium">{calculateCTR(ad.views_count || 0, ad.clicks_count || 0)}%</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Revenue:</span>
-                    <span className="font-medium text-green-600">
-                      KSh {(ad.revenue_generated || 0).toLocaleString()}
+                    <span className="text-gray-600">Revenue Generated:</span>
+                    <span className="font-semibold text-green-600 text-base">
+                      KSh {(() => {
+                        const revenue = parseFloat(ad.revenue_generated || 0);
+                        return revenue.toLocaleString('en-US', { 
+                          minimumFractionDigits: revenue > 0 ? 2 : 0, 
+                          maximumFractionDigits: 2 
+                        });
+                      })()}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -498,7 +563,9 @@ const AdvertisementManager: React.FC = () => {
           </Card>
           );
         })}
-      </div>
+          </div>
+        );
+      })()}
 
       {/* Create Advertisement Form Modal */}
       <Dialog open={showCreateForm} onOpenChange={(open) => setShowCreateForm(open)}>
@@ -659,7 +726,10 @@ const AdvertisementManager: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Revenue</p>
                 <p className="text-2xl font-bold text-green-600">
-                  KSh {analytics.revenue_generated.toLocaleString()}
+                  KSh {parseFloat(analytics.revenue_generated || 0).toLocaleString('en-US', { 
+                    minimumFractionDigits: analytics.revenue_generated > 0 ? 2 : 0, 
+                    maximumFractionDigits: 2 
+                  })}
                 </p>
               </div>
             </div>

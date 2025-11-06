@@ -57,25 +57,16 @@ function handleContactForm() {
             'message' => $input['message']
         ]);
         
-        // Send confirmation email to user
-        $userSubject = "Thank you for contacting PoultryConnect Kenya";
-        $userMessage = "
-        <html>
-        <head>
-            <title>Contact Form Confirmation</title>
-        </head>
-        <body>
-            <h2>Thank you for contacting us!</h2>
-            <p>Dear " . htmlspecialchars($input['name']) . ",</p>
-            <p>We have received your message and will get back to you within 24 hours.</p>
-            <p><strong>Your message:</strong></p>
-            <p>" . nl2br(htmlspecialchars($input['message'])) . "</p>
-            <hr>
-            <p><em>PoultryConnect Kenya Team</em></p>
-        </body>
-        </html>";
-        
-        sendEmail($input['email'], $userSubject, $userMessage);
+        // Send confirmation email to user using styled template
+        require_once __DIR__ . '/../config/email.php';
+        sendContactConfirmation([
+            'name' => $input['name'],
+            'email' => $input['email'],
+            'phone' => $input['phone'] ?? null,
+            'subject' => $input['subject'],
+            'category' => $input['category'] ?? 'General',
+            'message' => $input['message']
+        ]);
         
         echo json_encode([
             'success' => true,

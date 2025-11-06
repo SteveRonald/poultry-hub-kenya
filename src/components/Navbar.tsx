@@ -78,21 +78,22 @@ const Navbar = () => {
   return (
     <>
     <nav className="bg-white shadow-lg sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-24">
-          <div className="flex items-center">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-24">
+          {/* Logo - Left side */}
+          <div className="flex items-center flex-shrink-0">
             <Link to="/" className="hover:opacity-80 transition-opacity">
               <Logo size="lg" showText={true} />
             </Link>
           </div>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          {/* Desktop Navigation - Center */}
+          <div className="hidden md:flex items-center justify-center flex-1 space-x-6 lg:space-x-8 px-4">
             {navLinks.map(({ path, label }) => (
               <Link
                 key={path}
                 to={path}
-                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                className={`px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                   isActive(path)
                     ? 'text-primary border-b-2 border-primary'
                     : 'text-gray-700 hover:text-primary'
@@ -103,8 +104,8 @@ const Navbar = () => {
             ))}
           </div>
 
-          {/* User Menu */}
-          <div className="hidden md:flex items-center space-x-4">
+          {/* User Menu - Right side */}
+          <div className="hidden md:flex items-center flex-shrink-0 space-x-4">
             {adminInfo ? (
               <div className="flex items-center space-x-4">
                 <Link to="/admin-dashboard">

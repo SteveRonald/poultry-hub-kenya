@@ -59,7 +59,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await fetch(getApiUrl('/api/users/me'), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Failed to fetch user');
+      
+      // Only remove token on 401 (unauthorized) - but verify it's actually expired
+      if (res.status === 401) {
+        // Double-check: try to get token from localStorage
+        const currentToken = localStorage.getItem('token');
+        if (currentToken === token) {
+          // Token is the same, so it's actually expired
+          setUser(null);
+          localStorage.removeItem('token');
+        }
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!res.ok) {
+        // For other errors, keep the token and user state
+        // Don't clear user on temporary errors (500, 503, etc.)
+        setIsLoading(false);
+        return;
+      }
+      
       const data = await res.json();
         setUser({
         id: data.id,
@@ -71,14 +91,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         vendorData: data.vendorData,
       });
     } catch (err) {
-      setUser(null);
-      localStorage.removeItem('token');
+      // Network errors - don't remove token or clear user, might be temporary
+      // Keep the existing user state if available
+      // Only log in dev mode
+      if (import.meta.env.DEV) {
+        console.error('Failed to fetch user:', err);
+      }
+      // Don't clear user on network errors - keep existing state
     }
     setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchUser();
+    // Only fetch user if we don't have one yet
+    // This prevents clearing user state on page refresh if token is valid
+    if (!user) {
+      fetchUser();
+    } else {
+      // If we already have a user, just set loading to false
+      setIsLoading(false);
+    }
     // eslint-disable-next-line
   }, []);
 

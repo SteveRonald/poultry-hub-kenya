@@ -69,6 +69,9 @@ function handleCreateOrder() {
             $product = $stmt->fetch(PDO::FETCH_ASSOC);
             
             if (!$product) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 http_response_code(404);
                 echo json_encode(['error' => 'Product not found or not available']);
                 return;
@@ -76,6 +79,9 @@ function handleCreateOrder() {
             
             // Check stock
             if ($product['stock_quantity'] < $quantity) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 http_response_code(400);
                 echo json_encode(['error' => 'Insufficient stock']);
                 return;
@@ -114,6 +120,9 @@ function handleCreateOrder() {
             $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             if (empty($cartItems)) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
                 http_response_code(400);
                 echo json_encode(['error' => 'Cart is empty']);
                 return;
@@ -122,6 +131,9 @@ function handleCreateOrder() {
             // Check stock for all items
             foreach ($cartItems as $item) {
                 if ($item['stock_quantity'] < $item['quantity']) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     http_response_code(400);
                     echo json_encode(['error' => "Insufficient stock for {$item['product_name']}"]);
                     return;
@@ -174,6 +186,12 @@ function handleCreateOrder() {
             
             $orderId = $pdo->lastInsertId();
             
+            // Get the actual created_at timestamp from database to ensure timezone consistency
+            $stmt = $pdo->prepare("SELECT created_at FROM orders WHERE id = ?");
+            $stmt->execute([$orderId]);
+            $orderRecord = $stmt->fetch(PDO::FETCH_ASSOC);
+            $orderCreatedAt = $orderRecord['created_at'] ?? date('Y-m-d H:i:s');
+            
             // Update product stock
             $stmt = $pdo->prepare("
                 UPDATE products 
@@ -196,7 +214,7 @@ function handleCreateOrder() {
                 'vendor_email' => $item['vendor_email'],
                 'customer_name' => $customer['full_name'] ?? 'Customer', // Add customer name
                 'customer_email' => $customer['email'] ?? '', // Add customer email
-                'created_at' => date('Y-m-d H:i:s'), // Add current timestamp
+                'created_at' => $orderCreatedAt, // Use actual database timestamp
                 'shipping_address' => $input['shipping_address'],
                 'contact_phone' => $input['contact_phone'],
                 'payment_method' => $input['payment_method']
@@ -211,22 +229,26 @@ function handleCreateOrder() {
         
         $pdo->commit();
 
-        // Best-effort emails and notifications; do not fail the request if these error
-        try {
-            // Send notification emails to vendors
-            $vendorEmails = [];
-            foreach ($createdOrders as $order) {
-                if (!isset($vendorEmails[$order['vendor_id']])) {
-                    $vendorEmails[$order['vendor_id']] = [
-                        'email' => $order['vendor_email'],
-                        'name' => $order['vendor_name'],
-                        'orders' => []
-                    ];
-                }
-                $vendorEmails[$order['vendor_id']]['orders'][] = $order;
-            }
+        // Track email sending status separately
+        $customerEmailSent = false;
+        $vendorEmailsSent = [];
+        $emailErrors = [];
 
-            foreach ($vendorEmails as $vendorId => $vendorData) {
+        // Send notification emails to vendors (best-effort, don't fail order)
+        $vendorEmails = [];
+        foreach ($createdOrders as $order) {
+            if (!isset($vendorEmails[$order['vendor_id']])) {
+                $vendorEmails[$order['vendor_id']] = [
+                    'email' => $order['vendor_email'],
+                    'name' => $order['vendor_name'],
+                    'orders' => []
+                ];
+            }
+            $vendorEmails[$order['vendor_id']]['orders'][] = $order;
+        }
+
+        foreach ($vendorEmails as $vendorId => $vendorData) {
+            try {
                 // Prepare items for this vendor
                 $vendorItems = [];
                 foreach ($vendorData['orders'] as $order) {
@@ -253,9 +275,16 @@ function handleCreateOrder() {
                 ];
 
                 sendStyledEmail($vendorData['email'], 'vendor_notification', $vendorEmailData);
+                $vendorEmailsSent[$vendorId] = true;
+            } catch (Exception $vendorEmailError) {
+                $vendorEmailsSent[$vendorId] = false;
+                error_log("Failed to send email to vendor {$vendorId}: " . $vendorEmailError->getMessage());
+                // Don't add to emailErrors - we don't want to show this to customer
             }
+        }
 
-            // Send order confirmation email to customer
+        // Send order confirmation email to customer
+        try {
             $customerEmailData = [
                 'order' => [
                     'order_number' => $orderNumber,
@@ -268,7 +297,8 @@ function handleCreateOrder() {
                     'items' => []
                 ],
                 'customer' => [
-                    'name' => $createdOrders[0]['customer_name']
+                    'name' => $createdOrders[0]['customer_name'] ?? $customer['full_name'] ?? 'Customer',
+                    'email' => $createdOrders[0]['customer_email'] ?? $customer['email'] ?? ''
                 ]
             ];
 
@@ -282,9 +312,38 @@ function handleCreateOrder() {
                 ];
             }
 
-            sendStyledEmail($createdOrders[0]['customer_email'], 'order_confirmation', $customerEmailData);
+            // Check if customer email is valid
+            $customerEmail = $createdOrders[0]['customer_email'] ?? $customer['email'] ?? '';
+            if (empty($customerEmail)) {
+                throw new Exception('Customer email is empty or not found');
+            }
+            
+            // Update customer email in email data if needed
+            if (empty($customerEmailData['customer']['email'])) {
+                $customerEmailData['customer']['email'] = $customerEmail;
+            }
+            
+            // Attempt to send email
+            $emailResult = sendStyledEmail($customerEmail, 'order_confirmation', $customerEmailData);
+            
+            if ($emailResult) {
+                $customerEmailSent = true;
+                error_log("Customer email sent successfully to: " . $customerEmail);
+            } else {
+                throw new Exception('Email sending returned false');
+            }
+        } catch (Exception $customerEmailError) {
+            $customerEmailSent = false;
+            $customerEmailForLog = $createdOrders[0]['customer_email'] ?? $customer['email'] ?? 'unknown';
+            error_log("=== EMAIL SEND FAILURE ===");
+            error_log("Customer email: {$customerEmailForLog}");
+            error_log("Error message: " . $customerEmailError->getMessage());
+            error_log("Stack trace: " . $customerEmailError->getTraceAsString());
+            $emailErrors[] = 'Failed to send confirmation email';
+        }
 
-            // Create notifications for vendors and admins
+        // Create notifications for vendors and admins (best-effort)
+        try {
             require_once __DIR__ . '/../utils/notifications.php';
 
             // Notify vendors about new orders
@@ -302,12 +361,89 @@ function handleCreateOrder() {
             error_log('Order created but notifications failed: ' . $notificationError->getMessage());
         }
         
+        // Send SMS notifications (best-effort, don't fail order)
+        try {
+            require_once __DIR__ . '/../services/sms/SMSService.php';
+            require_once __DIR__ . '/../services/sms/SMSTemplates.php';
+            
+            $smsService = new SMSService();
+            
+            // Send SMS to customer
+            $customerPhone = $input['contact_phone'] ?? null;
+            error_log("SMS Order Creation: Customer phone from input: " . ($customerPhone ?? 'NULL'));
+            
+            if ($customerPhone) {
+                $customerSMSMessage = SMSTemplates::getOrderConfirmationCustomer([
+                    'id' => $orderNumber,
+                    'customer_name' => $createdOrders[0]['customer_name'] ?? 'Customer',
+                    'total_amount' => array_sum(array_column($createdOrders, 'total_amount')),
+                    'product_name' => count($createdOrders) > 1 ? count($createdOrders) . ' items' : $createdOrders[0]['product_name'],
+                    'quantity' => array_sum(array_column($createdOrders, 'quantity'))
+                ]);
+                
+                error_log("SMS Order Creation: Attempting to send SMS to: {$customerPhone}");
+                error_log("SMS Order Creation: Message: " . substr($customerSMSMessage, 0, 100) . "...");
+                
+                $smsResult = $smsService->sendSMS($customerPhone, $customerSMSMessage, [
+                    'recipient_type' => 'customer',
+                    'related_order_id' => $createdOrders[0]['order_id'] ?? null,
+                    'related_user_id' => $payload['user_id']
+                ]);
+                
+                error_log("SMS Order Creation: SMS result: " . json_encode($smsResult));
+            } else {
+                error_log("SMS Order Creation: WARNING - No customer phone number provided in order!");
+            }
+            
+            // Send SMS to each vendor
+            foreach ($vendorEmails as $vendorId => $vendorData) {
+                // Get vendor phone number
+                $stmt = $pdo->prepare("SELECT phone FROM vendors WHERE id = ?");
+                $stmt->execute([$vendorId]);
+                $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($vendor && !empty($vendor['phone'])) {
+                    $vendorOrder = $vendorData['orders'][0];
+                    $vendorSMSMessage = SMSTemplates::getOrderConfirmationVendor([
+                        'id' => $orderNumber,
+                        'customer_name' => $vendorOrder['customer_name'] ?? 'Customer',
+                        'product_name' => count($vendorData['orders']) > 1 ? count($vendorData['orders']) . ' items' : $vendorOrder['product_name'],
+                        'quantity' => array_sum(array_column($vendorData['orders'], 'quantity')),
+                        'total_amount' => array_sum(array_column($vendorData['orders'], 'total_amount'))
+                    ]);
+                    
+                    $smsService->sendSMS($vendor['phone'], $vendorSMSMessage, [
+                        'recipient_type' => 'vendor',
+                        'related_order_id' => $vendorOrder['order_id'] ?? null,
+                        'related_user_id' => $vendorId
+                    ]);
+                }
+            }
+        } catch (Exception $smsError) {
+            error_log('Order created but SMS sending failed: ' . $smsError->getMessage());
+            // Don't fail the order if SMS fails
+        }
+        
+        // Determine response message based on email status
+        $ordersCount = count($createdOrders);
+        $ordersText = $ordersCount === 1 ? 'order' : 'orders';
+        
+        if (!$customerEmailSent) {
+            $responseMessage = "Order sent successfully! {$ordersCount} {$ordersText} placed. However, we could not send the confirmation email. Please check your order in your dashboard.";
+        } else {
+            $responseMessage = "Orders created successfully! {$ordersCount} {$ordersText} placed.";
+        }
+        
+        // Always return success if order was created, regardless of email status
+        http_response_code(200);
         echo json_encode([
             'success' => true,
-            'message' => 'Orders created successfully',
+            'message' => $responseMessage,
             'order_number' => $orderNumber,
             'orders' => $createdOrders,
-            'total_items' => count($createdOrders)
+            'total_items' => $ordersCount,
+            'total_orders' => $ordersCount, // Add this for compatibility
+            'customer_email_sent' => $customerEmailSent
         ]);
         
     } catch (Exception $e) {
@@ -475,31 +611,79 @@ function handleUpdateOrderStatus() {
         
         // Process commission if status is 'delivered'
         if ($input['status'] === 'delivered') {
-            $eligibility = isOrderEligibleForCommission($input['order_id']);
-            if ($eligibility['eligible']) {
-                $commissionResult = processCommission(
-                    $input['order_id'],
-                    $eligibility['vendor_id'],
-                    $eligibility['total_amount']
-                );
+            try {
+                // Get order details after status update for commission processing
+                $stmt = $pdo->prepare("
+                    SELECT o.total_amount, o.advertisement_id, p.vendor_id
+                    FROM orders o 
+                    JOIN products p ON o.product_id = p.id 
+                    WHERE o.id = ? AND o.status = 'delivered'
+                ");
+                $stmt->execute([$input['order_id']]);
+                $orderForCommission = $stmt->fetch(PDO::FETCH_ASSOC);
                 
-                if (!$commissionResult['success']) {
-                    // Log the error but don't fail the order status update
-                    error_log("Commission processing failed: " . $commissionResult['message']);
+                if ($orderForCommission) {
+                    $commissionResult = processCommission(
+                        $input['order_id'],
+                        $orderForCommission['vendor_id'],
+                        $orderForCommission['total_amount']
+                    );
+                    
+                    if (!$commissionResult['success']) {
+                        // Log the error but don't fail the order status update
+                        error_log("Commission processing failed: " . $commissionResult['message']);
+                    }
                 }
+            } catch (Exception $commissionError) {
+                // Log the error but don't fail the order status update
+                error_log("Exception during commission processing for order {$input['order_id']}: " . $commissionError->getMessage());
+                error_log("Stack trace: " . $commissionError->getTraceAsString());
             }
         }
         
         $pdo->commit();
         
+        // Send success response FIRST before any background operations
         echo json_encode([
             'success' => true,
             'message' => 'Order status updated successfully'
         ]);
         
+        // Flush output to ensure response is sent immediately
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        
+        // Update ad revenue AFTER response is sent (for ad orders only)
+        // This is done outside the transaction and after response is sent so it never blocks
+        if ($input['status'] === 'delivered') {
+            try {
+                // Check if this is an ad order
+                $stmt = $pdo->prepare("SELECT advertisement_id, total_amount FROM orders WHERE id = ?");
+                $stmt->execute([$input['order_id']]);
+                $orderCheck = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($orderCheck && $orderCheck['advertisement_id']) {
+                    // Update ad revenue in a separate, non-blocking operation
+                    require_once __DIR__ . '/../routes/advertisements.php';
+                    $adRevenueUpdated = updateAdRevenue($orderCheck['advertisement_id'], $orderCheck['total_amount']);
+                    if (!$adRevenueUpdated) {
+                        error_log("Warning: Failed to update ad revenue for ad {$orderCheck['advertisement_id']} after order {$input['order_id']} was delivered");
+                    }
+                }
+            } catch (Exception $adRevenueError) {
+                // Log but don't fail - order status update already succeeded and response already sent
+                error_log("Error updating ad revenue after order status update: " . $adRevenueError->getMessage());
+            }
+        }
+        
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         http_response_code(500);
+        error_log("Exception updating order status: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
         echo json_encode(['error' => 'Failed to update order status: ' . $e->getMessage()]);
     }
 }
@@ -522,7 +706,9 @@ function handleUpdateCustomerShippingAddress() {
     }
     
     $input = json_decode(file_get_contents('php://input'), true);
-    $orderId = $_GET['id'] ?? null;
+    // Sanitize order ID from GET parameter
+    require_once __DIR__ . '/../utils/security.php';
+    $orderId = isset($_GET['id']) ? sanitizeInput($_GET['id']) : null;
     
     if (!$orderId || !isset($input['shipping_address'])) {
         http_response_code(400);

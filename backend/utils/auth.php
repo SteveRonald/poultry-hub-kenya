@@ -12,7 +12,18 @@ function generateJWT($user_id, $email, $role) {
     $base64Header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
     $base64Payload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($payload));
     
-    $secretKey = getenv('JWT_SECRET_KEY') ?: 'poultry-hub-kenya-secure-key-' . hash('sha256', __DIR__ . date('Y-m-d'));
+    // JWT Secret Key MUST be set in .env file for security
+    $secretKey = getenv('JWT_SECRET_KEY');
+    if (empty($secretKey)) {
+        error_log('SECURITY ERROR: JWT_SECRET_KEY not set in .env file');
+        throw new Exception('JWT secret key not configured. Please set JWT_SECRET_KEY in your .env file.');
+    }
+    
+    // Ensure secret key is at least 32 characters for security
+    if (strlen($secretKey) < 32) {
+        error_log('SECURITY WARNING: JWT_SECRET_KEY is too short (minimum 32 characters recommended)');
+    }
+    
     $signature = hash_hmac('sha256', $base64Header . "." . $base64Payload, $secretKey, true);
     $base64Signature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
     
@@ -30,7 +41,12 @@ function validateJWT($token) {
     $signature = $parts[2];
     
     // Verify signature
-    $secretKey = getenv('JWT_SECRET_KEY') ?: 'poultry-hub-kenya-secure-key-' . hash('sha256', __DIR__ . date('Y-m-d'));
+    // JWT Secret Key MUST be set in .env file for security
+    $secretKey = getenv('JWT_SECRET_KEY');
+    if (empty($secretKey)) {
+        error_log('SECURITY ERROR: JWT_SECRET_KEY not set in .env file');
+        return false;
+    }
     $expectedSignature = hash_hmac('sha256', $header . "." . $payload, $secretKey, true);
     $expectedSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($expectedSignature));
     

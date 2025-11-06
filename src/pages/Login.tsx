@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
@@ -16,23 +16,57 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    // Check if there's a pending order in sessionStorage
+    const pendingOrder = sessionStorage.getItem('pending_order');
+    if (pendingOrder) {
+      try {
+        const orderContext = JSON.parse(pendingOrder);
+        // Show a message that they can complete their order after login
+        if (orderContext.source === 'advertisement') {
+          toast.info('Please login to complete your order from the advertisement');
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      const loggedInUser = await login(email, password);
       toast.success('Login successful!');
       
-      // Navigate based on user role
-      if (user?.role === 'vendor') {
-        navigate('/vendor-dashboard');
-      } else if (user?.role === 'admin') {
-        // Redirect admins to admin login page
-        navigate('/admin-login');
+      // Check for pending order or redirect parameter
+      const pendingOrder = sessionStorage.getItem('pending_order');
+      const redirectParam = searchParams.get('redirect');
+      const productParam = searchParams.get('product');
+      const adParam = searchParams.get('ad');
+      
+      if (pendingOrder || (redirectParam && productParam)) {
+        // Restore order context and redirect to products page
+        if (productParam) {
+          const redirectUrl = adParam 
+            ? `/products?product=${productParam}&ad=${adParam}`
+            : `/products?product=${productParam}`;
+          navigate(redirectUrl);
+        } else {
+          navigate('/products');
+        }
       } else {
-        navigate('/dashboard');
+        // Navigate based on user role
+        if (loggedInUser?.role === 'vendor') {
+          navigate('/vendor-dashboard');
+        } else if (loggedInUser?.role === 'admin') {
+          navigate('/admin-login');
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Login failed. Please check your credentials.');

@@ -39,6 +39,9 @@ const AdminDashboard = () => {
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [smsLogs, setSmsLogs] = useState<any[]>([]);
+  const [smsStats, setSmsStats] = useState<any>(null);
+  const [smsLoading, setSmsLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     show: boolean;
     title: string;
@@ -504,28 +507,43 @@ const AdminDashboard = () => {
         body: JSON.stringify({ status: newStatus, status_notes: statusNotes }),
       });
       
-      if (response.ok) {
+      // Check if response is OK before parsing JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        // If JSON parsing fails but status is OK, assume success
+        if (response.ok) {
+          data = { success: true, message: 'Order status updated successfully' };
+        } else {
+          data = { error: 'Failed to parse response' };
+        }
+      }
+      
+      if (response.ok && data.success !== false) {
         toast.success('Order status updated successfully!');
         
-        // Small delay to ensure database transaction is committed
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Refresh orders data to ensure consistency
-        const res = await fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { 
-          headers: { 
-            Authorization: `Bearer ${token}`
-          } 
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (import.meta.env.DEV) {
-            console.log('Refreshed orders after status update:', data);
-            console.log('Order that was updated:', data.find((order: any) => order.id === orderId));
-          }
-          setOrders(Array.isArray(data) ? data : []);
+        // Refresh orders after status update
+        const token = localStorage.getItem('admin_session_token');
+        if (token) {
+          // Small delay to ensure database transaction is committed
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+            .then(r => r.json())
+            .then(ordersData => {
+              if (ordersData.success && Array.isArray(ordersData.orders)) {
+                setOrders(ordersData.orders);
+              } else if (Array.isArray(ordersData)) {
+                setOrders(ordersData);
+              }
+            })
+            .catch(() => {
+              // Silently fail - orders were already optimistically updated
+            });
         }
-        
-        // Refresh stats to update platform revenue if order is delivered
         if (newStatus === 'delivered') {
           const statsRes = await fetch(getApiUrl('/api/admin/stats'), { headers: { Authorization: `Bearer ${token}` } });
           if (statsRes.ok) {
@@ -548,21 +566,43 @@ const AdminDashboard = () => {
         // Revert optimistic update on failure
         const res = await fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
-          const data = await res.json();
-          setOrders(Array.isArray(data) ? data : []);
+          const ordersData = await res.json();
+          if (ordersData.success && Array.isArray(ordersData.orders)) {
+            setOrders(ordersData.orders);
+          } else if (Array.isArray(ordersData)) {
+            setOrders(ordersData);
+          }
         }
         
-        const error = await response.json();
-        toast.error(error.error || 'Failed to update order status');
+        toast.error(data.error || 'Failed to update order status');
       }
     } catch (error) {
-      // Revert optimistic update on network error
-      const res = await fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(Array.isArray(data) ? data : []);
+      // Try to verify if the update actually succeeded by fetching orders
+      try {
+        const res = await fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const ordersData = await res.json();
+          const fetchedOrders = (ordersData.success && Array.isArray(ordersData.orders)) 
+            ? ordersData.orders 
+            : (Array.isArray(ordersData) ? ordersData : []);
+          
+          setOrders(fetchedOrders);
+          
+          // Check if the order was actually updated by comparing with fetched orders
+          const updatedOrder = fetchedOrders.find((o: any) => o.id === orderId);
+          if (updatedOrder && updatedOrder.status === newStatus) {
+            // Order was updated successfully, just JSON parsing failed
+            toast.success('Order status updated successfully!');
+            setShowViewOrderModal(false);
+            setSelectedOrder(null);
+            return; // Exit early since update succeeded
+          }
+        }
+      } catch (fetchError) {
+        // If we can't verify, show error
       }
       
+      // If we get here, the update likely failed
       toast.error('Network error. Please try again.');
     } finally {
       setActionLoading(null);
@@ -878,7 +918,151 @@ const AdminDashboard = () => {
     if (activeTab === 'profile') {
       fetchAdminProfile();
     }
+    
+    if (activeTab === 'sms') {
+      fetchSMSLogs();
+    }
   }, [activeTab]);
+  
+  const fetchSMSLogs = async () => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) {
+      if (import.meta.env.DEV) {
+        console.error('No admin token found');
+      }
+      return;
+    }
+    
+    setSmsLoading(true);
+    try {
+      const apiUrl = getApiUrl('/api/admin/sms/logs');
+      console.log('🔍 Fetching SMS logs from:', apiUrl);
+      console.log('🔑 Using token:', token.substring(0, 20) + '...');
+      
+      const [logsRes, statsRes] = await Promise.all([
+        fetch(apiUrl, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(getApiUrl('/api/admin/sms/stats'), {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+      
+      console.log('📡 SMS Logs Response Status:', logsRes.status, logsRes.statusText);
+      console.log('📋 SMS Logs Response Headers:', Object.fromEntries(logsRes.headers.entries()));
+      
+      if (logsRes.ok) {
+        let logsData;
+        try {
+          logsData = await logsRes.json();
+        } catch (jsonError) {
+          if (import.meta.env.DEV) {
+            console.error('Failed to parse SMS logs JSON:', jsonError);
+          }
+          setSmsLogs([]);
+          return;
+        }
+        
+        // Always log in console (not just dev mode) for debugging
+        console.log('📦 SMS Logs Response:', logsData);
+        console.log('📊 logsData type:', typeof logsData);
+        console.log('📊 logsData.logs type:', typeof logsData?.logs);
+        console.log('📊 logsData.logs is array:', Array.isArray(logsData?.logs));
+        console.log('📊 logsData.logs value:', logsData?.logs);
+        
+        // Handle different response formats
+        let logs: any[] = [];
+        
+        // Check if response itself is an array
+        if (Array.isArray(logsData)) {
+          logs = logsData;
+        }
+        // Check if response has success and logs property
+        else if (logsData && logsData.success !== false) {
+          if (Array.isArray(logsData.logs)) {
+            logs = logsData.logs;
+          } else if (logsData.logs && typeof logsData.logs === 'object' && !Array.isArray(logsData.logs)) {
+            // If it's an object (not array), try to convert to array
+            logs = Object.values(logsData.logs) as any[];
+          } else if (logsData.data && Array.isArray(logsData.data)) {
+            // Alternative response format
+            logs = logsData.data;
+          } else {
+            // Log what we got if logs property exists but isn't an array
+            if (import.meta.env.DEV) {
+              console.warn('logsData.logs exists but is not an array:', typeof logsData.logs, logsData.logs);
+            }
+          }
+        } else {
+          // Response doesn't have success or success is false
+          if (import.meta.env.DEV) {
+            console.warn('Response does not have success=true:', logsData);
+            console.log('Full response:', JSON.stringify(logsData, null, 2));
+          }
+        }
+        
+        // Always log in console for debugging
+        console.log('=== 📋 SMS Logs Parsing Summary ===');
+        console.log('Final logs array:', logs);
+        console.log('Logs count:', logs.length);
+        console.log('Logs is array:', Array.isArray(logs));
+        console.log('Original response:', logsData);
+        if (logs.length === 0) {
+          console.warn('⚠️ WARNING: Logs array is empty!');
+          console.log('Full response structure:', JSON.stringify(logsData, null, 2));
+          console.log('Response keys:', Object.keys(logsData || {}));
+          if (logsData && 'logs' in logsData) {
+            console.log('logsData.logs value:', logsData.logs);
+            console.log('logsData.logs type:', typeof logsData.logs);
+            console.log('logsData.logs is array:', Array.isArray(logsData.logs));
+            if (logsData.logs && typeof logsData.logs === 'object') {
+              console.log('logsData.logs keys:', Object.keys(logsData.logs));
+            }
+          }
+        } else {
+          console.log('✅ SUCCESS: Found', logs.length, 'logs');
+          console.log('First log:', logs[0]);
+        }
+        
+        // Ensure we always set an array
+        if (Array.isArray(logs)) {
+          setSmsLogs(logs);
+          if (import.meta.env.DEV && logs.length > 0) {
+            console.log('✅ Set smsLogs state with', logs.length, 'items');
+          }
+        } else {
+          console.error('❌ ERROR: logs is not an array:', typeof logs, logs);
+          setSmsLogs([]);
+        }
+      } else {
+        const errorText = await logsRes.text();
+        if (import.meta.env.DEV) {
+          console.error('SMS Logs API failed:', logsRes.status, errorText);
+        }
+      }
+      
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        if (import.meta.env.DEV) {
+          console.log('SMS Stats Response:', statsData);
+        }
+        if (statsData.success) {
+          setSmsStats(statsData.statistics || {});
+        }
+      } else {
+        const errorText = await statsRes.text();
+        if (import.meta.env.DEV) {
+          console.error('SMS Stats API failed:', statsRes.status, errorText);
+        }
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Failed to fetch SMS logs:', error);
+      }
+    } finally {
+      setSmsLoading(false);
+    }
+  };
 
 
   return (
@@ -1012,6 +1196,7 @@ const AdminDashboard = () => {
                   { id: 'advertisements', label: 'Advertisements' },
                   { id: 'users', label: 'User Management' },
                   { id: 'messages', label: 'Contact Messages' },
+                  { id: 'sms', label: 'SMS Logs' },
                   { id: 'commission', label: 'Commission' },
                   { id: 'analytics', label: 'Analytics' },
                   { id: 'backup', label: 'Backup' },
@@ -1835,6 +2020,154 @@ const AdminDashboard = () => {
               {/* Backup Tab */}
               {activeTab === 'backup' && (
                 <BackupManagement />
+              )}
+
+              {/* SMS Logs Tab */}
+              {activeTab === 'sms' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold text-primary">SMS Logs</h2>
+                    <Button
+                      onClick={() => {
+                        setSmsLoading(true);
+                        fetchSMSLogs();
+                      }}
+                      disabled={smsLoading}
+                    >
+                      {smsLoading ? 'Loading...' : 'Refresh'}
+                    </Button>
+                  </div>
+
+                  {/* SMS Statistics */}
+                  {smsStats && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">Total SMS</p>
+                            <p className="text-2xl font-bold">{smsStats.total || 0}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">Sent</p>
+                            <p className="text-2xl font-bold text-green-600">{smsStats.sent || 0}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">Failed</p>
+                            <p className="text-2xl font-bold text-red-600">{smsStats.failed || 0}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">To Customers</p>
+                            <p className="text-2xl font-bold text-blue-600">{smsStats.to_customers || 0}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+
+                  {/* SMS Logs Table */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>SMS History</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {smsLoading ? (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500">Loading SMS logs...</p>
+                        </div>
+                      ) : !Array.isArray(smsLogs) ? (
+                        <div className="text-center py-8">
+                          <p className="text-red-500 font-semibold">Error: Invalid data format received</p>
+                          {import.meta.env.DEV && (
+                            <div className="text-xs text-gray-400 mt-2 space-y-1">
+                              <p>Type: {typeof smsLogs}</p>
+                              <p>Is Array: {Array.isArray(smsLogs) ? 'Yes' : 'No'}</p>
+                              <p>Value: {JSON.stringify(smsLogs).substring(0, 200)}</p>
+                              <p>Has logs property: {smsLogs && 'logs' in smsLogs ? 'Yes' : 'No'}</p>
+                              {smsLogs && 'logs' in smsLogs && (
+                                <p>logs type: {typeof (smsLogs as any).logs}, is array: {Array.isArray((smsLogs as any).logs) ? 'Yes' : 'No'}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : smsLogs.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500">No SMS logs found</p>
+                          {import.meta.env.DEV && (
+                            <p className="text-xs text-gray-400 mt-2">
+                              Array is empty (length: {smsLogs.length})
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-left py-2 px-4">Phone</th>
+                                <th className="text-left py-2 px-4">Message</th>
+                                <th className="text-left py-2 px-4">Recipient</th>
+                                <th className="text-left py-2 px-4">Status</th>
+                                <th className="text-left py-2 px-4">Order ID</th>
+                                <th className="text-left py-2 px-4">Sent At</th>
+                                <th className="text-left py-2 px-4">Created</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {smsLogs.map((log: any) => (
+                                <tr key={log.id} className="border-b">
+                                  <td className="py-2 px-4">{log.phone}</td>
+                                  <td className="py-2 px-4 max-w-xs truncate" title={log.message}>
+                                    {log.message}
+                                  </td>
+                                  <td className="py-2 px-4">
+                                    <Badge className={
+                                      log.recipient_type === 'customer' ? 'bg-blue-100 text-blue-800' :
+                                      log.recipient_type === 'vendor' ? 'bg-green-100 text-green-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }>
+                                      {log.recipient_type}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-2 px-4">
+                                    <Badge className={
+                                      log.status === 'sent' ? 'bg-green-100 text-green-800' :
+                                      log.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                      log.status === 'delivered' ? 'bg-blue-100 text-blue-800' :
+                                      'bg-yellow-100 text-yellow-800'
+                                    }>
+                                      {log.status}
+                                    </Badge>
+                                  </td>
+                                  <td className="py-2 px-4">
+                                    {log.related_order_id ? `#${log.related_order_id}` : '-'}
+                                  </td>
+                                  <td className="py-2 px-4">
+                                    {log.sent_at ? new Date(log.sent_at).toLocaleString() : '-'}
+                                  </td>
+                                  <td className="py-2 px-4">
+                                    {new Date(log.created_at).toLocaleString()}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               )}
 
               {/* Profile Tab */}

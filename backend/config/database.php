@@ -1,4 +1,7 @@
 <?php
+// Set timezone to Nairobi (UTC+3) for consistent date/time handling
+date_default_timezone_set('Africa/Nairobi');
+
 // Load environment variables
 require_once __DIR__ . '/env_loader.php';
 
@@ -17,6 +20,9 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    
+    // Set MySQL session timezone to match PHP timezone (Africa/Nairobi)
+    $pdo->exec("SET time_zone = '+03:00'");
 } catch (PDOException $e) {
     throw new PDOException($e->getMessage(), (int)$e->getCode());
 }

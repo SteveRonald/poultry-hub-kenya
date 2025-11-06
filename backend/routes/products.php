@@ -1,12 +1,14 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../utils/security.php';
 
 function handleGetProducts() {
     global $pdo;
     
-    $search = $_GET['search'] ?? '';
-    $category = $_GET['category'] ?? '';
-    $location = $_GET['location'] ?? '';
+    // Sanitize GET parameters to prevent XSS and SQL injection
+    $search = isset($_GET['search']) ? sanitizeInput($_GET['search']) : '';
+    $category = isset($_GET['category']) ? sanitizeInput($_GET['category']) : '';
+    $location = isset($_GET['location']) ? sanitizeInput($_GET['location']) : '';
     
     try {
         $sql = "SELECT p.*, v.farm_name, v.location as vendor_location 

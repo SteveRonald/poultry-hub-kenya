@@ -22,11 +22,29 @@ function sendEmail($to, $subject, $message, $from = null) {
     
     // For development, use basic mail() function if configured
     if (!$config['development']['use_smtp']) {
+        // Convert CID logo reference to base64 for mail() function compatibility
+        require_once __DIR__ . '/email_templates.php';
+        $logoPath = getLogoPath();
+        if ($logoPath && file_exists($logoPath)) {
+            $imageData = file_get_contents($logoPath);
+            if ($imageData !== false) {
+                $base64 = base64_encode($imageData);
+                $dataUri = 'data:image/png;base64,' . $base64;
+                // Replace CID reference with base64 data URI
+                $message = str_replace("src='cid:logo'", "src='{$dataUri}'", $message);
+                error_log("Logo converted to base64 for mail() function");
+            }
+        }
+        
+        // Encode subject for UTF-8
+        $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+        
         $headers = "From: $from\r\n";
         $headers .= "Reply-To: $from\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
         $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
         
-        $result = mail($to, $subject, $message, $headers);
+        $result = mail($to, $encodedSubject, $message, $headers);
         
         if ($config['development']['log_emails']) {
             error_log("Email sent to $to: $subject");
@@ -51,10 +69,36 @@ function sendEmail($to, $subject, $message, $from = null) {
         $mail->setFrom($from, $config['smtp']['from_name']);
         $mail->addAddress($to);
         
-        // Content
+        // Content - set HTML first
         $mail->isHTML(true);
+        $mail->CharSet = 'UTF-8';
+        $mail->Encoding = 'base64';
         $mail->Subject = $subject;
-        $mail->Body    = $message;
+        
+        // Embed logo as inline attachment (CID) for better email client compatibility
+        // Must be done AFTER isHTML() but BEFORE setting Body
+        if (!function_exists('getLogoPath')) {
+            require_once __DIR__ . '/email_templates.php';
+        }
+        $logoPath = getLogoPath();
+        if ($logoPath && file_exists($logoPath) && is_readable($logoPath)) {
+            try {
+                // Use addEmbeddedImage with CID 'logo' to match the HTML reference
+                $embedded = $mail->addEmbeddedImage($logoPath, 'logo', 'logo.png', 'base64', 'image/png', 'inline');
+                if ($embedded) {
+                    error_log("Logo embedded successfully as CID:logo from " . $logoPath);
+                } else {
+                    error_log("Failed to embed logo - addEmbeddedImage returned false");
+                }
+            } catch (Exception $logoError) {
+                error_log("Exception while embedding logo: " . $logoError->getMessage());
+            }
+        } else {
+            error_log("Logo file not found or not readable. Path checked: " . ($logoPath ?: 'null'));
+        }
+        
+        // Set body after logo is embedded
+        $mail->Body = $message;
         
         $mail->send();
         error_log("=== EMAIL SENT SUCCESSFULLY ===");
@@ -65,11 +109,16 @@ function sendEmail($to, $subject, $message, $from = null) {
         
         // Fallback to basic mail() function if SMTP fails
         error_log("Trying fallback mail() function...");
+        
+        // Encode subject for UTF-8
+        $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+        
         $headers = "From: $from\r\n";
         $headers .= "Reply-To: $from\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
         $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
         
-        $fallbackResult = mail($to, $subject, $message, $headers);
+        $fallbackResult = mail($to, $encodedSubject, $message, $headers);
         error_log("Fallback mail() result: " . ($fallbackResult ? 'SUCCESS' : 'FAILED'));
         error_log("=== SEND EMAIL END ===");
         
@@ -82,52 +131,30 @@ function getEmailConfig() {
 }
 
 function sendContactNotification($contactData) {
+    // Use styled email template with logo
     $config = getEmailConfig();
     $adminEmail = $config['admin_email'];
-    $subject = "New Contact Message: " . $contactData['subject'];
     
-    $message = "
-    <html>
-    <head>
-        <title>New Contact Message</title>
-    </head>
-    <body>
-        <h2>New Contact Message Received</h2>
-        <p><strong>Name:</strong> " . htmlspecialchars($contactData['name']) . "</p>
-        <p><strong>Email:</strong> " . htmlspecialchars($contactData['email']) . "</p>
-        <p><strong>Phone:</strong> " . htmlspecialchars($contactData['phone'] ?? 'Not provided') . "</p>
-        <p><strong>Subject:</strong> " . htmlspecialchars($contactData['subject']) . "</p>
-        <p><strong>Category:</strong> " . htmlspecialchars($contactData['category'] ?? 'General') . "</p>
-        <p><strong>Message:</strong></p>
-        <p>" . nl2br(htmlspecialchars($contactData['message'])) . "</p>
-        <hr>
-        <p><em>This message was sent from the PoultryConnect Kenya contact form.</em></p>
-    </body>
-    </html>";
+    $data = [
+        'contact' => $contactData
+    ];
     
-    return sendEmail($adminEmail, $subject, $message);
+    return sendStyledEmail($adminEmail, 'contact_notification', $data);
+}
+
+function sendContactConfirmation($contactData) {
+    // Use styled email template with logo for user confirmation
+    $data = [
+        'contact' => $contactData
+    ];
+    
+    return sendStyledEmail($contactData['email'], 'contact_confirmation', $data);
 }
 
 function sendOTPEmail($email, $otp) {
-    $subject = "Password Reset OTP - PoultryConnect Kenya";
-    
-    $message = "
-    <html>
-    <head>
-        <title>Password Reset OTP</title>
-    </head>
-    <body>
-        <h2>Password Reset Request</h2>
-        <p>You have requested to reset your password for your PoultryConnect Kenya account.</p>
-        <p><strong>Your OTP code is: <span style='font-size: 24px; color: #2563eb; font-weight: bold;'>$otp</span></strong></p>
-        <p>This code will expire in 5 minutes.</p>
-        <p>If you did not request this password reset, please ignore this email.</p>
-        <hr>
-        <p><em>PoultryConnect Kenya Team</em></p>
-    </body>
-    </html>";
-    
-    return sendEmail($email, $subject, $message);
+    // Use styled OTP email template instead of plain HTML
+    // This ensures logo and consistent styling
+    return sendStyledOTPEmail($email, $otp);
 }
 
 function sendStyledEmail($email, $templateType, $data) {
@@ -149,6 +176,10 @@ function getEmailSubject($templateType, $data) {
             return "New Order Alert #{$data['order']['order_number']} - Poultry Hub Kenya";
         case 'otp_email':
             return "Password Reset OTP - Poultry Hub Kenya";
+        case 'contact_notification':
+            return "New Contact Message: " . ($data['contact']['subject'] ?? 'Contact Form') . " - Poultry Hub Kenya";
+        case 'contact_confirmation':
+            return "Thank You for Contacting Us - Poultry Hub Kenya";
         default:
             return "Notification - Poultry Hub Kenya";
     }

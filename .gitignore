@@ -14,13 +14,16 @@ dist-ssr
 
 # Environment variables (CRITICAL - Never commit these!)
 .env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 .env.local
 .env.production
 .env.staging
-backend/.env
-backend/.env.local
-backend/.env.production
-backend/.env.staging
+.env.development
+.env.test
 
 # Security sensitive files
 backend/config/database.php.backup

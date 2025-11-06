@@ -80,7 +80,9 @@ function calculateCommission($totalAmount, $vendorId = null) {
         'total_amount' => floatval($totalAmount),
         'commission_amount' => round($totalAmount * $commissionRate, 2),
         'vendor_amount' => round($totalAmount * $vendorRate, 2),
-        'threshold_reached' => true
+        'threshold_reached' => true,
+        'lifetime_sales' => $vendorId !== null ? getVendorLifetimeSales($vendorId) : null,
+        'threshold' => $threshold
     ];
 }
 
@@ -107,10 +109,13 @@ function processCommission($orderId, $vendorId, $totalAmount) {
             return ['success' => false, 'message' => 'Commission already processed for this order'];
         }
         
-        // Get vendor lifetime sales before this order
+        // IMPORTANT: Get current lifetime sales BEFORE adding this order
+        // This ensures we check the threshold continuously as orders are updated
+        // The threshold check uses lifetime sales BEFORE this order is added
         $lifetimeSalesBefore = getVendorLifetimeSales($vendorId);
         
-        // Calculate commission amounts (checks threshold internally)
+        // Calculate commission amounts (checks threshold using current lifetime sales)
+        // This checks if vendor has reached threshold BEFORE processing this order
         $commission = calculateCommission($totalAmount, $vendorId);
         
         // Get order details including advertisement_id
@@ -125,15 +130,40 @@ function processCommission($orderId, $vendorId, $totalAmount) {
         $orderDetails = $stmt->fetch(PDO::FETCH_ASSOC);
         
         // Update vendor lifetime sales (always update, even if no commission)
+        // This adds the current order amount to lifetime sales
         updateVendorLifetimeSales($vendorId, $totalAmount);
+        
+        // After updating lifetime sales, verify threshold status
+        // This handles edge cases where threshold status might have changed
+        $lifetimeSalesAfter = getVendorLifetimeSales($vendorId);
+        $threshold = 10000;
+        
+        // Log if vendor just crossed the threshold (for tracking purposes)
+        if ($lifetimeSalesBefore < $threshold && $lifetimeSalesAfter >= $threshold) {
+            error_log("Vendor {$vendorId} crossed threshold with order {$orderId}. Lifetime sales: {$lifetimeSalesBefore} -> {$lifetimeSalesAfter}. Commission already calculated based on pre-order threshold.");
+        }
         
         // If vendor hasn't reached threshold, no commission to process
         if (!$commission['threshold_reached']) {
-            // Update advertisement revenue if order came from an ad (even without commission)
-            if ($orderDetails && isset($orderDetails['advertisement_id']) && $orderDetails['advertisement_id']) {
-                require_once __DIR__ . '/../routes/advertisements.php';
-                updateAdRevenue($orderDetails['advertisement_id'], $totalAmount);
-            }
+            // Still create vendor earnings record with 100% (no commission deducted)
+            // This ensures earnings show up even for vendors below threshold
+            $vendorEarningId = generateUUID();
+            $stmt = $pdo->prepare("
+                INSERT INTO vendor_earnings 
+                (id, vendor_id, order_id, total_amount, commission_amount, net_amount, status, confirmed_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'confirmed', NOW())
+            ");
+            $stmt->execute([
+                $vendorEarningId,
+                $vendorId,
+                $orderId,
+                $totalAmount,
+                0.00, // No commission
+                $totalAmount // Vendor gets 100%
+            ]);
+            
+            // NOTE: Ad revenue update is now handled separately AFTER the transaction commits
+            // This ensures ad orders are processed exactly like normal orders
             
             // Still update lifetime sales, but don't create commission records
             if (!$inTransaction) {
@@ -181,11 +211,8 @@ function processCommission($orderId, $vendorId, $totalAmount) {
             $commission['vendor_amount']
         ]);
         
-        // Update advertisement revenue if order came from an ad
-        if ($orderDetails && isset($orderDetails['advertisement_id']) && $orderDetails['advertisement_id']) {
-            require_once __DIR__ . '/../routes/advertisements.php';
-            updateAdRevenue($orderDetails['advertisement_id'], $commission['total_amount']);
-        }
+        // NOTE: Ad revenue update is now handled separately AFTER the transaction commits
+        // This ensures ad orders are processed exactly like normal orders
         
         // Only commit if we started the transaction
         if (!$inTransaction) {

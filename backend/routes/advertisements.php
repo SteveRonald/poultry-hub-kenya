@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
+require_once __DIR__ . '/../utils/security.php';
 
 // Ensure validateAdminSession is available (from admin.php)
 if (!function_exists('validateAdminSession')) {
@@ -226,7 +227,7 @@ function handleGetVendorAdvertisements() {
         
         $vendorId = $vendor['id'];
         
-        // Get advertisements with analytics
+        // Get advertisements with analytics and actual revenue from orders
         $stmt = $pdo->prepare("
             SELECT 
                 a.*,
@@ -235,10 +236,17 @@ function handleGetVendorAdvertisements() {
                 p.image_urls as product_images,
                 a.previous_price,
                 a.current_price,
-                an.views_count,
-                an.clicks_count,
-                an.revenue_generated,
-                an.orders_count
+                COALESCE(an.views_count, 0) as views_count,
+                COALESCE(an.clicks_count, 0) as clicks_count,
+                COALESCE(an.orders_count, 0) as orders_count,
+                COALESCE(
+                    (SELECT SUM(o.total_amount) 
+                     FROM orders o 
+                     WHERE o.advertisement_id = a.id 
+                     AND o.status = 'delivered'
+                    ), 
+                    COALESCE(an.revenue_generated, 0)
+                ) as revenue_generated
             FROM advertisements a
             JOIN products p ON a.product_id = p.id
             LEFT JOIN advertisement_analytics an ON a.id = an.advertisement_id
@@ -310,6 +318,20 @@ function handleGetAdvertisementAnalytics($adId) {
         $stmt->execute([$adId]);
         $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        // Calculate actual revenue from orders (only delivered orders, same as earnings)
+        $stmt = $pdo->prepare("
+            SELECT COALESCE(SUM(o.total_amount), 0) as revenue_generated
+            FROM orders o
+            WHERE o.advertisement_id = ?
+            AND o.status = 'delivered'
+        ");
+        $stmt->execute([$adId]);
+        $revenueResult = $stmt->fetch(PDO::FETCH_ASSOC);
+        $actualRevenue = floatval($revenueResult['revenue_generated'] ?? 0);
+        
+        // Use actual revenue from orders, fallback to analytics table if no orders
+        $revenue = $actualRevenue > 0 ? $actualRevenue : floatval($result['revenue_generated'] ?? 0);
+        
         // Calculate CTR
         $ctr = $result['views_count'] > 0 
             ? ($result['clicks_count'] / $result['views_count']) * 100 
@@ -318,11 +340,11 @@ function handleGetAdvertisementAnalytics($adId) {
         echo json_encode([
             'success' => true,
             'analytics' => [
-                'views_count' => intval($result['views_count']),
-                'clicks_count' => intval($result['clicks_count']),
+                'views_count' => intval($result['views_count'] ?? 0),
+                'clicks_count' => intval($result['clicks_count'] ?? 0),
                 'ctr' => round($ctr, 2),
-                'revenue_generated' => floatval($result['revenue_generated']),
-                'orders_count' => intval($result['orders_count']),
+                'revenue_generated' => $revenue,
+                'orders_count' => count($orders),
                 'orders' => $orders
             ]
         ]);
@@ -347,7 +369,14 @@ function handleGetAdminAdvertisements() {
     }
     
     try {
-        $status = $_GET['status'] ?? null;
+        // Sanitize and validate status parameter
+        $status = isset($_GET['status']) ? sanitizeInput($_GET['status']) : null;
+        
+        // Validate status to prevent injection
+        $allowedStatuses = ['pending', 'active', 'rejected', 'expired', 'all'];
+        if ($status && !in_array($status, $allowedStatuses)) {
+            $status = null;
+        }
         
         $query = "
             SELECT 
@@ -631,15 +660,30 @@ function handleTrackAdView() {
         ");
         $stmt->execute([$viewId, $adId, $userId, $sessionId, $ipAddress, $pageLocation]);
         
-        // Update analytics
-        $stmt = $pdo->prepare("
-            UPDATE advertisement_analytics 
-            SET views_count = views_count + 1,
-                last_viewed_at = NOW(),
-                updated_at = NOW()
-            WHERE advertisement_id = ?
-        ");
+        // Update analytics (create record if it doesn't exist)
+        $stmt = $pdo->prepare("SELECT id FROM advertisement_analytics WHERE advertisement_id = ?");
         $stmt->execute([$adId]);
+        $analyticsExists = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$analyticsExists) {
+            // Create analytics record if it doesn't exist
+            $analyticsId = generateUUID();
+            $stmt = $pdo->prepare("
+                INSERT INTO advertisement_analytics (id, advertisement_id, views_count, orders_count, revenue_generated, created_at, updated_at, last_viewed_at)
+                VALUES (?, ?, 1, 0, 0, NOW(), NOW(), NOW())
+            ");
+            $stmt->execute([$analyticsId, $adId]);
+        } else {
+            // Update existing analytics record
+            $stmt = $pdo->prepare("
+                UPDATE advertisement_analytics 
+                SET views_count = views_count + 1,
+                    last_viewed_at = NOW(),
+                    updated_at = NOW()
+                WHERE advertisement_id = ?
+            ");
+            $stmt->execute([$adId]);
+        }
         
         echo json_encode(['success' => true]);
         
@@ -692,15 +736,30 @@ function handleTrackAdClick() {
         ");
         $stmt->execute([$clickId, $adId, $userId, $sessionId, $ipAddress]);
         
-        // Update analytics
-        $stmt = $pdo->prepare("
-            UPDATE advertisement_analytics 
-            SET clicks_count = clicks_count + 1,
-                last_clicked_at = NOW(),
-                updated_at = NOW()
-            WHERE advertisement_id = ?
-        ");
+        // Update analytics (create record if it doesn't exist)
+        $stmt = $pdo->prepare("SELECT id FROM advertisement_analytics WHERE advertisement_id = ?");
         $stmt->execute([$adId]);
+        $analyticsExists = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$analyticsExists) {
+            // Create analytics record if it doesn't exist
+            $analyticsId = generateUUID();
+            $stmt = $pdo->prepare("
+                INSERT INTO advertisement_analytics (id, advertisement_id, views_count, clicks_count, orders_count, revenue_generated, created_at, updated_at, last_clicked_at)
+                VALUES (?, ?, 0, 1, 0, 0, NOW(), NOW(), NOW())
+            ");
+            $stmt->execute([$analyticsId, $adId]);
+        } else {
+            // Update existing analytics record
+            $stmt = $pdo->prepare("
+                UPDATE advertisement_analytics 
+                SET clicks_count = clicks_count + 1,
+                    last_clicked_at = NOW(),
+                    updated_at = NOW()
+                WHERE advertisement_id = ?
+            ");
+            $stmt->execute([$adId]);
+        }
         
         echo json_encode(['success' => true]);
         
@@ -716,8 +775,15 @@ function handleTrackAdClick() {
 function handleGetActiveAdvertisements() {
     global $pdo;
     
-    $limit = intval($_GET['limit'] ?? 3);
-    $pageLocation = $_GET['page_location'] ?? 'homepage';
+    // Sanitize and validate GET parameters
+    $limit = isset($_GET['limit']) ? max(1, min(100, intval($_GET['limit']))) : 3;
+    $pageLocation = isset($_GET['page_location']) ? sanitizeInput($_GET['page_location']) : 'homepage';
+    
+    // Validate page location to prevent injection
+    $allowedLocations = ['homepage', 'products', 'blog', 'training'];
+    if (!in_array($pageLocation, $allowedLocations)) {
+        $pageLocation = 'homepage';
+    }
     
     try {
         // Get active ads that match the page location
@@ -797,25 +863,105 @@ function handleGetActiveAdvertisements() {
 function updateAdRevenue($adId, $orderAmount) {
     global $pdo;
     
+    // Validate inputs
+    if (empty($adId) || !is_numeric($orderAmount) || $orderAmount < 0) {
+        error_log("Invalid parameters for updateAdRevenue: adId={$adId}, orderAmount={$orderAmount}");
+        return false;
+    }
+    
+    // Check if we're already in a transaction
+    $inTransaction = $pdo->inTransaction();
+    $transactionStarted = false;
+    
     try {
-        $pdo->beginTransaction();
+        if (!$inTransaction) {
+            $pdo->beginTransaction();
+            $transactionStarted = true;
+        }
         
-        // Update analytics revenue and order count
-        $stmt = $pdo->prepare("
-            UPDATE advertisement_analytics 
-            SET revenue_generated = revenue_generated + ?,
-                orders_count = orders_count + 1,
-                updated_at = NOW()
-            WHERE advertisement_id = ?
-        ");
-        $stmt->execute([$orderAmount, $adId]);
+        // First verify the advertisement exists
+        $stmt = $pdo->prepare("SELECT id FROM advertisements WHERE id = ?");
+        $stmt->execute([$adId]);
+        $adExists = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        $pdo->commit();
+        if (!$adExists) {
+            error_log("Advertisement {$adId} not found when trying to update revenue");
+            if ($transactionStarted) {
+                $pdo->rollBack();
+            }
+            return false;
+        }
+        
+        // Check if analytics record exists
+        $stmt = $pdo->prepare("SELECT id FROM advertisement_analytics WHERE advertisement_id = ?");
+        $stmt->execute([$adId]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$existing) {
+            // Create analytics record if it doesn't exist
+            $analyticsId = generateUUID();
+            $stmt = $pdo->prepare("
+                INSERT INTO advertisement_analytics (id, advertisement_id, revenue_generated, orders_count, created_at, updated_at)
+                VALUES (?, ?, ?, 1, NOW(), NOW())
+            ");
+            $result = $stmt->execute([$analyticsId, $adId, $orderAmount]);
+            
+            if (!$result) {
+                error_log("Failed to insert analytics record for ad {$adId}");
+                if ($transactionStarted) {
+                    $pdo->rollBack();
+                }
+                return false;
+            }
+        } else {
+            // Update existing analytics record
+            $stmt = $pdo->prepare("
+                UPDATE advertisement_analytics 
+                SET revenue_generated = revenue_generated + ?,
+                    orders_count = orders_count + 1,
+                    updated_at = NOW()
+                WHERE advertisement_id = ?
+            ");
+            $result = $stmt->execute([$orderAmount, $adId]);
+            
+            if (!$result || $stmt->rowCount() === 0) {
+                error_log("Failed to update analytics record for ad {$adId} or no rows affected");
+                if ($transactionStarted) {
+                    $pdo->rollBack();
+                }
+                return false;
+            }
+        }
+        
+        // Only commit if we started the transaction
+        if ($transactionStarted) {
+            $pdo->commit();
+        }
         return true;
         
     } catch (PDOException $e) {
-        $pdo->rollBack();
-        error_log("Error updating ad revenue: " . $e->getMessage());
+        // Only rollback if we started the transaction
+        if ($transactionStarted) {
+            try {
+                $pdo->rollBack();
+            } catch (Exception $rollbackError) {
+                error_log("Error during rollback in updateAdRevenue: " . $rollbackError->getMessage());
+            }
+        }
+        error_log("PDOException in updateAdRevenue for ad {$adId}: " . $e->getMessage());
+        error_log("SQL State: " . $e->getCode());
+        return false;
+    } catch (Exception $e) {
+        // Only rollback if we started the transaction
+        if ($transactionStarted) {
+            try {
+                $pdo->rollBack();
+            } catch (Exception $rollbackError) {
+                error_log("Error during rollback in updateAdRevenue: " . $rollbackError->getMessage());
+            }
+        }
+        error_log("Exception in updateAdRevenue for ad {$adId}: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
         return false;
     }
 }

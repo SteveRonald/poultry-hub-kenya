@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageCircle, X, Send, Bot, User, Sparkles } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User, Sparkles, ThumbsUp, ThumbsDown, MessageSquare, Plus, ChevronLeft } from 'lucide-react';
 import { getApiUrl } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,6 +10,8 @@ interface Message {
   sender: 'user' | 'bot';
   intent?: string;
   created_at?: string;
+  message_id?: string;
+  conversation_id?: string;
 }
 
 interface QuickReply {
@@ -25,6 +27,8 @@ interface ChatResponse {
   action_type?: string;
   quick_replies?: QuickReply[];
   data?: any;
+  message_id?: string;
+  conversation_id?: string;
 }
 
 const Chatbot: React.FC = () => {
@@ -36,6 +40,10 @@ const Chatbot: React.FC = () => {
   const [showWelcomeNotification, setShowWelcomeNotification] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState<Set<string>>(new Set());
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [showConversations, setShowConversations] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -63,12 +71,120 @@ const Chatbot: React.FC = () => {
     return audioContextRef.current;
   };
 
-  // Load chat history on mount
+  // Load conversations list if user is logged in (but don't auto-load them)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && user) {
+      loadConversations();
+    }
+  }, [isOpen, user]);
+  
+  // Load chat history ONLY when user explicitly selects a conversation
+  useEffect(() => {
+    if (isOpen && currentConversationId) {
+      // Only load if user explicitly selected a conversation
+      loadChatHistory(currentConversationId);
+    } else if (isOpen && !currentConversationId && !user) {
+      // For non-logged-in users, just load session history
       loadChatHistory();
     }
-  }, [isOpen]);
+  }, [isOpen, currentConversationId, user]);
+  
+  // Load conversations list (don't auto-load any conversation)
+  const loadConversations = async () => {
+    if (!user) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/chat/conversations'), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setConversations(data.conversations || []);
+          // DO NOT auto-load conversations - user must explicitly click to view them
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
+    }
+  };
+  
+  // Create new conversation
+  const createNewConversation = async () => {
+    if (!user) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/chat/conversations'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Clear current conversation to start fresh
+          setCurrentConversationId(null);
+          setMessages([]);
+          setQuickReplies([]);
+          setShowConversations(false);
+          // Reload conversations list
+          loadConversations();
+          // Show welcome message for new conversation
+          const welcomeMessage: Message = {
+            id: 'welcome',
+            message: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+            sender: 'bot',
+          };
+          setMessages([welcomeMessage]);
+          setQuickReplies([
+            { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
+            { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+            { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to create conversation:', error);
+    }
+  };
+  
+  // Switch to a different conversation (user explicitly clicks to view)
+  const switchConversation = async (conversationId: string) => {
+    setCurrentConversationId(conversationId);
+    setMessages([]);
+    setQuickReplies([]);
+    setShowConversations(false);
+    // loadChatHistory will handle loading state
+    await loadChatHistory(conversationId);
+  };
+  
+  // Start fresh chat (clear current conversation and show welcome)
+  const startFreshChat = () => {
+    setCurrentConversationId(null);
+    setMessages([]);
+    setQuickReplies([]);
+    setShowConversations(false);
+    // Show welcome message for fresh chat
+    const welcomeMessage: Message = {
+      id: 'welcome',
+      message: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+      sender: 'bot',
+    };
+    setMessages([welcomeMessage]);
+    setQuickReplies([
+      { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
+      { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+      { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
+    ]);
+  };
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -79,8 +195,9 @@ const Chatbot: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = async (conversationId?: string) => {
     try {
+      setIsLoading(true);
       const token = localStorage.getItem('token') || localStorage.getItem('admin_session_token');
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
@@ -90,7 +207,13 @@ const Chatbot: React.FC = () => {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(getApiUrl('/api/chat/history'), {
+      // Build URL with optional conversation_id query parameter
+      let url = getApiUrl('/api/chat/history');
+      if (conversationId) {
+        url += `?conversation_id=${encodeURIComponent(conversationId)}`;
+      }
+
+      const response = await fetch(url, {
         method: 'GET',
         headers,
       });
@@ -99,10 +222,18 @@ const Chatbot: React.FC = () => {
         const data = await response.json();
         if (data.success && data.messages) {
           setMessages(data.messages);
+          // Update quick replies if provided
+          if (data.quick_replies && Array.isArray(data.quick_replies)) {
+            setQuickReplies(data.quick_replies);
+          }
         }
+      } else {
+        console.error('Failed to load chat history:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Failed to load chat history:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -195,7 +326,10 @@ const Chatbot: React.FC = () => {
       const response = await fetch(getApiUrl('/api/chat/message'), {
         method: 'POST',
         headers,
-        body: JSON.stringify({ message: messageToSend }),
+        body: JSON.stringify({ 
+          message: messageToSend,
+          conversation_id: currentConversationId 
+        }),
       });
 
       if (response.ok) {
@@ -205,12 +339,24 @@ const Chatbot: React.FC = () => {
           // Play receive sound
           playSound('receive');
           
+          // Update current conversation ID when user sends first message (starts new conversation)
+          if (data.conversation_id) {
+            // Set conversation ID when user starts chatting (first message creates/links to conversation)
+            setCurrentConversationId(data.conversation_id);
+            // Reload conversations list if user is logged in
+            if (user) {
+              loadConversations();
+            }
+          }
+          
           // Add bot response
           const botMessage: Message = {
             id: `bot_${Date.now()}`,
             message: data.response,
             sender: 'bot',
             intent: data.intent,
+            message_id: data.message_id,
+            conversation_id: data.conversation_id || currentConversationId || undefined,
           };
           setMessages(prev => [...prev, botMessage]);
           
@@ -256,6 +402,31 @@ const Chatbot: React.FC = () => {
     } else {
       // Send the quick reply text as a message
       handleSendMessage(reply.text);
+    }
+  };
+
+  const handleFeedback = async (messageId: string, feedbackType: 'positive' | 'negative', conversationId?: string) => {
+    if (!messageId || feedbackGiven.has(messageId)) return;
+    
+    try {
+      const response = await fetch(getApiUrl('/api/chat/feedback'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message_id: messageId,
+          conversation_id: conversationId,
+          feedback_type: feedbackType,
+        }),
+      });
+
+      if (response.ok) {
+        setFeedbackGiven(prev => new Set(prev).add(messageId));
+        console.log('Feedback submitted:', feedbackType);
+      }
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
     }
   };
 
@@ -352,9 +523,11 @@ const Chatbot: React.FC = () => {
     }
   }, [showWelcomeNotification, isOpen]);
 
-  // Welcome message on first open
+  // Welcome message on first open - always show fresh chat (don't auto-load previous conversations)
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
+    if (isOpen && messages.length === 0 && !isLoading && !currentConversationId) {
+      // Always show welcome message when opening chat (fresh start)
+      // Previous conversations are available via the conversations button
       const welcomeMessage: Message = {
         id: 'welcome',
         message: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
@@ -367,7 +540,7 @@ const Chatbot: React.FC = () => {
         { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
       ]);
     }
-  }, [isOpen]);
+  }, [isOpen, messages.length, isLoading, currentConversationId]);
 
   // Render popup using portal for better z-index handling
   const popupContent = showWelcomeNotification && !isOpen && mounted ? (
@@ -487,28 +660,186 @@ const Chatbot: React.FC = () => {
         <div className="fixed bottom-0 right-0 sm:bottom-6 sm:right-6 z-50 w-full sm:w-96 sm:max-w-[calc(100vw-2rem)] h-[calc(100vh-4rem)] sm:h-[600px] sm:max-h-[calc(100vh-8rem)] sm:rounded-lg bg-white shadow-2xl flex flex-col border-t sm:border border-gray-200">
           {/* Header */}
           <div className="bg-gradient-to-r from-primary to-secondary text-white p-3 sm:p-4 rounded-t-lg sm:rounded-t-lg flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Bot className="h-5 w-5 sm:h-6 sm:w-6" />
-                <Sparkles className="h-3 w-3 absolute -top-0.5 -right-0.5 text-yellow-300" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm sm:text-base">AI Assistant</h3>
-                <p className="text-xs text-white/80 hidden sm:block">PoultryHubKenya</p>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* Previous Conversations button - grouped in one place (only show when not viewing a conversation) */}
+              {user && conversations.length > 0 && !currentConversationId && (
+                <button
+                  onClick={() => {
+                    setShowConversations(true);
+                    // Ensure we're in fresh chat mode
+                    setCurrentConversationId(null);
+                  }}
+                  className="hover:bg-white/20 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 transition-colors flex-shrink-0 relative flex items-center gap-1.5 bg-white/10 border border-white/20"
+                  aria-label="Previous Conversations"
+                  title={`${conversations.length} previous conversations`}
+                >
+                  <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="text-xs sm:text-sm font-medium hidden sm:inline">
+                    Previous
+                  </span>
+                  <span className="bg-yellow-400 text-gray-900 text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                    {conversations.length > 9 ? '9+' : conversations.length}
+                  </span>
+                </button>
+              )}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="relative flex-shrink-0">
+                  <Bot className="h-5 w-5 sm:h-6 sm:w-6" />
+                  <Sparkles className="h-3 w-3 absolute -top-0.5 -right-0.5 text-yellow-300" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm sm:text-base truncate">
+                    {currentConversationId ? 'AI Assistant' : 'New Chat'}
+                  </h3>
+                  <p className="text-xs text-white/80 hidden sm:block truncate">PoultryHubKenya</p>
+                </div>
               </div>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="hover:bg-white/20 rounded-full p-1.5 sm:p-2 transition-colors"
-              aria-label="Close chat"
-            >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Start fresh chat button when viewing a conversation */}
+              {user && currentConversationId && (
+                <button
+                  onClick={startFreshChat}
+                  className="hover:bg-white/20 rounded-full p-1.5 sm:p-2 transition-colors flex-shrink-0"
+                  aria-label="Start new chat"
+                  title="Start new chat"
+                >
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+              )}
+              <button
+                onClick={() => setIsOpen(false)}
+                className="hover:bg-white/20 rounded-full p-1.5 sm:p-2 transition-colors flex-shrink-0"
+                aria-label="Close chat"
+              >
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              </button>
+            </div>
           </div>
+          
+          {/* Conversations Sidebar (for logged-in users) */}
+          {user && showConversations && (
+            <div className="absolute inset-0 bg-white z-10 flex flex-col">
+              {/* Conversations Header */}
+              <div className="bg-gradient-to-r from-primary to-secondary text-white p-3 sm:p-4 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setShowConversations(false);
+                      // When closing conversations list, ensure we're in fresh chat mode (not viewing old conversation)
+                      if (currentConversationId) {
+                        startFreshChat();
+                      }
+                    }}
+                    className="hover:bg-white/20 rounded-full p-1.5 transition-colors"
+                    aria-label="Back to chat"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <h3 className="font-semibold text-sm sm:text-base">Your Previous Conversations</h3>
+                  {conversations.length > 0 && (
+                    <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                      {conversations.length}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    createNewConversation();
+                  }}
+                  className="hover:bg-white/20 rounded-full p-1.5 transition-colors"
+                  aria-label="New conversation"
+                  title="Start new chat"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              </div>
+              
+              {/* Conversations List */}
+              <div className="flex-1 overflow-y-auto p-2">
+                {conversations.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No previous conversations</p>
+                    <p className="text-xs text-gray-400 mt-1">Start chatting to create your first conversation</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {conversations.map((conv) => (
+                      <button
+                        key={conv.id}
+                        onClick={() => switchConversation(conv.id)}
+                        className={`w-full text-left p-3 rounded-lg transition-all ${
+                          currentConversationId === conv.id
+                            ? 'bg-primary/10 border-l-4 border-primary shadow-sm'
+                            : 'hover:bg-gray-100 border-l-4 border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-medium text-sm text-gray-900 truncate">
+                                {conv.title || 'New Conversation'}
+                              </h4>
+                              {currentConversationId === conv.id && (
+                                <span className="text-xs bg-primary text-white px-1.5 py-0.5 rounded">Viewing</span>
+                              )}
+                            </div>
+                            {conv.last_message && (
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-2 mb-2">
+                                {conv.last_message}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                              <span>{conv.message_count} {conv.message_count === 1 ? 'message' : 'messages'}</span>
+                              {conv.last_message_at && (
+                                <>
+                                  <span>•</span>
+                                  <span>{new Date(conv.last_message_at).toLocaleDateString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric',
+                                    year: new Date(conv.last_message_at).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+                                  })}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Previous Conversations indicator - grouped in one place (only show when in fresh chat mode) */}
+          {user && conversations.length > 0 && !showConversations && !currentConversationId && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-300 px-4 py-3 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">
+                    {conversations.length} Previous {conversations.length === 1 ? 'Conversation' : 'Conversations'}
+                  </p>
+                  <p className="text-xs text-blue-600">Click to view and continue previous chats</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowConversations(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 shadow-md"
+              >
+                View
+                <ChevronLeft className="h-4 w-4 rotate-180" />
+              </button>
+            </div>
+          )}
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50">
-            {messages.map((message) => (
+          {/* Messages - Hide when conversations sidebar is open */}
+          {!showConversations && (
+            <>
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50">
+              {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -530,7 +861,34 @@ const Chatbot: React.FC = () => {
                     {message.sender === 'user' && (
                       <User className="h-4 w-4 sm:h-5 sm:w-5 mt-0.5 flex-shrink-0" />
                     )}
-                    <p className="text-xs sm:text-sm whitespace-pre-wrap break-words leading-relaxed">{message.message}</p>
+                    <div className="flex-1">
+                      <p className="text-xs sm:text-sm whitespace-pre-wrap break-words leading-relaxed">{message.message}</p>
+                      {/* Feedback buttons for bot messages */}
+                      {message.sender === 'bot' && message.message_id && !feedbackGiven.has(message.message_id) && (
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                          <span className="text-xs text-gray-500">Helpful?</span>
+                          <button
+                            onClick={() => handleFeedback(message.message_id!, 'positive', message.conversation_id)}
+                            className="p-1.5 hover:bg-green-50 rounded-full transition-colors group"
+                            title="Helpful"
+                          >
+                            <ThumbsUp className="h-4 w-4 text-gray-400 group-hover:text-green-500 transition-colors" />
+                          </button>
+                          <button
+                            onClick={() => handleFeedback(message.message_id!, 'negative', message.conversation_id)}
+                            className="p-1.5 hover:bg-red-50 rounded-full transition-colors group"
+                            title="Not helpful"
+                          >
+                            <ThumbsDown className="h-4 w-4 text-gray-400 group-hover:text-red-500 transition-colors" />
+                          </button>
+                        </div>
+                      )}
+                      {message.sender === 'bot' && message.message_id && feedbackGiven.has(message.message_id) && (
+                        <div className="text-xs text-green-600 mt-2 pt-2 border-t border-gray-100">
+                          ✓ Thank you for your feedback!
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -571,40 +929,42 @@ const Chatbot: React.FC = () => {
               </div>
             )}
 
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input */}
-          <div className="border-t border-gray-200 p-3 sm:p-4 bg-white rounded-b-lg flex-shrink-0">
-            <div className="flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputMessage}
-                onChange={(e) => {
-                  setInputMessage(e.target.value);
-                  // Initialize audio context on first interaction
-                  initAudioContext();
-                }}
-                onFocus={() => {
-                  // Initialize audio context when input is focused
-                  initAudioContext();
-                }}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask me anything..."
-                className="flex-1 border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                disabled={isLoading}
-              />
-              <button
-                onClick={() => handleSendMessage()}
-                disabled={isLoading || !inputMessage.trim()}
-                className="bg-primary text-white rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center active:scale-95"
-                aria-label="Send message"
-              >
-                <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-              </button>
+              <div ref={messagesEndRef} />
             </div>
-          </div>
+
+            {/* Input */}
+            <div className="border-t border-gray-200 p-3 sm:p-4 bg-white rounded-b-lg flex-shrink-0">
+              <div className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => {
+                    setInputMessage(e.target.value);
+                    // Initialize audio context on first interaction
+                    initAudioContext();
+                  }}
+                  onFocus={() => {
+                    // Initialize audio context when input is focused
+                    initAudioContext();
+                  }}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Ask me anything..."
+                  className="flex-1 border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={() => handleSendMessage()}
+                  disabled={isLoading || !inputMessage.trim()}
+                  className="bg-primary text-white rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center active:scale-95"
+                  aria-label="Send message"
+                >
+                  <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+              </div>
+            </div>
+            </>
+          )}
         </div>
       )}
     </>

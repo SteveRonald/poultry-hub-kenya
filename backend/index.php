@@ -260,6 +260,22 @@ switch ($path) {
         }
         break;
         
+    case 'api/chat/conversations':
+        if ($method === 'GET') {
+            include 'routes/chat.php';
+            handleGetConversations();
+        } elseif ($method === 'POST') {
+            include 'routes/chat.php';
+            handleCreateConversation();
+        }
+        break;
+        
+    case 'api/chat/feedback':
+        if ($method === 'POST' || $method === 'GET') {
+            include 'routes/chat_feedback.php';
+        }
+        break;
+        
     case 'api/admin/users':
         if ($method === 'GET') {
             include 'routes/admin.php';

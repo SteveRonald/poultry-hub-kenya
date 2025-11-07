@@ -97,9 +97,12 @@ function handleImageUpload() {
     // Move uploaded file
     if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
         // Return the URL path (dynamic based on the request host)
+        // SECURITY: Sanitize host header to prevent header injection
         $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'];
-        $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $filename;
+        $host = filter_var($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL);
+        // SECURITY: Validate host format and prevent path traversal in filename
+        $safeFilename = basename($filename); // Ensure no path traversal
+        $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $safeFilename;
         
         echo json_encode([
             'success' => true,
@@ -157,28 +160,60 @@ function handleMultipleImageUpload() {
             continue;
         }
         
-        // Check file type
+        // Check file type with multiple validation methods
         $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        
+        // Check MIME type
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $mimeType = finfo_file($finfo, $files['tmp_name'][$i]);
         finfo_close($finfo);
         
-        if (!in_array($mimeType, $allowedTypes)) {
+        // Check file extension
+        $extension = strtolower(pathinfo($files['name'][$i], PATHINFO_EXTENSION));
+        
+        // Validate both MIME type and extension
+        if (!in_array($mimeType, $allowedTypes) || !in_array($extension, $allowedExtensions)) {
             $errors[] = "File {$i}: Invalid type (only JPEG, PNG, GIF, WebP allowed)";
             continue;
         }
         
-        // Generate unique filename
-        $extension = pathinfo($files['name'][$i], PATHINFO_EXTENSION);
+        // Additional security: Check file header (magic bytes)
+        $fileHeader = file_get_contents($files['tmp_name'][$i], false, null, 0, 10);
+        $validHeaders = [
+            "\xFF\xD8\xFF", // JPEG
+            "\x89PNG\r\n\x1a\n", // PNG
+            "GIF87a", // GIF87a
+            "GIF89a", // GIF89a
+            "RIFF", // WebP (starts with RIFF)
+        ];
+        
+        $headerValid = false;
+        foreach ($validHeaders as $header) {
+            if (strpos($fileHeader, $header) === 0) {
+                $headerValid = true;
+                break;
+            }
+        }
+        
+        if (!$headerValid) {
+            $errors[] = "File {$i}: Invalid file format detected";
+            continue;
+        }
+        
+        // Generate unique filename (extension already validated above)
         $filename = uniqid() . '_' . time() . '_' . $i . '.' . $extension;
         $uploadPath = $uploadDir . $filename;
         
         // Move uploaded file
         if (move_uploaded_file($files['tmp_name'][$i], $uploadPath)) {
             // Return the URL path (dynamic based on the request host)
+            // SECURITY: Sanitize host header to prevent header injection
             $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-            $host = $_SERVER['HTTP_HOST'];
-            $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $filename;
+            $host = filter_var($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL);
+            // SECURITY: Validate host format and prevent path traversal in filename
+            $safeFilename = basename($filename); // Ensure no path traversal
+            $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $safeFilename;
             $uploadedFiles[] = [
                 'url' => $url,
                 'filename' => $filename

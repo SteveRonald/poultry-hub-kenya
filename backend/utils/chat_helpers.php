@@ -233,7 +233,9 @@ function isAccountCreationQuestion($message) {
     $creationPatterns = [
         'create', 'creating', 'register', 'registration', 'sign up', 'new account',
         'how to create', 'how do i create', 'how to register', 'how do i register',
-        'make account', 'open account', 'set up account'
+        'make account', 'open account', 'set up account', 'signup', 'sign-up',
+        'i want to create', 'i want to register', 'want to sign up', 'need to create',
+        'need to register', 'need account', 'want account', 'get account'
     ];
     
     $messageLower = strtolower(trim($message));
@@ -243,8 +245,21 @@ function isAccountCreationQuestion($message) {
         return false;
     }
     
+    // Check if message contains creation keywords
     foreach ($creationPatterns as $pattern) {
         if (stripos($messageLower, $pattern) !== false) {
+            return true;
+        }
+    }
+    
+    // Check for partial matches (like "creating" in "creating an account")
+    $words = explode(' ', $messageLower);
+    foreach ($words as $word) {
+        if (in_array($word, ['create', 'creating', 'register', 'registering', 'signup', 'sign-up'])) {
+            return true;
+        }
+        // Check if word starts with creation prefix
+        if (strpos($word, 'creat') === 0 || strpos($word, 'regist') === 0) {
             return true;
         }
     }

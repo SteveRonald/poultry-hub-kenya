@@ -15,8 +15,8 @@ $allowedOrigins = [
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173', // Vite default port
-    'http://192.168.137.1:8080',
-    'http://192.168.167.24:8081',
+    'http://192.168.194.24:8080',
+    'http://192.168.194.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.14.176:3000'
 ];
@@ -242,6 +242,21 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/ai_services.php';
             handleAIConfig();
+        }
+        break;
+        
+    // Chatbot Routes
+    case 'api/chat/message':
+        if ($method === 'POST') {
+            include 'routes/chat.php';
+            handleChatMessage();
+        }
+        break;
+        
+    case 'api/chat/history':
+        if ($method === 'GET') {
+            include 'routes/chat.php';
+            handleGetChatHistory();
         }
         break;
         

@@ -24,8 +24,8 @@ const Logo: React.FC<LogoProps> = ({
   };
 
   return (
-    <div className={`flex items-center space-x-3 ${className}`}>
-      <div className={`flex items-center justify-center ${size === 'lg' ? 'w-28 h-28' : size === 'md' ? 'w-16 h-16' : 'w-14 h-14'}`}>
+    <div className={`flex items-center space-x-1 sm:space-x-2 md:space-x-3 ${className}`}>
+      <div className={`flex items-center justify-center ${size === 'lg' ? 'w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28' : size === 'md' ? 'w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16' : 'w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14'}`}>
         <img 
           src="/logo.png" 
           alt="Poultry Hub Kenya Logo" 
@@ -33,8 +33,9 @@ const Logo: React.FC<LogoProps> = ({
         />
       </div>
       {showText && (
-        <span className={`font-bold text-primary ${textSizeClasses[size]} block`}>
-          PoultryHubKenya (KE)
+        <span className={`font-bold text-primary ${textSizeClasses[size]} block whitespace-nowrap`}>
+          <span className="hidden md:inline">PoultryHubKenya (KE)</span>
+          <span className="md:hidden">PoultryHubKenya</span>
         </span>
       )}
     </div>

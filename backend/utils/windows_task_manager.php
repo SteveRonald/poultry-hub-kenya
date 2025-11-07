@@ -24,12 +24,18 @@ class WindowsTaskManager {
             $this->deleteTask();
             
             // Create new task
+            // SECURITY: Use escapeshellarg() to prevent command injection
+            $taskNameEscaped = escapeshellarg($this->taskName);
+            $phpPathEscaped = escapeshellarg($this->phpPath);
+            $scriptPathEscaped = escapeshellarg($this->scriptPath);
+            $backupTimeEscaped = escapeshellarg($backupTime);
+            
             $command = sprintf(
-                'schtasks /create /tn "%s" /tr "\"%s\" \"%s\"" /sc daily /st %s /f',
-                $this->taskName,
-                $this->phpPath,
-                $this->scriptPath,
-                $backupTime
+                'schtasks /create /tn %s /tr %s %s %s /sc daily /st %s /f',
+                $taskNameEscaped,
+                $phpPathEscaped,
+                $scriptPathEscaped,
+                $backupTimeEscaped
             );
             
             $output = [];
@@ -63,7 +69,9 @@ class WindowsTaskManager {
      */
     public function deleteTask() {
         try {
-            $command = sprintf('schtasks /delete /tn "%s" /f', $this->taskName);
+            // SECURITY: Use escapeshellarg() to prevent command injection
+            $taskNameEscaped = escapeshellarg($this->taskName);
+            $command = sprintf('schtasks /delete /tn %s /f', $taskNameEscaped);
             exec($command);
             return true;
         } catch (Exception $e) {
@@ -76,7 +84,9 @@ class WindowsTaskManager {
      */
     public function taskExists() {
         try {
-            $command = sprintf('schtasks /query /tn "%s"', $this->taskName);
+            // SECURITY: Use escapeshellarg() to prevent command injection
+            $taskNameEscaped = escapeshellarg($this->taskName);
+            $command = sprintf('schtasks /query /tn %s', $taskNameEscaped);
             $output = [];
             $returnCode = 0;
             exec($command, $output, $returnCode);
@@ -99,7 +109,9 @@ class WindowsTaskManager {
                 ];
             }
             
-            $command = sprintf('schtasks /query /tn "%s" /fo list', $this->taskName);
+            // SECURITY: Use escapeshellarg() to prevent command injection
+            $taskNameEscaped = escapeshellarg($this->taskName);
+            $command = sprintf('schtasks /query /tn %s /fo list', $taskNameEscaped);
             $output = [];
             $returnCode = 0;
             exec($command, $output, $returnCode);
@@ -123,7 +135,9 @@ class WindowsTaskManager {
      */
     public function runTask() {
         try {
-            $command = sprintf('schtasks /run /tn "%s"', $this->taskName);
+            // SECURITY: Use escapeshellarg() to prevent command injection
+            $taskNameEscaped = escapeshellarg($this->taskName);
+            $command = sprintf('schtasks /run /tn %s', $taskNameEscaped);
             $output = [];
             $returnCode = 0;
             exec($command, $output, $returnCode);

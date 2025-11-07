@@ -38,8 +38,13 @@ function getGDBearerToken() {
         }
     }
 
-    if (isset($_GET['token']) && is_string($_GET['token']) && $_GET['token'] !== '') {
-        return $_GET['token'];
+    // SECURITY: Validate and sanitize token from GET parameter
+    if (isset($_GET['token']) && is_string($_GET['token'])) {
+        $token = filter_var($_GET['token'], FILTER_SANITIZE_STRING);
+        // Validate token format (alphanumeric, base64-like, or UUID) and reasonable length
+        if (preg_match('/^[a-zA-Z0-9._-]+$/', $token) && strlen($token) > 10 && strlen($token) < 2000) {
+            return $token;
+        }
     }
 
     return null;
@@ -150,7 +155,16 @@ function handleGoogleDriveDelete() {
     $input = json_decode(file_get_contents('php://input'), true);
     $fileId = $input['file_id'] ?? ($_GET['file_id'] ?? null);
     
-    if (!$fileId) {
+    // SECURITY: Validate and sanitize file ID to prevent injection
+    if ($fileId) {
+        $fileId = filter_var($fileId, FILTER_SANITIZE_STRING);
+        // Validate file ID format (Google Drive file IDs are alphanumeric)
+        if (!preg_match('/^[a-zA-Z0-9_-]+$/', $fileId) || strlen($fileId) > 100) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid file ID format']);
+            return;
+        }
+    } else {
         http_response_code(400);
         echo json_encode(['error' => 'File ID is required']);
         return;

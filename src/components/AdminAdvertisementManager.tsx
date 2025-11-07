@@ -349,24 +349,30 @@ const AdminAdvertisementManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-primary">Advertisement Management</h2>
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <h2 className="text-xl sm:text-2xl font-bold text-primary">Advertisement Management</h2>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
             variant={filter === 'all' ? 'default' : 'outline'}
             onClick={() => setFilter('all')}
+            size="sm"
+            className="flex-1 sm:flex-initial text-xs sm:text-sm whitespace-nowrap"
           >
             All ({advertisements.length})
           </Button>
           <Button
             variant={filter === 'pending' ? 'default' : 'outline'}
             onClick={() => setFilter('pending')}
+            size="sm"
+            className="flex-1 sm:flex-initial text-xs sm:text-sm whitespace-nowrap"
           >
             Pending ({pendingAds.length})
           </Button>
           <Button
             variant={filter === 'active' ? 'default' : 'outline'}
             onClick={() => setFilter('active')}
+            size="sm"
+            className="flex-1 sm:flex-initial text-xs sm:text-sm whitespace-nowrap"
           >
             Active ({activeAds.length})
           </Button>

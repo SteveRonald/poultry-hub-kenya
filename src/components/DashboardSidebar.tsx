@@ -306,7 +306,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-24 left-0 h-[calc(100vh-6rem)] bg-gray-50 border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out overflow-y-auto",
+          "fixed top-16 sm:top-20 md:top-24 left-0 h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] md:h-[calc(100vh-6rem)] bg-gray-50 border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out overflow-y-auto",
           "lg:translate-x-0 lg:fixed lg:top-24 lg:left-0 lg:h-[calc(100vh-6rem)] lg:z-30 lg:overflow-y-auto",
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
           "w-64"

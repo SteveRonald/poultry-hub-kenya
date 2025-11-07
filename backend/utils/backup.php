@@ -59,16 +59,35 @@ class BackupManager {
                 }
             }
             
-            $command = "\"{$mysqldump}\" -h \"{$host}\" -u \"{$username}\"";
+            // SECURITY: Use escapeshellarg() to prevent command injection
+            $mysqldumpEscaped = escapeshellarg($mysqldump);
+            $hostEscaped = escapeshellarg($host);
+            $usernameEscaped = escapeshellarg($username);
+            $databaseEscaped = escapeshellarg($database);
+            $filepathEscaped = escapeshellarg($filepath);
+            
+            // Build command safely - password should be passed via .my.cnf or environment variable for security
+            // Using -p without value will prompt, but we'll use environment variable approach
+            $command = "{$mysqldumpEscaped} -h {$hostEscaped} -u {$usernameEscaped}";
+            
+            // SECURITY: Use environment variable for password instead of command line
+            // Password in command line can be visible in process list
+            $env = $_ENV;
             if (!empty($password)) {
-                $command .= " -p\"{$password}\"";
+                // Set password via environment variable (more secure)
+                putenv("MYSQL_PWD=" . $password);
             }
-            $command .= " \"{$database}\" > \"{$filepath}\"";
+            $command .= " {$databaseEscaped} > {$filepathEscaped} 2>&1";
             
             // Execute backup
             $output = [];
             $returnCode = 0;
             exec($command, $output, $returnCode);
+            
+            // Clear password from environment after use
+            if (!empty($password)) {
+                putenv("MYSQL_PWD");
+            }
             
             if ($returnCode === 0 && file_exists($filepath)) {
                 // Compress the backup

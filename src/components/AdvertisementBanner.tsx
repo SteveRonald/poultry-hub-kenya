@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { X, ExternalLink } from 'lucide-react';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getImageUrl } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Advertisement {
@@ -196,9 +196,26 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
     return null;
   }
 
-  const productImage = advertisement.ad_image || 
+  // Get the raw image path
+  const rawImagePath = advertisement.ad_image || 
     (advertisement.product_images ? JSON.parse(advertisement.product_images)[0] : null) ||
     '/placeholder.svg';
+  
+  // Convert to proper URL using getImageUrl helper (handles localhost to network IP conversion)
+  let productImage = rawImagePath;
+  if (rawImagePath && rawImagePath !== '/placeholder.svg') {
+    productImage = getImageUrl(rawImagePath);
+    
+    // Debug logging for mobile
+    if (import.meta.env.DEV) {
+      console.log('AdvertisementBanner - Image URL conversion:', {
+        raw: rawImagePath,
+        converted: productImage,
+        currentHost: window.location.hostname,
+        currentPort: window.location.port
+      });
+    }
+  }
 
   // Premium ads: Top fixed banner using Leaderboard standard (728×90 px)
   // Responsive: scales down on mobile while maintaining aspect ratio
@@ -235,22 +252,35 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
                 }}
               >
                 {(() => {
-                  const isVideo = productImage?.endsWith('.mp4') || 
-                                 productImage?.endsWith('.webm') || 
-                                 productImage?.endsWith('.mov') ||
-                                 productImage?.includes('video');
+                  const isVideo = rawImagePath?.endsWith('.mp4') || 
+                                 rawImagePath?.endsWith('.webm') || 
+                                 rawImagePath?.endsWith('.mov') ||
+                                 rawImagePath?.includes('video');
                   return isVideo ? (
                     <video
                       src={productImage}
                       className="w-full h-full object-cover"
                       muted
                       preload="metadata"
+                      onError={(e) => {
+                        console.error('Video load error:', productImage, 'Original:', rawImagePath);
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   ) : (
                     <img
                       src={productImage}
                       alt={advertisement.ad_title || advertisement.product_name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error('Image load error:', productImage, 'Original:', rawImagePath);
+                        (e.target as HTMLImageElement).src = '/placeholder.svg';
+                      }}
+                      onLoad={() => {
+                        if (import.meta.env.DEV) {
+                          console.log('Ad image loaded successfully:', productImage);
+                        }
+                      }}
                     />
                   );
                 })()}
@@ -366,22 +396,55 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
             }}
           >
             {(() => {
-              const isVideo = productImage?.endsWith('.mp4') || 
-                             productImage?.endsWith('.webm') || 
-                             productImage?.endsWith('.mov') ||
-                             productImage?.includes('video');
+              const isVideo = rawImagePath?.endsWith('.mp4') || 
+                             rawImagePath?.endsWith('.webm') || 
+                             rawImagePath?.endsWith('.mov') ||
+                             rawImagePath?.includes('video');
               return isVideo ? (
                 <video
                   src={productImage}
                   className="w-full h-full object-cover"
                   muted
                   preload="metadata"
+                  onError={(e) => {
+                    console.error('Video load error:', productImage, 'Original:', rawImagePath);
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
               ) : (
                 <img
                   src={productImage}
                   alt={advertisement.ad_title || advertisement.product_name}
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    console.error('AdvertisementBanner - Image load error:', {
+                      productImage,
+                      rawImagePath,
+                      currentHost: window.location.hostname,
+                      error: e
+                    });
+                    // Try fallback to product image if ad_image fails
+                    if (rawImagePath === advertisement.ad_image && advertisement.product_images) {
+                      try {
+                        const productImages = JSON.parse(advertisement.product_images);
+                        if (productImages && productImages[0]) {
+                          const fallbackUrl = getImageUrl(productImages[0]);
+                          console.log('Trying fallback product image:', fallbackUrl);
+                          (e.target as HTMLImageElement).src = fallbackUrl;
+                          return;
+                        }
+                      } catch (err) {
+                        console.error('Failed to parse product_images:', err);
+                      }
+                    }
+                    (e.target as HTMLImageElement).src = '/placeholder.svg';
+                  }}
+                  onLoad={() => {
+                    if (import.meta.env.DEV) {
+                      console.log('AdvertisementBanner - Image loaded successfully:', productImage);
+                    }
+                  }}
                 />
               );
             })()}

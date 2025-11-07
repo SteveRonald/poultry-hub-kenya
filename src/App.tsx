@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLogin from "./pages/AdminLogin";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
+import Chatbot from "./components/Chatbot";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const App = () => (
                 <Route path="/admin-login" element={<AdminLogin />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              <Chatbot />
             </BrowserRouter>
           </AdminProvider>
         </CartProvider>

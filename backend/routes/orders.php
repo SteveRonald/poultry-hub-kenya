@@ -158,7 +158,21 @@ function handleCreateOrder() {
             $totalAmount = $item['price'] * $item['quantity'];
             
             // Check if order came from an advertisement (via session/cookie)
-            $advertisementId = $input['advertisement_id'] ?? $_COOKIE['ad_click'] ?? null;
+            // SECURITY: Sanitize and validate cookie value to prevent injection
+            $advertisementId = null;
+            if (isset($input['advertisement_id'])) {
+                $advertisementId = filter_var($input['advertisement_id'], FILTER_SANITIZE_STRING);
+                // Validate it's alphanumeric or UUID format
+                if (!preg_match('/^[a-zA-Z0-9_-]+$/', $advertisementId)) {
+                    $advertisementId = null;
+                }
+            } elseif (isset($_COOKIE['ad_click'])) {
+                $cookieValue = filter_var($_COOKIE['ad_click'], FILTER_SANITIZE_STRING);
+                // Validate cookie value format (alphanumeric, UUID, or similar safe format)
+                if (preg_match('/^[a-zA-Z0-9_-]+$/', $cookieValue)) {
+                    $advertisementId = $cookieValue;
+                }
+            }
             
             $stmt = $pdo->prepare("
                 INSERT INTO orders (

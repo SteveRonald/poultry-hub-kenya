@@ -48,14 +48,52 @@ export const getApiUrl = (endpoint: string) => {
 export const getImageUrl = (imageUrl: string) => {
   if (!imageUrl) return '';
   
-  // If it's already a full URL (http/https), return as is (after localhost conversion if needed)
+  // If it's already a full URL (http/https), convert localhost to current host if needed
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    // Convert localhost to current host if needed
+    const currentHost = window.location.hostname;
+    const currentProtocol = window.location.protocol;
+    // For images, we typically don't need the port (they're served on port 80/443)
+    // But if the current location has a port, we might need it
+    const currentPort = window.location.port && window.location.port !== '80' && window.location.port !== '443' 
+      ? `:${window.location.port}` 
+      : '';
+    
+    // Convert localhost/127.0.0.1 to current host for mobile/network access
     if (imageUrl.includes('localhost') || imageUrl.includes('127.0.0.1')) {
-      const host = window.location.hostname;
-      const protocol = window.location.protocol;
-      if (host !== 'localhost' && host !== '127.0.0.1') {
-        return imageUrl.replace(/https?:\/\/[^\/]+/, `${protocol}//${host}`);
+      if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+        try {
+          // Extract the path from the original URL
+          const urlObj = new URL(imageUrl);
+          const path = urlObj.pathname;
+          
+          // Replace the host part, keeping the path
+          // Images are served on port 80 (XAMPP default), so don't include port
+          const newUrl = `${currentProtocol}//${currentHost}${path}`;
+          
+          if (import.meta.env.DEV) {
+            console.log('getImageUrl - Converting localhost URL:', {
+              original: imageUrl,
+              converted: newUrl,
+              currentHost,
+              path
+            });
+          }
+          
+          return newUrl;
+        } catch (e) {
+          // If URL parsing fails, try simple string replacement
+          const pathMatch = imageUrl.match(/\/poultry-hub-kenya\/.*$/);
+          if (pathMatch) {
+            const newUrl = `${currentProtocol}//${currentHost}${pathMatch[0]}`;
+            if (import.meta.env.DEV) {
+              console.log('getImageUrl - Fallback conversion:', {
+                original: imageUrl,
+                converted: newUrl
+              });
+            }
+            return newUrl;
+          }
+        }
       }
     }
     return imageUrl;
@@ -65,15 +103,33 @@ export const getImageUrl = (imageUrl: string) => {
   if (imageUrl.startsWith('/')) {
     const protocol = window.location.protocol;
     const host = window.location.hostname;
-    const port = window.location.port ? `:${window.location.port}` : '';
+    // For images, typically no port needed (port 80/443)
+    const port = '';
+    
+    // Ensure the path includes the project folder if needed
+    if (!imageUrl.startsWith('/poultry-hub-kenya/')) {
+      // Check if it's an uploads path
+      if (imageUrl.startsWith('/uploads/')) {
+        return `${protocol}//${host}${port}/poultry-hub-kenya${imageUrl}`;
+      }
+    }
+    
     return `${protocol}//${host}${port}${imageUrl}`;
   }
   
-  // If it's just a filename, prepend uploads path
+  // If it's just a filename (no path), prepend uploads path
   // This handles cases where just the filename is stored
   const protocol = window.location.protocol;
   const host = window.location.hostname;
-  const port = window.location.port ? `:${window.location.port}` : '';
+  const port = '';
+  
+  // Check if filename already looks like it might be in uploads/products
+  if (imageUrl.includes('/')) {
+    // It has a path, construct full URL
+    return `${protocol}//${host}${port}/poultry-hub-kenya/${imageUrl}`;
+  }
+  
+  // Just a filename, assume it's in uploads/products
   return `${protocol}//${host}${port}/poultry-hub-kenya/uploads/products/${imageUrl}`;
 };
 

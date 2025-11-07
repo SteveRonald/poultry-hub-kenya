@@ -270,21 +270,26 @@ const AdvertisementManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-primary">My Advertisements</h2>
-        <Button onClick={() => setShowCreateForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Advertisement
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <h2 className="text-xl sm:text-2xl font-bold text-primary">My Advertisements</h2>
+        <Button 
+          onClick={() => setShowCreateForm(true)}
+          className="w-full sm:w-auto whitespace-nowrap"
+          size="sm"
+        >
+          <Plus className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Create Advertisement</span>
+          <span className="sm:hidden">New Ad</span>
         </Button>
       </div>
 
       {/* Total Revenue Summary */}
       <Card className="mb-6">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <div className="text-center">
-            <DollarSign className="h-8 w-8 text-green-600 mx-auto mb-2" />
-            <p className="text-sm text-gray-600 mb-1">Total Revenue Generated from Ads</p>
-            <p className="text-3xl font-bold text-green-600">
+            <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-green-600 mx-auto mb-2" />
+            <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Revenue Generated from Ads</p>
+            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600">
               KSh {(() => {
                 const total = advertisements.reduce((sum, ad) => sum + (parseFloat(ad.revenue_generated) || 0), 0);
                 return total.toLocaleString('en-US', { 
@@ -299,59 +304,59 @@ const AdvertisementManager: React.FC = () => {
       </Card>
 
       {/* Analytics Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Spent</p>
-                <p className="text-2xl font-bold text-orange-600">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Spent</p>
+                <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-600 truncate">
                   KSh {advertisements.reduce((sum, ad) => sum + (parseFloat(ad.price) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
-              <DollarSign className="h-8 w-8 text-orange-600" />
+              <DollarSign className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-orange-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Views</p>
-                <p className="text-2xl font-bold">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Views</p>
+                <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">
                   {advertisements.reduce((sum, ad) => sum + (ad.views_count || 0), 0)}
                 </p>
               </div>
-              <Eye className="h-8 w-8 text-blue-500" />
+              <Eye className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-blue-500 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Clicks</p>
-                <p className="text-2xl font-bold">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Clicks</p>
+                <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">
                   {advertisements.reduce((sum, ad) => sum + (ad.clicks_count || 0), 0)}
                 </p>
               </div>
-              <MousePointerClick className="h-8 w-8 text-green-500" />
+              <MousePointerClick className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-green-500 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Active Ads</p>
-                <p className="text-2xl font-bold">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">Active Ads</p>
+                <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">
                   {advertisements.filter(ad => ad.status === 'active').length}
                 </p>
               </div>
-              <TrendingUp className="h-8 w-8 text-purple-500" />
+              <TrendingUp className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-purple-500 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>

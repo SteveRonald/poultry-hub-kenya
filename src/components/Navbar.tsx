@@ -78,12 +78,12 @@ const Navbar = () => {
   return (
     <>
     <nav className="bg-white shadow-lg sticky top-0 z-50">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-24">
+      <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 sm:h-20 md:h-24">
           {/* Logo - Left side */}
           <div className="flex items-center flex-shrink-0">
             <Link to="/" className="hover:opacity-80 transition-opacity">
-              <Logo size="lg" showText={true} />
+              <Logo size="md" showText={true} />
             </Link>
           </div>
 

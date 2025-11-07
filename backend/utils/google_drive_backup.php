@@ -183,7 +183,8 @@ class GoogleDriveBackup {
                 return false;
             }
             
-            error_log("Validating folder ID: {$folderId} with access token: " . substr($accessToken, 0, 20) . "...");
+            // SECURITY: Don't log access token even partially
+            error_log("Validating folder ID: {$folderId}");
             
             $url = "https://www.googleapis.com/drive/v3/files/{$folderId}?fields=id,name,mimeType";
             

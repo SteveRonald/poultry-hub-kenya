@@ -69,8 +69,9 @@ class SMSService {
             return ['success' => false, 'error' => 'SMS is disabled'];
         }
         
+        // SECURITY: Don't log credential status to prevent information disclosure
         if (empty(AFRICASTALKING_USERNAME) || empty(AFRICASTALKING_API_KEY)) {
-            error_log("SMS Service: Missing credentials - Username: " . (empty(AFRICASTALKING_USERNAME) ? 'EMPTY' : 'SET') . ", API Key: " . (empty(AFRICASTALKING_API_KEY) ? 'EMPTY' : 'SET'));
+            error_log("SMS Service: Missing credentials - Please check your .env file configuration");
             return ['success' => false, 'error' => 'SMS credentials not configured. Please check your .env file.'];
         }
         
@@ -92,9 +93,8 @@ class SMSService {
             'from' => AFRICASTALKING_SENDER_ID
         ];
         
-        // Log request details (without exposing credentials)
+        // SECURITY: Log request details without exposing credential status
         error_log("SMS Service: Sending SMS to {$normalizedPhone} via " . ($isSandbox ? 'SANDBOX' : 'PRODUCTION') . " endpoint");
-        error_log("SMS Service: Credentials configured - Username: " . (empty(AFRICASTALKING_USERNAME) ? 'NOT SET' : 'SET') . ", API Key: " . (empty(AFRICASTALKING_API_KEY) ? 'NOT SET' : 'SET'));
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);

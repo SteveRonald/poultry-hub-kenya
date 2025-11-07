@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3, DollarSign, Menu } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
@@ -77,6 +77,74 @@ const AdminDashboard = () => {
   
   // Account status toggle states
   const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
+  const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to section when tab changes
+  useEffect(() => {
+    if (!activeTab) return;
+    
+    const scrollToSection = () => {
+      const element = document.getElementById(`tab-section-${activeTab}`);
+      if (!element) {
+        if (import.meta.env.DEV) {
+          console.log(`Element not found: tab-section-${activeTab}`);
+        }
+        return;
+      }
+      
+      // Check if mobile (screen width < 1024px)
+      const isMobile = window.innerWidth < 1024;
+      
+      // On mobile, scroll window instead of container for better UX
+      if (isMobile) {
+        const headerOffset = 100; // Account for navbar/header height
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth'
+        });
+        return;
+      }
+      
+      // Use the main content ref for desktop
+      const scrollableContainer = mainContentRef.current;
+      if (!scrollableContainer) {
+        // Fallback: Scroll window
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - 120;
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth'
+        });
+        return;
+      }
+      
+      const headerOffset = 120; // Account for navbar/header height
+      
+      // Use getBoundingClientRect for accurate positioning
+      const containerRect = scrollableContainer.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      
+      // Calculate relative position
+      const relativeTop = elementRect.top - containerRect.top;
+      const currentScrollTop = scrollableContainer.scrollTop;
+      
+      // Calculate target scroll position
+      const targetScrollTop = currentScrollTop + relativeTop - headerOffset;
+      
+      // Always scroll to bring the element into view (even if it seems visible)
+      // This ensures consistent behavior
+      scrollableContainer.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth'
+      });
+    };
+    
+    // Delay to ensure DOM is updated and content is rendered
+    const timer = setTimeout(scrollToSection, 300);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
 
   useEffect(() => {
     const token = localStorage.getItem('admin_session_token');
@@ -1088,7 +1156,7 @@ const AdminDashboard = () => {
 
         {/* Main Content */}
         <div className="flex-1 w-full lg:ml-64">
-          <div className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div ref={mainContentRef} className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-4rem)] sm:min-h-[calc(100vh-5rem)] md:min-h-[calc(100vh-6rem)] pb-8 sm:pb-12 overflow-y-auto">
             {/* Mobile Header with Menu Button */}
             <div className="lg:hidden mb-6 flex items-center justify-between">
               <button
@@ -1121,68 +1189,68 @@ const AdminDashboard = () => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 sm:gap-4 mb-6 sm:mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2 sm:gap-3 md:gap-4 mb-6 sm:mb-8">
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Total Vendors</p>
-                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.totalVendors || '0'}</p>
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Vendors</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats?.totalVendors || '0'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <div className="h-5 w-5 sm:h-6 sm:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
-                    <span className="text-xs text-yellow-800 font-bold">{stats?.pendingVendors || '0'}</span>
+                  <div className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1">
+                    <span className="text-[10px] text-yellow-800 font-bold">{stats?.pendingVendors || '0'}</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-600">Pending Vendors</p>
-                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.pendingVendors || '0'}</p>
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Pending Vendors</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats?.pendingVendors || '0'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <Package className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Total Products</p>
-                  <p className="text-lg sm:text-xl font-bold text-primary">{stats ? (stats.totalProducts ?? 0) : 0}</p>
+                  <Package className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Products</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats ? (stats.totalProducts ?? 0) : 0}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <div className="h-5 w-5 sm:h-6 sm:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
-                    <span className="text-xs text-yellow-800 font-bold">{stats?.pendingProducts || '0'}</span>
+                  <div className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1">
+                    <span className="text-[10px] text-yellow-800 font-bold">{stats?.pendingProducts || '0'}</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-600">Pending Products</p>
-                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.pendingProducts || '0'}</p>
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Pending Products</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats?.pendingProducts || '0'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Total Orders</p>
-                  <p className="text-lg sm:text-xl font-bold text-primary">{stats ? (stats.totalOrders ?? 0) : 0}</p>
+                  <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Orders</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats ? (stats.totalOrders ?? 0) : 0}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Platform Revenue</p>
-                  <p className="text-sm sm:text-lg font-bold text-primary">KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
-                  <p className="text-xs text-gray-500 mt-1 hidden lg:block">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Platform Revenue</p>
+                  <p className="text-xs sm:text-sm md:text-base font-bold text-primary truncate" title={`KSH ${stats?.totalRevenue?.toFixed(2) || '0.00'}`}>KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
+                  <p className="text-[8px] min-[375px]:text-[10px] text-gray-500 mt-1 hidden lg:block">
                     {stats?.commissionRevenue || stats?.advertisementRevenue ? (
                       <>
                         Commission: KSH {stats?.commissionRevenue?.toFixed(2) || '0.00'} | 
@@ -1197,21 +1265,21 @@ const AdminDashboard = () => {
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Total Users</p>
-                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.totalUsers || 'Loading...'}</p>
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-600 mx-auto mb-1" />
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Users</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats?.totalUsers || 'Loading...'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="p-3 sm:p-4">
+              <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
-                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Total Admins</p>
-                  <p className="text-lg sm:text-xl font-bold text-primary">{stats?.totalAdmins || 'Loading...'}</p>
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-purple-600 mx-auto mb-1" />
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Admins</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats?.totalAdmins || 'Loading...'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1222,7 +1290,7 @@ const AdminDashboard = () => {
             <div className="p-4 sm:p-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
-                <div className="space-y-6">
+                <div id="tab-section-overview" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">Platform Overview</h2>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -1333,7 +1401,7 @@ const AdminDashboard = () => {
 
               {/* Vendor Approvals Tab */}
               {activeTab === 'vendors' && (
-                <div className="space-y-6">
+                <div id="tab-section-vendors" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">Vendor Approvals</h2>
 
                   <div className="space-y-4">
@@ -1405,7 +1473,7 @@ const AdminDashboard = () => {
 
               {/* Product Approvals Tab */}
               {activeTab === 'products' && (
-                <div className="space-y-6">
+                <div id="tab-section-products" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">Product Approvals</h2>
 
                   <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -1498,13 +1566,13 @@ const AdminDashboard = () => {
 
               {/* Orders Tab */}
               {activeTab === 'advertisements' && (
-                <div className="space-y-6">
+                <div id="tab-section-advertisements" className="space-y-6 scroll-mt-24">
                   <AdminAdvertisementManager />
                 </div>
               )}
 
               {activeTab === 'orders' && (
-                <div className="space-y-6">
+                <div id="tab-section-orders" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">All Orders</h2>
 
                   <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -1588,7 +1656,7 @@ const AdminDashboard = () => {
 
               {/* User Management Tab */}
               {activeTab === 'users' && (
-                <div className="space-y-6">
+                <div id="tab-section-users" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">User Management</h2>
 
                   <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -1775,7 +1843,7 @@ const AdminDashboard = () => {
 
               {/* Contact Messages Tab */}
               {activeTab === 'messages' && (
-                <div className="space-y-6">
+                <div id="tab-section-messages" className="space-y-6 scroll-mt-24">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xl font-semibold text-primary">Contact Messages</h2>
                     <div className="flex items-center space-x-2">
@@ -1889,7 +1957,7 @@ const AdminDashboard = () => {
 
               {/* Commission Tab */}
               {activeTab === 'commission' && (
-                <div className="space-y-6">
+                <div id="tab-section-commission" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">Commission Management</h2>
                   
                   {commissionData ? (
@@ -2060,17 +2128,21 @@ const AdminDashboard = () => {
 
               {/* Analytics Tab */}
               {activeTab === 'analytics' && (
-                <Analytics />
+                <div id="tab-section-analytics" className="scroll-mt-24">
+                  <Analytics />
+                </div>
               )}
 
               {/* Backup Tab */}
               {activeTab === 'backup' && (
-                <BackupManagement />
+                <div id="tab-section-backup" className="scroll-mt-24">
+                  <BackupManagement />
+                </div>
               )}
 
               {/* SMS Logs Tab */}
               {activeTab === 'sms' && (
-                <div className="space-y-6">
+                <div id="tab-section-sms" className="space-y-6 scroll-mt-24">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xl font-semibold text-primary">SMS Logs</h2>
                     <Button
@@ -2218,7 +2290,7 @@ const AdminDashboard = () => {
 
               {/* Profile Tab */}
               {activeTab === 'profile' && (
-                <div className="space-y-6">
+                <div id="tab-section-profile" className="space-y-6 scroll-mt-24">
                   <div className="flex justify-between items-center">
                     <h2 className="text-xl font-semibold text-primary">Admin Profile</h2>
                     <Button onClick={openEditProfileModal} className="btn-primary">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -28,6 +28,74 @@ const Dashboard = () => {
   const [newShippingAddress, setNewShippingAddress] = useState('');
   const [updatingShipping, setUpdatingShipping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to section when tab changes
+  useEffect(() => {
+    if (!activeTab) return;
+    
+    const scrollToSection = () => {
+      const element = document.getElementById(`tab-section-${activeTab}`);
+      if (!element) {
+        if (import.meta.env.DEV) {
+          console.log(`Element not found: tab-section-${activeTab}`);
+        }
+        return;
+      }
+      
+      // Check if mobile (screen width < 1024px)
+      const isMobile = window.innerWidth < 1024;
+      
+      // On mobile, scroll window instead of container for better UX
+      if (isMobile) {
+        const headerOffset = 100; // Account for navbar/header height
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth'
+        });
+        return;
+      }
+      
+      // Use the main content ref for desktop
+      const scrollableContainer = mainContentRef.current;
+      if (!scrollableContainer) {
+        // Fallback: Scroll window
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - 120;
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth'
+        });
+        return;
+      }
+      
+      const headerOffset = 120; // Account for navbar/header height
+      
+      // Use getBoundingClientRect for accurate positioning
+      const containerRect = scrollableContainer.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      
+      // Calculate relative position
+      const relativeTop = elementRect.top - containerRect.top;
+      const currentScrollTop = scrollableContainer.scrollTop;
+      
+      // Calculate target scroll position
+      const targetScrollTop = currentScrollTop + relativeTop - headerOffset;
+      
+      // Always scroll to bring the element into view (even if it seems visible)
+      // This ensures consistent behavior
+      scrollableContainer.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth'
+      });
+    };
+    
+    // Delay to ensure DOM is updated and content is rendered
+    const timer = setTimeout(scrollToSection, 300);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!user) return;
@@ -201,7 +269,7 @@ const Dashboard = () => {
 
         {/* Main Content */}
         <div className="flex-1 w-full lg:ml-64">
-          <div className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div ref={mainContentRef} className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-4rem)] sm:min-h-[calc(100vh-5rem)] md:min-h-[calc(100vh-6rem)] pb-8 sm:pb-12 overflow-y-auto">
             {/* Mobile Header with Menu Button */}
             <div className="lg:hidden mb-4">
               <button
@@ -270,7 +338,7 @@ const Dashboard = () => {
             <div className="p-4 sm:p-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
-                <div className="space-y-6">
+                <div id="tab-section-overview" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">Order Overview</h2>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -334,7 +402,7 @@ const Dashboard = () => {
 
               {/* Orders Tab */}
               {activeTab === 'orders' && (
-                <div className="space-y-6">
+                <div id="tab-section-orders" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">My Orders</h2>
 
                   {orders.length === 0 ? (
@@ -440,7 +508,7 @@ const Dashboard = () => {
 
               {/* Profile Tab */}
               {activeTab === 'profile' && (
-                <div className="space-y-6">
+                <div id="tab-section-profile" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">Account Details</h2>
                   
                   <Card>

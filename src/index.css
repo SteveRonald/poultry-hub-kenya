@@ -155,3 +155,37 @@
 .animate-blink-attention {
   animation: blink-attention 2s ease-in-out infinite !important;
 }
+
+@keyframes analyze-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+@keyframes analyze-zoom {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  50% {
+    transform: scale(1.15) rotate(0deg);
+  }
+  75% {
+    transform: scale(1.1) rotate(-5deg);
+  }
+}
+
+.animate-analyze-pulse {
+  animation: analyze-pulse 2s ease-in-out infinite !important;
+}
+
+.animate-analyze-zoom {
+  animation: analyze-zoom 3s ease-in-out infinite !important;
+}

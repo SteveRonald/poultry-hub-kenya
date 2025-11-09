@@ -200,10 +200,47 @@ function handleRegister() {
         if ($role === 'vendor') {
             $vendor_id = uniqid();
             $farm_description = $input['farm_description'] ?? '';
-            $location = $input['location'] ?? '';
+            $location = $input['location'] ?? ''; // Keep for backward compatibility
             
-            $stmt = $pdo->prepare("INSERT INTO vendors (id, user_id, farm_name, farm_description, location, id_number, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')");
-            $stmt->execute([$vendor_id, $id, $farm_name, $farm_description, $location, $id_number]);
+            // Get location IDs (vendor-only fields)
+            $county_id = isset($input['county_id']) && $input['county_id'] ? (int)$input['county_id'] : null;
+            $constituency_id = isset($input['constituency_id']) && $input['constituency_id'] ? (int)$input['constituency_id'] : null;
+            $ward_id = isset($input['ward_id']) && $input['ward_id'] ? (int)$input['ward_id'] : null;
+            
+            // Validate location IDs if provided
+            if ($county_id) {
+                $stmt = $pdo->prepare("SELECT county_id FROM counties WHERE county_id = ?");
+                $stmt->execute([$county_id]);
+                if (!$stmt->fetch()) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid county_id']);
+                    return;
+                }
+            }
+            
+            if ($constituency_id) {
+                $stmt = $pdo->prepare("SELECT constituency_id FROM constituencies WHERE constituency_id = ? AND county_id = ?");
+                $stmt->execute([$constituency_id, $county_id]);
+                if (!$stmt->fetch()) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid constituency_id or constituency does not belong to selected county']);
+                    return;
+                }
+            }
+            
+            if ($ward_id) {
+                $stmt = $pdo->prepare("SELECT ward_id FROM wards WHERE ward_id = ? AND constituency_id = ?");
+                $stmt->execute([$ward_id, $constituency_id]);
+                if (!$stmt->fetch()) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid ward_id or ward does not belong to selected constituency']);
+                    return;
+                }
+            }
+            
+            // Insert vendor with location IDs
+            $stmt = $pdo->prepare("INSERT INTO vendors (id, user_id, farm_name, farm_description, location, id_number, county_id, constituency_id, ward_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
+            $stmt->execute([$vendor_id, $id, $farm_name, $farm_description, $location, $id_number, $county_id, $constituency_id, $ward_id]);
             
             // Notify admins about new vendor registration
             notifyAllAdmins("New vendor registered: {$full_name} ({$farm_name})", 'info');
@@ -261,7 +298,16 @@ function handleGetUser() {
         $isApproved = true; // Default for non-vendors
         $vendorData = null;
         if ($user['role'] === 'vendor') {
-            $stmt = $pdo->prepare("SELECT status, farm_name, farm_description, location, id_number FROM vendors WHERE user_id = ?");
+            $stmt = $pdo->prepare("
+                SELECT v.status, v.farm_name, v.farm_description, v.location, v.id_number,
+                       v.county_id, v.constituency_id, v.ward_id,
+                       c.county_name, co.constituency_name, w.ward_name
+                FROM vendors v
+                LEFT JOIN counties c ON v.county_id = c.county_id
+                LEFT JOIN constituencies co ON v.constituency_id = co.constituency_id
+                LEFT JOIN wards w ON v.ward_id = w.ward_id
+                WHERE v.user_id = ?
+            ");
             $stmt->execute([$user['id']]);
             $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
             $isApproved = $vendor && $vendor['status'] === 'approved';

@@ -25,6 +25,8 @@ const Products = () => {
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [showQuickOrderModal, setShowQuickOrderModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
+  const [selectedDescription, setSelectedDescription] = useState<{ name: string; description: string } | null>(null);
   const [quickOrderData, setQuickOrderData] = useState({
     quantity: 1,
     shipping_address: '',
@@ -37,6 +39,43 @@ const Products = () => {
   const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
   const { addToCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
+  
+  // Function to check if description needs truncation (more than ~150 characters or 2 lines)
+  const needsTruncation = (description: string): boolean => {
+    if (!description) return false;
+    // Check if description is longer than approximately 2 lines (150 chars is roughly 2 lines at text-sm)
+    return description.length > 150 || description.split('\n').filter(line => line.trim().length > 0).length > 2;
+  };
+  
+  // Function to handle viewing full description
+  const handleViewDescription = (product: Product) => {
+    setSelectedDescription({
+      name: product.name,
+      description: product.description
+    });
+    setShowDescriptionModal(true);
+  };
+
+  // Handle ESC key to close description modal
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showDescriptionModal) {
+        setShowDescriptionModal(false);
+        setSelectedDescription(null);
+      }
+    };
+
+    if (showDescriptionModal) {
+      document.addEventListener('keydown', handleEscKey);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+      document.body.style.overflow = 'unset';
+    };
+  }, [showDescriptionModal]);
 
   useEffect(() => {
     fetchAdvertisements();
@@ -395,7 +434,22 @@ const Products = () => {
                   
                   <CardContent className="p-4">
                     <h3 className="font-semibold text-lg text-primary mb-2">{product.name}</h3>
-                    <p className="text-gray-600 text-sm mb-3">{product.description}</p>
+                    <div className="mb-3">
+                      <div className={`text-gray-600 text-sm ${needsTruncation(product.description) ? 'line-clamp-2' : ''}`}>
+                        {product.description}
+                      </div>
+                      {needsTruncation(product.description) && (
+                        <button
+                          onClick={() => handleViewDescription(product)}
+                          className="text-primary hover:text-primary/80 text-sm font-semibold mt-2 focus:outline-none focus:underline transition-colors inline-flex items-center"
+                        >
+                          View More
+                          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                     
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center text-sm text-gray-500">
@@ -453,6 +507,64 @@ const Products = () => {
       </div>
 
       <Footer />
+
+      {/* Description Modal */}
+      {showDescriptionModal && selectedDescription && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            // Close modal when clicking on backdrop
+            if (e.target === e.currentTarget) {
+              setShowDescriptionModal(false);
+              setSelectedDescription(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-semibold text-primary pr-4">{selectedDescription.name}</h2>
+                <button
+                  onClick={() => {
+                    setShowDescriptionModal(false);
+                    setSelectedDescription(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100 flex-shrink-0"
+                  title="Close modal"
+                  aria-label="Close modal"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Product Description</h3>
+                <div className="prose max-w-none">
+                  <p className="text-gray-700 whitespace-pre-line leading-relaxed text-base">
+                    {selectedDescription.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDescriptionModal(false);
+                    setSelectedDescription(null);
+                  }}
+                  className="min-w-[100px]"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Order Modal */}
       {showQuickOrderModal && selectedProduct && (

@@ -1,18 +1,17 @@
 <?php
 // AI Content Moderation Service
-// Uses Hugging Face Transformers (free) and basic PHP validation
+// Uses basic PHP validation (OpenAI moderation can be added if needed)
 
 class ContentModerator {
     private $config;
-    private $cache;
     
     public function __construct() {
         $this->config = require __DIR__ . '/../../config/ai_config.php';
-        $this->cache = [];
     }
     
     /**
      * Moderate product content (name, description, images)
+     * Uses basic validation - OpenAI moderation can be added if needed
      */
     public function moderateContent($productName, $description, $imageAnalysis = null) {
         $moderation = [
@@ -24,23 +23,15 @@ class ContentModerator {
         ];
         
         try {
-            // Basic validation first
+            // Basic validation
             $basicValidation = $this->basicContentValidation($productName, $description);
             $moderation = array_merge($moderation, $basicValidation);
-            
-            // AI-powered moderation if enabled
-            if ($this->config['services']['hugging_face']['enabled']) {
-                $aiModeration = $this->aiContentModeration($productName, $description);
-                if ($aiModeration) {
-                    $moderation = array_merge($moderation, $aiModeration);
-                    $moderation['moderation_method'] = 'ai_enhanced';
-                }
-            }
             
             // Image moderation
             if ($imageAnalysis) {
                 $imageModeration = $this->moderateImage($imageAnalysis);
-                $moderation = array_merge($moderation, $imageModeration);
+                $moderation['issues'] = array_merge($moderation['issues'], $imageModeration['issues']);
+                $moderation['suggestions'] = array_merge($moderation['suggestions'], $imageModeration['suggestions']);
             }
             
             // Final approval decision
@@ -114,80 +105,6 @@ class ContentModerator {
     }
     
     /**
-     * AI-powered content moderation
-     */
-    private function aiContentModeration($productName, $description) {
-        $text = $productName . ' ' . $description;
-        
-        // Use Hugging Face toxicity detection
-        $model = $this->config['services']['hugging_face']['models']['content_moderation'];
-        $url = "https://api-inference.huggingface.co/models/$model";
-        
-        $data = [
-            'inputs' => $text
-        ];
-        
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . ($this->config['services']['hugging_face']['api_key'] ?? '')
-        ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($httpCode !== 200) {
-            error_log("Hugging Face Moderation API Error: HTTP $httpCode - $response");
-            return null;
-        }
-        
-        $result = json_decode($response, true);
-        if (!$result || !is_array($result)) {
-            return null;
-        }
-        
-        $moderation = [
-            'issues' => [],
-            'suggestions' => [],
-            'confidence' => 0.8
-        ];
-        
-        // Process toxicity results
-        foreach ($result as $label) {
-            if (isset($label['label']) && isset($label['score'])) {
-                $labelName = $label['label'];
-                $score = $label['score'];
-                
-                if ($score > 0.7) { // High confidence threshold
-                    switch ($labelName) {
-                        case 'TOXIC':
-                        case 'SEVERE_TOXIC':
-                            $moderation['issues'][] = 'Content contains toxic language';
-                            break;
-                        case 'THREAT':
-                            $moderation['issues'][] = 'Content contains threatening language';
-                            break;
-                        case 'INSULT':
-                            $moderation['issues'][] = 'Content contains insulting language';
-                            break;
-                        case 'IDENTITY_HATE':
-                            $moderation['issues'][] = 'Content contains hate speech';
-                            break;
-                    }
-                }
-            }
-        }
-        
-        return $moderation;
-    }
-    
-    /**
      * Moderate image content
      */
     private function moderateImage($imageAnalysis) {
@@ -196,6 +113,12 @@ class ContentModerator {
         
         if (isset($imageAnalysis['inappropriate_content']) && $imageAnalysis['inappropriate_content']) {
             $issues[] = 'Image contains inappropriate content';
+        }
+        
+        if (isset($imageAnalysis['is_poultry_related']) && !$imageAnalysis['is_poultry_related']) {
+            $issues[] = 'Image does not contain poultry-related content';
+            $rejectionReason = $imageAnalysis['rejection_reason'] ?? 'Image must show poultry products';
+            $suggestions[] = $rejectionReason;
         }
         
         if (isset($imageAnalysis['quality_score']) && $imageAnalysis['quality_score'] < 3) {
@@ -220,11 +143,8 @@ class ContentModerator {
         // If there are critical issues, don't approve
         $criticalIssues = [
             'Content contains inappropriate language',
-            'Content contains toxic language',
-            'Content contains threatening language',
-            'Content contains insulting language',
-            'Content contains hate speech',
             'Image contains inappropriate content',
+            'Image does not contain poultry-related content',
             'Content appears to be spam'
         ];
         
@@ -331,8 +251,8 @@ class ContentModerator {
             $summary['critical_issues'] = array_filter($moderation['issues'], function($issue) {
                 return in_array($issue, [
                     'Content contains inappropriate language',
-                    'Content contains toxic language',
                     'Image contains inappropriate content',
+                    'Image does not contain poultry-related content',
                     'Content appears to be spam'
                 ]);
             });
@@ -342,4 +262,3 @@ class ContentModerator {
     }
 }
 ?>
-

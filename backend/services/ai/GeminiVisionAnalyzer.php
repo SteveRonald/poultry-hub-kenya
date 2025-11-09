@@ -1,23 +1,23 @@
 <?php
-// OpenAI Vision API Integration for Poultry Detection and Image Analysis
+// Google Gemini Vision API Integration for Poultry Detection and Image Analysis
 require_once __DIR__ . '/../../config/ai_config.php';
 
-class OpenAIVisionAnalyzer {
+class GeminiVisionAnalyzer {
     private $config;
     private $apiKey;
     
     public function __construct() {
         $this->config = require __DIR__ . '/../../config/ai_config.php';
-        $this->apiKey = $this->config['services']['openai']['api_key'] ?? '';
+        $this->apiKey = $this->config['services']['gemini']['api_key'] ?? '';
     }
     
     /**
-     * Analyze image using OpenAI Vision API
+     * Analyze image using Gemini Vision API
      * Returns analysis with strict poultry verification
      */
     public function analyzeImage($imagePath, $imageUrl = null) {
         if (empty($this->apiKey)) {
-            return $this->getErrorResponse('OpenAI API key is not configured. Please set OPENAI_API_KEY in your environment variables.');
+            return $this->getErrorResponse('Gemini API key is not configured. Please set GEMINI_API_KEY or GOOGLE_API_KEY in your environment variables.');
         }
         
         try {
@@ -39,24 +39,25 @@ class OpenAIVisionAnalyzer {
                     return $this->getErrorResponse('Unable to detect image type. Supported formats: JPEG, PNG, GIF, WebP');
                 }
                 
-                // Check file size (OpenAI has a limit)
+                // Check file size (Gemini has a limit of ~20MB)
                 $fileSize = strlen($imageData);
-                $maxSize = 20 * 1024 * 1024; // 20MB OpenAI limit
+                $maxSize = 20 * 1024 * 1024; // 20MB
                 if ($fileSize > $maxSize) {
                     return $this->getErrorResponse('Image file is too large. Maximum size is 20MB. Current size: ' . round($fileSize / 1024 / 1024, 2) . 'MB');
                 }
                 
                 $base64Image = base64_encode($imageData);
-                $result = $this->analyzeWithOpenAI($base64Image, true, $mimeType);
+                $result = $this->analyzeWithGemini($base64Image, $mimeType, true);
             } elseif ($imageUrl) {
-                $result = $this->analyzeWithOpenAI($imageUrl, false);
+                // Gemini can handle URLs directly, but we'll convert to base64 for consistency
+                $result = $this->analyzeWithGemini($imageUrl, 'image/jpeg', false);
             } else {
                 return $this->getErrorResponse('Image file not found or invalid image URL.');
             }
             
             // Check if API call returned a result
             if ($result === null) {
-                return $this->getErrorResponse('OpenAI API returned no response. Please check your API key, network connection, and try again.');
+                return $this->getErrorResponse('Gemini API returned no response. Please check your API key, network connection, and try again.');
             }
             
             // Check if result contains an error
@@ -65,27 +66,25 @@ class OpenAIVisionAnalyzer {
                 $errorType = $result['error_type'] ?? 'unknown';
                 
                 // Provide helpful messages for common error types
-                if ($errorType === 'insufficient_quota' || strpos($errorMsg, 'quota') !== false) {
-                    $helpfulMsg = "OpenAI API quota error: Your account has insufficient quota. ";
-                    $helpfulMsg .= "This can happen if: (1) Your free trial expired, (2) Your payment method is invalid, ";
-                    $helpfulMsg .= "(3) You've reached organization limits, or (4) Your account needs billing setup. ";
-                    $helpfulMsg .= "Please check your OpenAI account billing and plan at https://platform.openai.com/account/billing";
+                if ($errorType === 'quota_exceeded' || strpos($errorMsg, 'quota') !== false || strpos($errorMsg, '429') !== false) {
+                    $helpfulMsg = "Gemini API quota error: Your account has insufficient quota or rate limit exceeded. ";
+                    $helpfulMsg .= "Please check your Google Cloud billing and API quotas at https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas";
                     return $this->getErrorResponse($helpfulMsg);
                 }
                 
-                return $this->getErrorResponse("OpenAI API error ({$errorType}): {$errorMsg}");
+                return $this->getErrorResponse("Gemini API error ({$errorType}): {$errorMsg}");
             }
             
             // Process the result
             if (is_array($result) && !isset($result['error'])) {
-                return $this->processOpenAIResult($result, $imagePath);
+                return $this->processGeminiResult($result, $imagePath);
             }
             
             // If result is not an array, it's an error
-            return $this->getErrorResponse('Invalid response from OpenAI API. Please try again.');
+            return $this->getErrorResponse('Invalid response from Gemini API. Please try again.');
             
         } catch (Exception $e) {
-            error_log("OpenAI Vision API Error: " . $e->getMessage());
+            error_log("Gemini Vision API Error: " . $e->getMessage());
             error_log("Stack trace: " . $e->getTraceAsString());
             return $this->getErrorResponse('Failed to analyze image: ' . $e->getMessage());
         }
@@ -122,30 +121,15 @@ class OpenAIVisionAnalyzer {
     }
     
     /**
-     * Analyze with OpenAI Vision API
+     * Analyze with Gemini Vision API
      */
-    private function analyzeWithOpenAI($imageSource, $isBase64 = false, $mimeType = 'image/jpeg') {
-        $url = "https://api.openai.com/v1/chat/completions";
-        $model = $this->config['services']['openai']['vision_model'] ?? 'gpt-4o-mini';
-        $temperature = $this->config['services']['openai']['vision_temperature'] ?? 0.1;
+    private function analyzeWithGemini($imageSource, $mimeType = 'image/jpeg', $isBase64 = true) {
+        $model = $this->config['services']['gemini']['vision_model'] ?? 'gemini-2.5-flash';
+        $temperature = $this->config['services']['gemini']['vision_temperature'] ?? 0.1;
+        $apiKey = $this->apiKey;
         
-        // Prepare the image
-        if ($isBase64) {
-            // Use the detected MIME type
-            $imageContent = [
-                "type" => "image_url",
-                "image_url" => [
-                    "url" => "data:" . $mimeType . ";base64," . $imageSource
-                ]
-            ];
-        } else {
-            $imageContent = [
-                "type" => "image_url",
-                "image_url" => [
-                    "url" => $imageSource
-                ]
-            ];
-        }
+        // Gemini API endpoint
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
         
         // Enhanced prompt for strict poultry verification and detailed analysis
         $prompt = "You are an expert poultry marketplace image analyzer. Analyze this image and determine if it contains poultry-related content.
@@ -179,23 +163,44 @@ Note: The database_category field should match one of these exact values: chicke
 
 CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry_related to false and provide a rejection_reason.";
         
+        // Build the request payload
+        $parts = [];
+        
+        // Add image part
+        if ($isBase64) {
+            $parts[] = [
+                "inline_data" => [
+                    "mime_type" => $mimeType,
+                    "data" => $imageSource
+                ]
+            ];
+        } else {
+            // For URLs, Gemini can handle them, but we'll need to fetch and convert
+            // For now, we'll assume base64 is provided
+            $parts[] = [
+                "inline_data" => [
+                    "mime_type" => $mimeType,
+                    "data" => $imageSource
+                ]
+            ];
+        }
+        
+        // Add text part
+        $parts[] = [
+            "text" => $prompt
+        ];
+        
         $data = [
-            "model" => $model,
-            "messages" => [
+            "contents" => [
                 [
-                    "role" => "user",
-                    "content" => [
-                        [
-                            "type" => "text",
-                            "text" => $prompt
-                        ],
-                        $imageContent
-                    ]
+                    "parts" => $parts
                 ]
             ],
-            "max_tokens" => 1000,
-            "temperature" => $temperature,
-            "response_format" => ["type" => "json_object"] // Request structured JSON response
+            "generationConfig" => [
+                "temperature" => $temperature,
+                "maxOutputTokens" => 1000,
+                "responseMimeType" => "application/json" // Request JSON response
+            ]
         ];
         
         $ch = curl_init();
@@ -203,8 +208,7 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $this->apiKey
+            'Content-Type: application/json'
         ]);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 60); // Increased timeout for image analysis
@@ -217,7 +221,7 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
         curl_close($ch);
         
         if ($curlError) {
-            error_log("OpenAI Vision API cURL Error: " . $curlError);
+            error_log("Gemini Vision API cURL Error: " . $curlError);
             error_log("cURL Info: " . json_encode([
                 'url' => $curlInfo['url'] ?? 'unknown',
                 'total_time' => $curlInfo['total_time'] ?? 0,
@@ -228,22 +232,37 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
         
         // Log request details for debugging
         if ($httpCode !== 200) {
-            error_log("OpenAI Vision API Request failed - HTTP $httpCode");
+            error_log("Gemini Vision API Request failed - HTTP $httpCode");
             error_log("Model: $model");
             error_log("MIME Type: " . ($mimeType ?? 'unknown'));
             error_log("Response (first 500 chars): " . substr($response, 0, 500));
         }
         
         if ($httpCode === 200) {
-            $data = json_decode($response, true);
-            if (!$data) {
-                error_log("OpenAI Vision API Error: Invalid JSON response");
+            $responseData = json_decode($response, true);
+            if (!$responseData) {
+                error_log("Gemini Vision API Error: Invalid JSON response");
                 error_log("Response (first 500 chars): " . substr($response, 0, 500));
                 return null;
             }
             
-            if (isset($data['choices'][0]['message']['content'])) {
-                $content = $data['choices'][0]['message']['content'];
+            // Check for errors in response
+            if (isset($responseData['error'])) {
+                $errorMessage = $responseData['error']['message'] ?? 'Unknown error';
+                $errorCode = $responseData['error']['code'] ?? 'unknown';
+                error_log("Gemini API Error Code: $errorCode");
+                error_log("Gemini API Error Message: $errorMessage");
+                
+                return [
+                    'error' => $errorMessage,
+                    'error_type' => $errorCode,
+                    'http_code' => $httpCode
+                ];
+            }
+            
+            // Extract content from response
+            if (isset($responseData['candidates'][0]['content']['parts'][0]['text'])) {
+                $content = $responseData['candidates'][0]['content']['parts'][0]['text'];
                 
                 // Parse JSON response
                 $jsonResult = json_decode($content, true);
@@ -267,29 +286,28 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
                     }
                 }
                 
-                error_log("OpenAI Vision API Error: Could not parse JSON from response");
+                error_log("Gemini Vision API Error: Could not parse JSON from response");
                 error_log("Content (first 500 chars): " . substr($content, 0, 500));
             } else {
-                error_log("OpenAI Vision API Error: No content in response");
-                error_log("Response data: " . json_encode($data));
+                error_log("Gemini Vision API Error: No content in response");
+                error_log("Response data: " . json_encode($responseData));
             }
         } else {
-            error_log("OpenAI Vision API Error: HTTP $httpCode");
+            error_log("Gemini Vision API Error: HTTP $httpCode");
             $errorData = json_decode($response, true);
             if ($errorData && isset($errorData['error'])) {
                 $errorMessage = $errorData['error']['message'] ?? 'Unknown error';
-                $errorType = $errorData['error']['type'] ?? 'unknown';
-                error_log("OpenAI API Error Type: $errorType");
-                error_log("OpenAI API Error Message: $errorMessage");
+                $errorCode = $errorData['error']['code'] ?? 'unknown';
+                error_log("Gemini API Error Code: $errorCode");
+                error_log("Gemini API Error Message: $errorMessage");
                 
-                // Return error details in a structured way
                 return [
                     'error' => $errorMessage,
-                    'error_type' => $errorType,
+                    'error_type' => $errorCode,
                     'http_code' => $httpCode
                 ];
             } else {
-                error_log("OpenAI Vision API Error: Unexpected response format");
+                error_log("Gemini Vision API Error: Unexpected response format");
                 error_log("Response (first 500 chars): " . substr($response, 0, 500));
             }
             return null;
@@ -299,9 +317,9 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
     }
     
     /**
-     * Process OpenAI result into standardized format
+     * Process Gemini result into standardized format
      */
-    private function processOpenAIResult($result, $imagePath) {
+    private function processGeminiResult($result, $imagePath) {
         // Map AI category to database category
         require_once __DIR__ . '/../../utils/category_mapper.php';
         $aiCategory = $result['category'] ?? 'Other';
@@ -318,12 +336,12 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
             'suggestions' => isset($result['suggestions']) && is_array($result['suggestions'])
                 ? $result['suggestions']
                 : ['Image analyzed successfully'],
-            'inappropriate_content' => false, // OpenAI handles this in their moderation
+            'inappropriate_content' => false,
             'category_suggestion' => $aiCategory, // Human-readable category
             'database_category' => $databaseCategory, // Database-compatible category
             'confidence' => isset($result['confidence']) ? (float)$result['confidence'] : 0.5,
             'is_poultry_related' => isset($result['is_poultry_related']) ? (bool)$result['is_poultry_related'] : false,
-            'analysis_method' => 'openai_vision',
+            'analysis_method' => 'gemini_vision',
             'image_description' => $result['image_description'] ?? '',
             'rejection_reason' => $result['rejection_reason'] ?? null
         ];
@@ -348,7 +366,7 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
             'suggestions' => [
                 '⚠️ ' . $message,
                 '❌ Cannot verify if image contains poultry products',
-                'Please configure OpenAI API key to enable image verification'
+                'Please configure Gemini API key to enable image verification'
             ],
             'inappropriate_content' => false,
             'category_suggestion' => 'Unknown - Requires AI Verification',
@@ -362,3 +380,4 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
     }
 }
 ?>
+

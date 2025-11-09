@@ -1,99 +1,54 @@
 <?php
 // AI Configuration for Poultry Hub Kenya
-// Free tier services only
+// Gemini (Google) - for image verification and description generation
 
 return [
     'enabled' => true,
     'services' => [
-        'google_vision' => [
+        'gemini' => [
             'enabled' => true,
-            'api_key' => getenv('GOOGLE_VISION_API_KEY') ?: '', // Use environment variable
-            'free_tier_limit' => 1000, // requests per month
-            'features' => [
-                'image_quality' => true,
-                'object_detection' => true,
-                'content_moderation' => true,
-                'text_detection' => true
-            ]
-        ],
-        'hugging_face' => [
-            'enabled' => true,
-            'api_key' => getenv('hugging_face_vision') ?: '', // Optional - works without API key for basic models
-            'models' => [
-                'description_generation' => 'microsoft/DialoGPT-medium',
-                'text_classification' => 'distilbert-base-uncased-finetuned-sst-2-english',
-                'content_moderation' => 'unitary/toxic-bert'
-            ]
-        ],
-    
-    
-        'roboflow' => [
-            'enabled' => false, // Disabled - using OpenAI instead
-            'api_key' => getenv('ROBOFLOW_API_KEY') ?: '', // Use environment variable
-            'project_id' => 'svb73', // Your custom poultry model project ID
-            'model_version' => '1', // Model version number
-            'free_tier_limit' => 1000, // predictions per month
-            'features' => [
-                'custom_poultry_detection' => true,
-                'object_detection' => true,
-                'confidence_scoring' => true,
-                'real_time_inference' => true
-            ]
-        ],
-        'openai_vision' => [
-            'enabled' => false, // Disabled - not free
-            'api_key' => getenv('OPENAI_API_KEY') ?: '', // Use environment variable
-            'model' => 'gpt-4o', // GPT-4 Vision model
-            'max_tokens' => 500,
-            'temperature' => 0.1,
+            'api_key' => getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '', // Use environment variable
+            'model' => 'gemini-2.5-flash', // Fast and efficient, or 'gemini-2.5-pro' for better quality
+            'vision_model' => 'gemini-2.5-flash', // For image analysis (supports vision)
+            'text_model' => 'gemini-2.5-flash', // For description generation
+            'max_tokens' => 2000, // Gemini uses maxOutputTokens (increased for longer descriptions)
+            'temperature' => 0.7, // Higher temperature for more creative descriptions
+            'vision_temperature' => 0.1, // Lower temperature for strict image verification
             'features' => [
                 'image_analysis' => true,
                 'object_detection' => true,
-                'content_moderation' => true,
+                'poultry_verification' => true,
                 'quality_assessment' => true,
-                'poultry_detection' => true
-            ]
-        ],
-        'hugging_face_vision' => [
-            'enabled' => true, // FREE - no API key needed
-            'api_key' => getenv('hugging_face_vision'), // Optional - works without API key
-            'models' => [
-                'image_classification' => 'microsoft/resnet-50',
-                'object_detection' => 'facebook/detr-resnet-50',
-                'poultry_detection' => 'google/vit-base-patch16-224',
-            ],
-            'features' => [
-                'image_analysis' => true,
-                'object_detection' => true,
-                'content_moderation' => true,
-                'quality_assessment' => true,
-                'poultry_detection' => true,
-            ]
-        ],
-        'ultralytics_hub' => [
-            'enabled' => true, // Your custom trained model
-            'api_key' => getenv('ULTRALYTICS_HUB_API_KEY') ?: '', // Use environment variable
-            'model_id' => getenv('ULTRALYTICS_HUB_MODEL_ID') ?: '', // Use environment variable
-            'features' => [
-                'custom_poultry_detection' => true,
-                'breed_identification' => true,
-                'health_assessment' => true,
-                'quality_scoring' => true,
-                'real_time_inference' => true
+                'description_generation' => true
             ]
         ]
-    ],
-    'fallback' => [
-        'enabled' => true,
-        'use_basic_analysis' => true, // Fallback to basic PHP analysis if AI fails
-        'cache_results' => true // Cache AI results to reduce API calls
     ],
     'limits' => [
         'max_image_size' => 5242880, // 5MB
         'supported_formats' => ['jpg', 'jpeg', 'png', 'webp'],
-        'max_description_length' => 500,
-        'cache_duration' => 86400 // 24 hours
+        'description_length' => [
+            'min_words' => 100, // Minimum words for SEO and comprehensiveness
+            'max_words' => 400, // Maximum words to prevent overly long descriptions
+            'optimal_min' => 150, // Optimal minimum for best SEO
+            'optimal_max' => 300, // Optimal maximum for user engagement
+            'max_characters' => 2500 // Maximum characters (approximately 400 words)
+        ],
+        'cache_duration' => 86400 // 24 hours (caching handled by OpenAI if needed)
+    ],
+    'image_verification' => [
+        'required' => true, // Images must be verified before product creation
+        'auto_verify_on_upload' => true, // Automatically verify images when uploaded
+        'min_confidence' => 0.6, // Minimum confidence score (60%) for acceptance
+        'reject_non_poultry' => true, // Reject images that are not poultry-related
+        'allow_manual_override' => false, // Allow manual override when AI verification fails (for quota issues)
+        'quota_error_mode' => 'reject' // 'reject' = reject upload, 'warn' = warn but allow, 'bypass' = skip verification
+    ],
+    'poultry_keywords' => [
+        'chicken', 'poultry', 'bird', 'hen', 'rooster', 'chick', 'duck', 'goose', 'turkey',
+        'egg', 'eggs', 'feed', 'grain', 'seed', 'corn', 'wheat', 'farm', 'farming',
+        'livestock', 'animal', 'cage', 'coop', 'nest', 'feather', 'beak', 'wing',
+        'meat', 'chicken meat', 'poultry meat', 'cooked chicken', 'broiler', 'layer',
+        'kienyeji', 'indigenous', 'feeder', 'waterer', 'incubator', 'hatchery'
     ]
 ];
 ?>
-

@@ -1,6 +1,6 @@
 <?php
 // AI Services API endpoints
-// Non-intrusive AI features for product enhancement
+// Google Gemini - for image verification and description generation
 
 // Suppress warnings to prevent JSON corruption
 error_reporting(E_ERROR | E_PARSE);
@@ -11,7 +11,7 @@ require_once __DIR__ . '/../services/ai/DescriptionGenerator.php';
 require_once __DIR__ . '/../services/ai/ContentModerator.php';
 
 /**
- * Analyze uploaded image
+ * Analyze uploaded image using Gemini Vision
  */
 function handleImageAnalysis() {
     try {
@@ -51,6 +51,17 @@ function handleImageAnalysis() {
             $analysis = $analyzer->analyzeImage($uploadedFile['tmp_name']);
         }
         
+        // Check if analysis failed
+        if (isset($analysis['error'])) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $analysis['error'],
+                'analysis' => $analysis
+            ]);
+            return;
+        }
+        
         echo json_encode([
             'success' => true,
             'analysis' => $analysis
@@ -59,19 +70,25 @@ function handleImageAnalysis() {
     } catch (Exception $e) {
         http_response_code(500);
         error_log("Image Analysis Error: " . $e->getMessage());
-        echo json_encode(['error' => 'Image analysis failed: ' . $e->getMessage()]);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Image analysis failed: ' . $e->getMessage()
+        ]);
     }
 }
 
 /**
- * Generate product description
+ * Generate product description using Gemini
  */
 function handleDescriptionGeneration() {
     $input = json_decode(file_get_contents('php://input'), true);
     
     if (!isset($input['product_name']) || !isset($input['category'])) {
         http_response_code(400);
-        echo json_encode(['error' => 'Product name and category are required']);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Product name and category are required'
+        ]);
         return;
     }
     
@@ -85,11 +102,36 @@ function handleDescriptionGeneration() {
             $input['additional_info'] ?? []
         );
         
-        $nameSuggestions = $generator->suggestProductName(
-            $input['product_name'],
-            $input['category'],
-            $input['image_analysis'] ?? null
-        );
+        // Check if description generation failed
+        if (isset($description['error']) || (is_string($description) && strpos($description, '⚠️') === 0)) {
+            $errorMessage = 'Description generation failed';
+            if (is_string($description)) {
+                // Extract error message from warning emoji prefix
+                $errorMessage = trim(str_replace('⚠️', '', $description));
+                // Remove redundant text
+                $errorMessage = preg_replace('/\n\nPlease write a description manually.*/s', '', $errorMessage);
+            } elseif (isset($description['error'])) {
+                $errorMessage = $description['error'];
+            }
+            
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'error' => $errorMessage,
+                'description' => null
+            ]);
+            return;
+        }
+        
+        // Generate name suggestions if image analysis is provided
+        $nameSuggestions = null;
+        if (isset($input['image_analysis']) && $input['image_analysis']) {
+            $nameSuggestions = $generator->suggestProductName(
+                $input['product_name'],
+                $input['category'],
+                $input['image_analysis']
+            );
+        }
         
         echo json_encode([
             'success' => true,
@@ -100,19 +142,26 @@ function handleDescriptionGeneration() {
     } catch (Exception $e) {
         http_response_code(500);
         error_log("Description Generation Error: " . $e->getMessage());
-        echo json_encode(['error' => 'Description generation failed: ' . $e->getMessage()]);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Description generation failed: ' . $e->getMessage()
+        ]);
     }
 }
 
 /**
  * Moderate product content
+ * Uses basic validation and Gemini if available
  */
 function handleContentModeration() {
     $input = json_decode(file_get_contents('php://input'), true);
     
     if (!isset($input['product_name']) || !isset($input['description'])) {
         http_response_code(400);
-        echo json_encode(['error' => 'Product name and description are required']);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Product name and description are required'
+        ]);
         return;
     }
     
@@ -136,7 +185,10 @@ function handleContentModeration() {
     } catch (Exception $e) {
         http_response_code(500);
         error_log("Content Moderation Error: " . $e->getMessage());
-        echo json_encode(['error' => 'Content moderation failed: ' . $e->getMessage()]);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Content moderation failed: ' . $e->getMessage()
+        ]);
     }
 }
 
@@ -148,7 +200,10 @@ function handleProductSuggestions() {
     
     if (!isset($input['product_name']) || !isset($input['category'])) {
         http_response_code(400);
-        echo json_encode(['error' => 'Product name and category are required']);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Product name and category are required'
+        ]);
         return;
     }
     
@@ -240,7 +295,10 @@ function handleProductSuggestions() {
     } catch (Exception $e) {
         http_response_code(500);
         error_log("Product Suggestions Error: " . $e->getMessage());
-        echo json_encode(['error' => 'Product suggestions failed: ' . $e->getMessage()]);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Product suggestions failed: ' . $e->getMessage()
+        ]);
     }
 }
 
@@ -254,23 +312,13 @@ function handleAIConfig() {
     $publicConfig = [
         'enabled' => $config['enabled'],
         'services' => [
-            'google_vision' => [
-                'enabled' => $config['services']['google_vision']['enabled'],
-                'has_api_key' => !empty($config['services']['google_vision']['api_key']),
-                'free_tier_limit' => $config['services']['google_vision']['free_tier_limit']
-            ],
-            'hugging_face' => [
-                'enabled' => $config['services']['hugging_face']['enabled'],
-                'has_api_key' => !empty($config['services']['hugging_face']['api_key'])
-            ],
-            'ultralytics_hub' => [
-                'enabled' => $config['services']['ultralytics_hub']['enabled'],
-                'has_api_key' => !empty($config['services']['ultralytics_hub']['api_key']),
-                'has_model_id' => !empty($config['services']['ultralytics_hub']['model_id']),
-                'features' => $config['services']['ultralytics_hub']['features']
+            'gemini' => [
+                'enabled' => $config['services']['gemini']['enabled'] ?? false,
+                'has_api_key' => !empty($config['services']['gemini']['api_key'] ?? ''),
+                'model' => $config['services']['gemini']['model'] ?? 'gemini-2.5-flash',
+                'features' => $config['services']['gemini']['features'] ?? []
             ]
         ],
-        'fallback' => $config['fallback'],
         'limits' => $config['limits']
     ];
     
@@ -280,4 +328,3 @@ function handleAIConfig() {
     ]);
 }
 ?>
-

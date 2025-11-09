@@ -149,26 +149,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       // Map name to full_name for backend compatibility
-      const payload = {
+      const payload: any = {
         ...userData,
         full_name: userData.name,
         phone: userData.phone,
-        // Always send vendor fields for backend compatibility
-        farm_name: userData.farmName || '',
-        farm_description: userData.farmDescription || '',
-        location: userData.location || '',
-        id_number: userData.idNumber || '',
       };
+      
+      // Remove frontend field names
       delete payload.name;
+      delete payload.confirmPassword;
+      
+      // Handle vendor fields
+      if (userData.role === 'vendor') {
+        payload.farm_name = userData.farmName || '';
+        payload.farm_description = userData.farmDescription || '';
+        payload.id_number = userData.idNumber || '';
+        // Location fields (vendor-only)
+        payload.county_id = userData.countyId || userData.county_id || null;
+        payload.constituency_id = userData.constituencyId || userData.constituency_id || null;
+        payload.ward_id = userData.wardId || userData.ward_id || null;
+        // Keep location for backward compatibility (can be removed later)
+        payload.location = userData.location || '';
+      }
+      
+      // Remove frontend-specific field names
       delete payload.farmName;
       delete payload.farmDescription;
       delete payload.idNumber;
+      delete payload.countyId;
+      delete payload.constituencyId;
+      delete payload.wardId;
+      
       const res = await fetch(getApiUrl('/api/users/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Registration failed');
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Registration failed');
+      }
+      
       // Optionally auto-login after registration
       await login(userData.email, userData.password);
     } finally {

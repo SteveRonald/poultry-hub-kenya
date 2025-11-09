@@ -15,8 +15,8 @@ $allowedOrigins = [
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173', // Vite default port
-    'http://192.168.194.24:8080',
-    'http://192.168.194.24:8081',
+    'http://192.168.10.24:8080',
+    'http://192.168.10.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.14.176:3000'
 ];
@@ -91,6 +91,34 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/users.php';
             handleGetUser();
+        }
+        break;
+        
+    case 'api/location/counties':
+        if ($method === 'GET') {
+            include 'routes/location.php';
+            handleGetCounties();
+        }
+        break;
+        
+    case 'api/location/constituencies':
+        if ($method === 'GET') {
+            include 'routes/location.php';
+            handleGetConstituencies();
+        }
+        break;
+        
+    case 'api/location/wards':
+        if ($method === 'GET') {
+            include 'routes/location.php';
+            handleGetWards();
+        }
+        break;
+        
+    case 'api/location/all':
+        if ($method === 'GET') {
+            include 'routes/location.php';
+            handleGetAllLocations();
         }
         break;
         

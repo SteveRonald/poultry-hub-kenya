@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import NotificationsMenu from '../components/NotificationsMenu';
 import DashboardSidebar from '../components/DashboardSidebar';
+import { LocationSelect } from '../components/LocationSelect';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -135,17 +136,27 @@ const VendorDashboard = () => {
     farm_name: '',
     farm_description: '',
     location: '',
-    id_number: ''
+    id_number: '',
+    county_id: null as number | null,
+    constituency_id: null as number | null,
+    ward_id: null as number | null
   });
   const [profileSubmitting, setProfileSubmitting] = useState(false);
   
   // AI Assistant states
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [nameSuggestions, setNameSuggestions] = useState<any>(null);
+  const [isImageVerified, setIsImageVerified] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+  const analysisSectionRef = useRef<HTMLDivElement>(null);
+  const errorSectionRef = useRef<HTMLDivElement>(null);
+  const modalScrollContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Always wait for auth to finish loading first
@@ -725,10 +736,45 @@ const VendorDashboard = () => {
     }
   };
 
+  // Map database category to frontend dropdown value
+  const mapDatabaseCategoryToDropdown = (dbCategory: string): string => {
+    if (!dbCategory) return '';
+    
+    const categoryMap: { [key: string]: string } = {
+      'chickens': 'chickens',
+      'chicks': 'chickens', // Map chicks to chickens since dropdown doesn't have chicks
+      'eggs': 'eggs',
+      'feed': 'feed',
+      'equipment': 'equipment',
+      'medicine': 'medication', // Map medicine to medication (dropdown uses medication)
+      'medication': 'medication',
+      'other': 'other'
+    };
+    
+    const normalized = dbCategory.toLowerCase().trim();
+    return categoryMap[normalized] || 'other';
+  };
+
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Reset file input to allow re-uploading the same file
+    const input = e.target;
+    const files = input.files;
+    
     setUploadError(null);
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    // Clear previous analysis and suggestions when starting a new upload
+    setAiAnalysis(null);
+    setNameSuggestions(null);
+    setIsImageVerified(false);
+    setIsAnalyzing(true); // Start analyzing indicator
+    
+    if (!files || files.length === 0) {
+      setIsAnalyzing(false);
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
     
     setUploading(true);
     const token = localStorage.getItem('token');
@@ -748,14 +794,17 @@ const VendorDashboard = () => {
 
     if (validFiles.length === 0) {
       setUploading(false);
+      setIsAnalyzing(false);
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
     
-    // Upload all files at once
+    // Upload only the first file (single image per product)
     const formData = new FormData();
-    validFiles.forEach(file => {
-      formData.append('images[]', file);
-    });
+    formData.append('images[]', validFiles[0]); // Only upload first image
     
     try {
       const res = await fetch(getApiUrl('/api/upload/multiple'), {
@@ -764,33 +813,289 @@ const VendorDashboard = () => {
         body: formData,
       });
       
-      if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       
-      if (data.success && data.uploaded) {
-        const newUrls = data.uploaded.map((upload: any) => upload.url);
-        setProductForm((prev: any) => ({ 
-          ...prev, 
-          image_urls: [...(prev.image_urls || []), ...newUrls] 
-        }));
+      // Handle verification errors and successful uploads
+      if (!res.ok || !data.success) {
+        // Show verification errors
+        const errorMessages = data.errors || [];
+        if (data.error) {
+          if (!errorMessages.includes(data.error)) {
+            errorMessages.push(data.error);
+          }
+        }
         
-        // Auto-analyze the first uploaded image with AI
-        if (newUrls.length > 0 && !aiAnalysis) {
-          await analyzeImageWithAI(newUrls[0]);
+        let rejectionReason = data.rejection_reason || '';
+        if (rejectionReason && !errorMessages.includes(rejectionReason)) {
+          errorMessages.push(rejectionReason);
+        }
+        
+        if (errorMessages.length > 0) {
+          const errorMessage = errorMessages.join('. ');
+          setUploadError(errorMessage);
+          setIsImageVerified(false);
+          setIsAnalyzing(false);
+          
+          // Scroll to error section after a brief delay
+          setTimeout(() => {
+            if (errorSectionRef.current && modalScrollContainerRef.current) {
+              const container = modalScrollContainerRef.current;
+              const element = errorSectionRef.current;
+              // Calculate scroll position: element position relative to container
+              const elementTop = element.offsetTop;
+              // Scroll to center the error section in view
+              const containerHeight = container.clientHeight;
+              const elementHeight = element.clientHeight;
+              container.scrollTo({
+                top: elementTop - (containerHeight / 2) + (elementHeight / 2),
+                behavior: 'smooth'
+              });
+            }
+          }, 100);
+          
+          toast({
+            title: "Image Verification Failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        } else {
+          setUploadError('Upload failed. Please try again.');
+          setIsImageVerified(false);
+          setIsAnalyzing(false);
+          
+          setTimeout(() => {
+            if (errorSectionRef.current && modalScrollContainerRef.current) {
+              const container = modalScrollContainerRef.current;
+              const element = errorSectionRef.current;
+              const elementTop = element.offsetTop;
+              const containerHeight = container.clientHeight;
+              const elementHeight = element.clientHeight;
+              container.scrollTo({
+                top: elementTop - (containerHeight / 2) + (elementHeight / 2),
+                behavior: 'smooth'
+              });
+            }
+          }, 100);
+          
+          toast({
+            title: "Upload Failed",
+            description: 'Upload failed. Please try again.',
+            variant: "destructive",
+          });
+        }
+        setUploading(false);
+        // Reset input after error
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+      
+      // Only add verified images to the form (replace existing images - single image per product)
+      if (data.uploaded && data.uploaded.length > 0) {
+        const verifiedUploads = data.uploaded.filter((upload: any) => upload.verification?.verified === true);
+        
+        if (verifiedUploads.length > 0) {
+          // Replace existing images with the new verified image (single image only)
+          const verifiedUrl = verifiedUploads[0].url;
+          setProductForm((prev: any) => ({ 
+            ...prev, 
+            image_urls: [verifiedUrl] // Replace, don't append
+          }));
+          
+          // Set AI analysis from the first verified image's verification data
+          const firstVerified = verifiedUploads[0];
+          if (firstVerified.verification?.analysis) {
+            const analysis = firstVerified.verification.analysis;
+            
+            // Only use analysis if it doesn't contain errors
+            if (!analysis.error && analysis.analysis_method !== 'error') {
+              // Always update analysis state with the latest results
+              setAiAnalysis(analysis);
+              setIsImageVerified(true); // Mark image as verified
+              setIsAnalyzing(false); // Stop analyzing indicator
+              
+              // Auto-scroll to analysis section on success
+              setTimeout(() => {
+                if (analysisSectionRef.current && modalScrollContainerRef.current) {
+                  const container = modalScrollContainerRef.current;
+                  const element = analysisSectionRef.current;
+                  // Calculate scroll position: element position relative to container
+                  const elementTop = element.offsetTop;
+                  // Scroll to show element at the top of the visible area (with 20px padding)
+                  container.scrollTo({
+                    top: elementTop - 20,
+                    behavior: 'smooth'
+                  });
+                }
+              }, 300);
+              
+              // Auto-fill/update category based on image analysis
+              // Use database_category first, then category_suggestion, then fallback
+              let suggestedCategory = analysis.database_category;
+              
+              // If no database_category, try to map from category_suggestion
+              if (!suggestedCategory && analysis.category_suggestion) {
+                // Map AI category suggestion to database category
+                const aiCategory = analysis.category_suggestion.toLowerCase().trim();
+                const categoryMapping: { [key: string]: string } = {
+                  'live poultry': 'chickens',
+                  'poultry': 'chickens',
+                  'chickens': 'chickens',
+                  'chicken': 'chickens',
+                  'chicks': 'chickens',
+                  'chick': 'chickens',
+                  'eggs': 'eggs',
+                  'egg': 'eggs',
+                  'feed & nutrition': 'feed',
+                  'feed': 'feed',
+                  'nutrition': 'feed',
+                  'equipment': 'equipment',
+                  'poultry meat': 'chickens',
+                  'meat': 'chickens',
+                  'medication': 'medication',
+                  'medicine': 'medication',
+                  'other': 'other'
+                };
+                
+                suggestedCategory = categoryMapping[aiCategory] || 'other';
+              }
+              
+              // Map database category to frontend dropdown value
+              let categoryUpdated = false;
+              let mappedCategory = '';
+              if (suggestedCategory) {
+                const dropdownValue = mapDatabaseCategoryToDropdown(suggestedCategory);
+                mappedCategory = dropdownValue;
+                const currentCategory = productForm.category;
+                
+                // Only update if different from current category
+                if (currentCategory !== dropdownValue) {
+                  setProductForm((prev: any) => ({
+                    ...prev,
+                    category: dropdownValue
+                  }));
+                  categoryUpdated = true;
+                }
+              }
+              
+              // Generate description and name suggestions if we have product name
+              // Use the mapped dropdown category
+              const categoryToUse = mappedCategory || productForm.category;
+              if (productForm.name && categoryToUse) {
+                await generateDescriptionWithAI();
+              }
+              
+              // Show combined toast notification
+              const toastMessage = categoryUpdated && mappedCategory
+                ? `Image verified. Category set to "${mappedCategory.charAt(0).toUpperCase() + mappedCategory.slice(1)}" based on image analysis.`
+                : "Image successfully verified and uploaded.";
+              
+              toast({
+                title: "Image Verified",
+                description: toastMessage,
+              });
+            } else {
+              // Clear analysis if it contains errors
+              setAiAnalysis(null);
+              setIsImageVerified(false);
+              setIsAnalyzing(false);
+            }
+          } else {
+            // Clear analysis if no verified image found
+            setAiAnalysis(null);
+            setIsImageVerified(false);
+            setIsAnalyzing(false);
+          }
+          // Reset input after successful processing
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        } else {
+          // All images were rejected
+          const rejectionMessage = 'Image was rejected. Please upload only poultry-related images (chickens, eggs, feed, equipment, etc.)';
+          setUploadError(rejectionMessage);
+          setIsImageVerified(false);
+          setIsAnalyzing(false);
+          setProductForm((prev: any) => ({ 
+            ...prev, 
+            image_urls: [] // Clear images if rejected
+          }));
+          
+          // Scroll to error section
+          setTimeout(() => {
+            if (errorSectionRef.current && modalScrollContainerRef.current) {
+              const container = modalScrollContainerRef.current;
+              const element = errorSectionRef.current;
+              const elementTop = element.offsetTop;
+              const containerHeight = container.clientHeight;
+              const elementHeight = element.clientHeight;
+              container.scrollTo({
+                top: elementTop - (containerHeight / 2) + (elementHeight / 2),
+                behavior: 'smooth'
+              });
+            }
+          }, 100);
+          
+          toast({
+            title: "Image Rejected",
+            description: "The uploaded image did not pass verification. Please upload only poultry-related images.",
+            variant: "destructive",
+          });
+          // Reset input after rejection
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
         }
       } else {
-        setUploadError(data.errors ? data.errors.join(', ') : 'Upload failed');
+        setUploadError('No images were uploaded. Please try again.');
+        setIsImageVerified(false);
+        setIsAnalyzing(false);
+        // Reset input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
-    } catch (err) {
-      setUploadError('Upload failed. Please try again.');
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setUploadError(err.message || 'Upload failed. Please try again.');
+      setIsImageVerified(false);
+      setIsAnalyzing(false);
+      
+      setTimeout(() => {
+        if (errorSectionRef.current && modalScrollContainerRef.current) {
+          const container = modalScrollContainerRef.current;
+          const element = errorSectionRef.current;
+          const elementTop = element.offsetTop;
+          const containerHeight = container.clientHeight;
+          const elementHeight = element.clientHeight;
+          container.scrollTo({
+            top: elementTop - (containerHeight / 2) + (elementHeight / 2),
+            behavior: 'smooth'
+          });
+        }
+      }, 100);
+      
+      toast({
+        title: "Upload Failed",
+        description: err.message || 'Upload failed. Please try again.',
+        variant: "destructive",
+      });
+      // Reset input after error
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
     
     setUploading(false);
   };
 
-  // AI Image Analysis function
+  // AI Image Analysis function (now mainly for re-analyzing existing images)
+  // Note: Images are now automatically verified during upload, so this is for manual re-analysis
   const analyzeImageWithAI = async (imageUrl: string) => {
     setAiLoading(true);
+    // Clear previous analysis when starting new analysis
+    setAiAnalysis(null);
     try {
       const response = await fetch(getApiUrl('/api/ai/analyze-image'), {
         method: 'POST',
@@ -800,6 +1105,7 @@ const VendorDashboard = () => {
 
       const data = await response.json();
       if (data.success) {
+        // Always update with latest analysis results
         setAiAnalysis(data.analysis);
         
         // Auto-fill form based on AI analysis
@@ -814,11 +1120,26 @@ const VendorDashboard = () => {
         if (productForm.name && productForm.category) {
           await generateDescriptionWithAI();
         }
+      } else {
+        // Clear analysis on error
+        setAiAnalysis(null);
+        toast({
+          title: "Analysis Failed",
+          description: data.error || 'Failed to analyze image',
+          variant: "destructive",
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Clear analysis on error
+      setAiAnalysis(null);
       if (import.meta.env.DEV) {
         console.error('AI analysis error:', error);
       }
+      toast({
+        title: "Analysis Error",
+        description: error.message || 'Failed to analyze image',
+        variant: "destructive",
+      });
     } finally {
       setAiLoading(false);
     }
@@ -828,6 +1149,14 @@ const VendorDashboard = () => {
   const generateDescriptionWithAI = async () => {
     if (!productForm.name || !productForm.category) return;
     
+    // Don't generate description if image analysis contains errors
+    if (aiAnalysis && (aiAnalysis.error || aiAnalysis.analysis_method === 'error')) {
+      if (import.meta.env.DEV) {
+        console.log('Skipping description generation - image analysis contains errors');
+      }
+      return;
+    }
+    
     setAiLoading(true);
     try {
       const response = await fetch(getApiUrl('/api/ai/generate-description'), {
@@ -836,29 +1165,74 @@ const VendorDashboard = () => {
         body: JSON.stringify({
           product_name: productForm.name,
           category: productForm.category,
-          image_analysis: aiAnalysis,
+          image_analysis: aiAnalysis && !aiAnalysis.error ? aiAnalysis : null,
           additional_info: []
         })
       });
 
       const data = await response.json();
-      if (data.success && !productForm.description) {
-        setProductForm(prev => ({
-          ...prev,
-          description: data.description
-        }));
+      if (data.success) {
+        // Set description if generated and not already set
+        if (data.description && !productForm.description) {
+          setProductForm(prev => ({
+            ...prev,
+            description: data.description
+          }));
+          toast({
+            title: "Description Generated",
+            description: "AI has generated a product description for you.",
+          });
+        }
+        
+        // Set name suggestions if available
+        if (data.name_suggestions) {
+          setNameSuggestions(data.name_suggestions);
+          
+          // Show warning if there's a mismatch
+          if (data.name_suggestions.has_mismatch && data.name_suggestions.suggested_name) {
+            toast({
+              title: "Product Name Mismatch Detected",
+              description: `The product name doesn't match the image. Image shows: ${data.name_suggestions.detected_items.join(', ')}. Click "Use Suggested Name" to update.`,
+              variant: "default",
+            });
+          }
+        }
+      } else if (!data.success && data.error) {
+        if (import.meta.env.DEV) {
+          console.warn('Description generation failed:', data.error);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       if (import.meta.env.DEV) {
-        console.error('AI description generation error:', error);
+        console.error('Description generation error:', error);
       }
     } finally {
       setAiLoading(false);
     }
   };
+  
+  // Handle accepting suggested product name
+  const handleAcceptSuggestedName = () => {
+    if (nameSuggestions?.suggested_name) {
+      setProductForm(prev => ({
+        ...prev,
+        name: nameSuggestions.suggested_name
+      }));
+      setNameSuggestions(null); // Clear suggestions after accepting
+      toast({
+        title: "Product Name Updated",
+        description: "Product name has been updated to match the image.",
+      });
+    }
+  };
 
   const removeImage = (url: string) => {
     setProductForm((prev: any) => ({ ...prev, image_urls: (prev.image_urls || []).filter((u: string) => u !== url) }));
+    // Clear analysis when image is removed
+    setAiAnalysis(null);
+    setNameSuggestions(null);
+    setIsImageVerified(false);
+    setIsAnalyzing(false);
   };
 
   // Drag-to-reorder logic
@@ -893,7 +1267,10 @@ const VendorDashboard = () => {
         farm_name: user.vendorData?.farm_name || '',
         farm_description: user.vendorData?.farm_description || '',
         location: user.vendorData?.location || '',
-        id_number: user.vendorData?.id_number || ''
+        id_number: user.vendorData?.id_number || '',
+        county_id: (user.vendorData as any)?.county_id || null,
+        constituency_id: (user.vendorData as any)?.constituency_id || null,
+        ward_id: (user.vendorData as any)?.ward_id || null
       });
     }
     setShowEditProfileModal(true);
@@ -910,13 +1287,22 @@ const VendorDashboard = () => {
     
     try {
       const token = localStorage.getItem('token');
+      
+      // Prepare payload with location IDs
+      const payload = {
+        ...profileFormData,
+        county_id: profileFormData.county_id || null,
+        constituency_id: profileFormData.constituency_id || null,
+        ward_id: profileFormData.ward_id || null
+      };
+      
       const response = await fetch(getApiUrl('/api/vendor/profile'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(profileFormData)
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -963,7 +1349,8 @@ const VendorDashboard = () => {
           price: parseFloat(productForm.price),
           category: productForm.category,
           stock_quantity: parseInt(productForm.stock_quantity),
-          image_urls: productForm.image_urls
+          image_urls: productForm.image_urls,
+          ai_analysis: aiAnalysis // Include AI verification data for database storage
         })
       });
 
@@ -977,6 +1364,11 @@ const VendorDashboard = () => {
           stock_quantity: '',
           image_urls: [] 
         });
+        setAiAnalysis(null);
+        setNameSuggestions(null);
+        setIsImageVerified(false);
+        setIsAnalyzing(false);
+        setUploadError(null);
         setShowAddProductModal(false);
         
         // Refresh products list
@@ -994,16 +1386,27 @@ const VendorDashboard = () => {
         });
       } else {
         const error = await response.json();
-        toast({
-          title: "Submission Failed",
-          description: error.error || "Failed to submit product. Please try again.",
-          variant: "destructive",
-        });
+        const errorMessage = error.error || 'Failed to submit product';
+        
+        // Check if it's a description length error
+        if (errorMessage.includes('Description is too short') || errorMessage.includes('Description is too long')) {
+          toast({
+            title: "Description Error",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Submission Failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Submission Failed",
-        description: "Network error. Please try again.",
+        description: error.message || "Network error. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -1037,6 +1440,8 @@ const VendorDashboard = () => {
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+                aria-label="Open sidebar menu"
+                title="Open menu"
               >
                 <Menu className="h-6 w-6" />
               </button>
@@ -1149,7 +1554,22 @@ const VendorDashboard = () => {
                     <h2 className="text-xl font-semibold text-primary">Recent Activity</h2>
                     <Button 
                       className="btn-primary flex items-center w-full sm:w-auto"
-                      onClick={() => setShowAddProductModal(true)}
+                      onClick={() => {
+                        // Reset form state when opening modal
+                        setProductForm({ 
+                          name: '', 
+                          description: '', 
+                          price: '', 
+                          category: '', 
+                          stock_quantity: '',
+                          image_urls: [] 
+                        });
+                        setAiAnalysis(null);
+                        setNameSuggestions(null);
+                        setIsImageVerified(false);
+                        setUploadError(null);
+                        setShowAddProductModal(true);
+                      }}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add New Product
@@ -1236,7 +1656,22 @@ const VendorDashboard = () => {
                     <h2 className="text-xl font-semibold text-primary">My Products</h2>
                     <Button 
                       className="btn-primary flex items-center w-full sm:w-auto"
-                      onClick={() => setShowAddProductModal(true)}
+                      onClick={() => {
+                        // Reset form state when opening modal
+                        setProductForm({ 
+                          name: '', 
+                          description: '', 
+                          price: '', 
+                          category: '', 
+                          stock_quantity: '',
+                          image_urls: [] 
+                        });
+                        setAiAnalysis(null);
+                        setNameSuggestions(null);
+                        setIsImageVerified(false);
+                        setUploadError(null);
+                        setShowAddProductModal(true);
+                      }}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add New Product
@@ -1628,24 +2063,59 @@ const VendorDashboard = () => {
                           </div>
                         </div>
                         
-                        <div className="pt-4 border-t border-gray-200">
+                        <div className="pt-6 border-t border-gray-200">
                           <h3 className="text-lg font-medium text-gray-900 mb-4">Vendor Information</h3>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                             <div className="space-y-2">
                               <label className="block text-sm font-medium text-gray-700">Farm Name</label>
                               <p className="text-gray-900">{user?.vendorData?.farm_name || 'Not provided'}</p>
                             </div>
                             <div className="space-y-2">
-                              <label className="block text-sm font-medium text-gray-700">Location</label>
-                              <p className="text-gray-900">{user?.vendorData?.location || 'Not provided'}</p>
+                              <label className="block text-sm font-medium text-gray-700">ID Number</label>
+                              <p className="text-gray-900">{user?.vendorData?.id_number || 'Not provided'}</p>
                             </div>
                             <div className="space-y-2 sm:col-span-2">
                               <label className="block text-sm font-medium text-gray-700">Farm Description</label>
                               <p className="text-gray-900">{user?.vendorData?.farm_description || 'Not provided'}</p>
                             </div>
-                            <div className="space-y-2">
-                              <label className="block text-sm font-medium text-gray-700">ID Number</label>
-                              <p className="text-gray-900">{user?.vendorData?.id_number || 'Not provided'}</p>
+                            <div className="space-y-2 sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                              {(() => {
+                                const vendorData = user?.vendorData as any;
+                                const hasLocationData = vendorData?.county_name;
+                                
+                                if (hasLocationData) {
+                                  return (
+                                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                                      <div className="flex items-start gap-3">
+                                        <span className="font-medium text-gray-700 min-w-[80px]">County:</span>
+                                        <span className="text-gray-900">{vendorData.county_name}</span>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <span className="font-medium text-gray-700 min-w-[80px]">Subcounty:</span>
+                                        <span className="text-gray-900">{vendorData.constituency_name || 'Not provided'}</span>
+                                      </div>
+                                      <div className="flex items-start gap-3">
+                                        <span className="font-medium text-gray-700 min-w-[80px]">Ward:</span>
+                                        <span className="text-gray-900">{vendorData.ward_name || 'Not provided'}</span>
+                                      </div>
+                                      {vendorData.location && (
+                                        <div className="pt-3 mt-3 border-t border-gray-200">
+                                          <div className="flex items-start gap-3">
+                                            <span className="font-medium text-gray-600 text-sm min-w-[80px]">Additional:</span>
+                                            <span className="text-gray-600 text-sm">{vendorData.location}</span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="bg-gray-50 rounded-lg p-4">
+                                    <p className="text-gray-900">{vendorData?.location || 'Not provided'}</p>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -1674,12 +2144,20 @@ const VendorDashboard = () => {
       {/* Add Product Modal */}
       {showAddProductModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+          <div ref={modalScrollContainerRef} className="bg-white rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-primary">Add New Product</h2>
                 <button 
-                  onClick={() => setShowAddProductModal(false)}
+                  onClick={() => {
+                    setShowAddProductModal(false);
+                    // Clear all states when closing modal
+                    setAiAnalysis(null);
+                    setNameSuggestions(null);
+                    setIsImageVerified(false);
+                    setIsAnalyzing(false);
+                    setUploadError(null);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                   title="Close modal"
                   aria-label="Close modal"
@@ -1688,9 +2166,10 @@ const VendorDashboard = () => {
                 </button>
               </div>
 
+
               {/* AI Assistant Section */}
               {aiAnalysis && (
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div ref={analysisSectionRef} className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg scroll-mt-4">
                   <div className="flex items-center space-x-2 mb-3">
                     <Sparkles className="h-5 w-5 text-blue-600" />
                     <h3 className="text-lg font-semibold text-blue-800">AI Assistant</h3>
@@ -1766,6 +2245,43 @@ const VendorDashboard = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="Enter product name"
                     />
+                    {/* Name Mismatch Warning */}
+                    {nameSuggestions?.has_mismatch && nameSuggestions?.suggested_name && (
+                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 text-yellow-800 mb-2">
+                              <AlertTriangle className="h-4 w-4" />
+                              <span className="text-sm font-medium">Name Mismatch Detected</span>
+                            </div>
+                            <p className="text-xs text-yellow-700 mb-2">
+                              The product name doesn't match the image. Image shows: <strong>{nameSuggestions.detected_items.join(', ')}</strong>
+                            </p>
+                            <p className="text-xs text-yellow-700 mb-2">
+                              Suggested name: <strong>{nameSuggestions.suggested_name}</strong>
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleAcceptSuggestedName}
+                              className="text-xs bg-yellow-100 hover:bg-yellow-200 border-yellow-300"
+                            >
+                              Use Suggested Name
+                            </Button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setNameSuggestions(null)}
+                            className="text-yellow-600 hover:text-yellow-800 ml-2"
+                            aria-label="Dismiss name suggestions"
+                            title="Dismiss suggestions"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -1849,17 +2365,17 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Product Images</label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center relative overflow-hidden">
                     <input
+                      ref={fileInputRef}
                       type="file"
-                      multiple
                       accept="image/*"
                       onChange={handleImageChange}
                       className="hidden"
                       id="image-upload"
                     />
-                    <label htmlFor="image-upload" className="cursor-pointer">
+                    <label htmlFor="image-upload" className={`cursor-pointer block relative z-0 ${isAnalyzing ? 'opacity-50 pointer-events-none' : ''}`}>
                       <div className="space-y-2">
                         <div className="mx-auto h-12 w-12 text-gray-400">
                           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1867,52 +2383,83 @@ const VendorDashboard = () => {
                           </svg>
                         </div>
                         <p className="text-sm text-gray-600">
-                          {uploading ? 'Uploading...' : 'Click to upload images or drag and drop'}
+                          {isAnalyzing ? 'Analyzing Image...' : uploading ? 'Uploading & Verifying...' : 'Click to upload image or drag and drop'}
                         </p>
-                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB each</p>
+                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB. One image per product. Images are automatically verified for poultry content.</p>
                       </div>
                     </label>
+                    
+                    {/* Analyzing Indicator - Inside Upload Box Overlay */}
+                    {isAnalyzing && (
+                      <div className="absolute top-0 left-0 right-0 bottom-0 bg-gradient-to-r from-blue-50/95 via-purple-50/95 to-blue-50/95 backdrop-blur-sm border-2 border-blue-300 rounded-lg flex items-center justify-center z-20 animate-analyze-pulse">
+                        <div className="flex flex-col items-center space-y-4">
+                          <div className="relative animate-analyze-zoom">
+                            <div className="absolute inset-0 animate-ping">
+                              <Sparkles className="h-12 w-12 text-purple-500 opacity-75" />
+                            </div>
+                            <Sparkles className="h-12 w-12 text-blue-600 relative z-10" />
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <h3 className="text-lg font-bold text-blue-800 animate-pulse">🔍 Analyzing Image...</h3>
+                            <p className="text-sm text-blue-600 mt-1 font-medium">AI is verifying your image content</p>
+                          </div>
+                          <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                          <div className="flex items-center justify-center space-x-2">
+                            <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="h-2 w-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Upload Error Display */}
                   {uploadError && (
-                    <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
-                      {uploadError}
+                    <div ref={errorSectionRef} className="mt-2 text-sm text-red-600 bg-red-50 border-2 border-red-300 p-4 rounded-lg scroll-mt-4">
+                      <div className="flex items-start space-x-2">
+                        <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-red-800 mb-1">Image Verification Failed</p>
+                          <p className="text-red-700">{uploadError}</p>
+                          <p className="text-xs text-red-600 mt-2 font-medium">
+                            💡 Please upload only poultry-related images: chickens, eggs, feed, equipment, etc.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  {/* Image Preview */}
+                  {/* Image Preview - Single Image */}
                   {productForm.image_urls && productForm.image_urls.length > 0 && (
                     <div className="mt-4">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Uploaded Images:</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-4">
-                        {productForm.image_urls.map((url: string, index: number) => (
-                          <div key={index} className="relative group">
-                            <img
-                              src={getImageUrl(url.replace(/\\/g, '/'))}
-                              alt={`Product ${index + 1}`}
-                              className="w-full h-24 object-cover rounded-lg border"
-                              draggable
-                              onDragStart={() => handleDragStart(index)}
-                              onDragEnter={() => handleDragEnterThumb(index)}
-                              onDragEnd={handleDragEnd}
-                              onDragOver={(e) => e.preventDefault()}
-                              onError={(e) => {
-                                if (import.meta.env.DEV) {
-                                  console.log('Image failed to load:', url);
-                                }
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeImage(url)}
-                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
+                      <p className="text-sm font-medium text-gray-700 mb-2">Uploaded Image:</p>
+                      <div className="relative inline-block group">
+                        <img
+                          src={getImageUrl(productForm.image_urls[0].replace(/\\/g, '/'))}
+                          alt="Product"
+                          className="w-32 h-32 object-cover rounded-lg border"
+                          onError={(e) => {
+                            if (import.meta.env.DEV) {
+                              console.log('Image failed to load:', productForm.image_urls[0]);
+                            }
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductForm((prev: any) => ({ ...prev, image_urls: [] }));
+                            setAiAnalysis(null);
+                            setIsImageVerified(false);
+                            setIsAnalyzing(false);
+                            setNameSuggestions(null);
+                            setUploadError(null);
+                          }}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1922,17 +2469,29 @@ const VendorDashboard = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowAddProductModal(false)}
+                    onClick={() => {
+                    setShowAddProductModal(false);
+                    // Clear all states when closing modal
+                    setAiAnalysis(null);
+                    setNameSuggestions(null);
+                    setIsImageVerified(false);
+                    setIsAnalyzing(false);
+                    setUploadError(null);
+                  }}
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
-                    disabled={submitting}
+                    disabled={submitting || !isImageVerified}
                     className="btn-primary"
+                    title={!isImageVerified ? "Please upload and verify an image before submitting" : ""}
                   >
                     {submitting ? 'Submitting...' : 'Submit Product'}
                   </Button>
+                  {!isImageVerified && (
+                    <p className="text-xs text-red-600 mt-1">* Image verification required before submission</p>
+                  )}
                 </div>
               </form>
             </div>
@@ -2157,17 +2716,26 @@ const VendorDashboard = () => {
                           </svg>
                         </div>
                         <p className="text-sm text-gray-600">
-                          {uploading ? 'Uploading...' : 'Click to upload images or drag and drop'}
+                          {uploading ? 'Uploading & Verifying...' : 'Click to upload images or drag and drop'}
                         </p>
-                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB each</p>
+                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB each. Images are automatically verified for poultry content.</p>
                       </div>
                     </label>
                   </div>
 
                   {/* Upload Error Display */}
                   {uploadError && (
-                    <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
-                      {uploadError}
+                    <div ref={errorSectionRef} className="mt-2 text-sm text-red-600 bg-red-50 border-2 border-red-300 p-4 rounded-lg scroll-mt-4">
+                      <div className="flex items-start space-x-2">
+                        <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-red-800 mb-1">Image Verification Failed</p>
+                          <p className="text-red-700">{uploadError}</p>
+                          <p className="text-xs text-red-600 mt-2 font-medium">
+                            💡 Please upload only poultry-related images: chickens, eggs, feed, equipment, etc.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -2516,8 +3084,24 @@ const VendorDashboard = () => {
                       />
                     </div>
                     <div>
-                      <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Location *
+                      </label>
+                      <LocationSelect
+                        countyId={profileFormData.county_id}
+                        onCountyChange={(id) => setProfileFormData(prev => ({ ...prev, county_id: id }))}
+                        constituencyId={profileFormData.constituency_id}
+                        onConstituencyChange={(id) => setProfileFormData(prev => ({ ...prev, constituency_id: id }))}
+                        wardId={profileFormData.ward_id}
+                        onWardChange={(id) => setProfileFormData(prev => ({ ...prev, ward_id: id }))}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Select your county, subcounty, and ward for accurate location tracking.
+                      </p>
+                    </div>
+                    <div>
+                      <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                        Additional Location Details (Optional)
                       </label>
                       <input
                         type="text"
@@ -2525,10 +3109,12 @@ const VendorDashboard = () => {
                         name="location"
                         value={profileFormData.location}
                         onChange={handleProfileFormChange}
-                        required
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                        placeholder="Enter your farm location"
+                        placeholder="e.g., Street name, Landmark, etc."
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Optional: Add specific address or landmark details.
+                      </p>
                     </div>
                     <div>
                       <label htmlFor="id_number" className="block text-sm font-medium text-gray-700 mb-1">

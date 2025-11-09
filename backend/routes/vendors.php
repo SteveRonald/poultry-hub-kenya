@@ -102,6 +102,39 @@ function handleCreateProduct() {
         return;
     }
     
+    // Validate description length
+    $config = require __DIR__ . '/../config/ai_config.php';
+    $minWords = $config['limits']['description_length']['min_words'] ?? 100;
+    $maxChars = $config['limits']['description_length']['max_characters'] ?? 2500;
+    $description = trim($input['description']);
+    $wordCount = str_word_count($description);
+    $charCount = strlen($description);
+    
+    if ($wordCount < $minWords) {
+        http_response_code(400);
+        echo json_encode([
+            'error' => "Description is too short. Minimum {$minWords} words required. Current: {$wordCount} words."
+        ]);
+        return;
+    }
+    
+    if ($charCount > $maxChars) {
+        http_response_code(400);
+        echo json_encode([
+            'error' => "Description is too long. Maximum {$maxChars} characters allowed. Current: {$charCount} characters."
+        ]);
+        return;
+    }
+    
+    // Validate images (all images should be verified - this is handled during upload)
+    // But we can add an extra check here if needed
+    $imageUrls = $input['image_urls'] ?? [];
+    if (empty($imageUrls) || !is_array($imageUrls)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'At least one verified image is required']);
+        return;
+    }
+    
     $productId = uniqid();
     
     try {
@@ -116,9 +149,50 @@ function handleCreateProduct() {
             return;
         }
         
+        // Normalize category to match database enum
+        require_once __DIR__ . '/../utils/category_mapper.php';
+        $normalizedCategory = normalizeCategory($input['category']);
+        
+        // Store AI verification data if images were uploaded
+        // Images are automatically verified during upload, so if we have image URLs,
+        // they have already been verified by AI
+        $aiVerified = 0;
+        $aiConfidence = null;
+        $aiAnalysisData = null;
+        $aiVerifiedAt = null;
+        
+        if (!empty($input['image_urls']) && is_array($input['image_urls']) && count($input['image_urls']) > 0) {
+            // Mark as verified since images passed verification during upload
+            $aiVerified = 1;
+            $aiVerifiedAt = date('Y-m-d H:i:s');
+            
+            // Store AI analysis data if provided (from image verification)
+            if (isset($input['ai_analysis']) && is_array($input['ai_analysis'])) {
+                // Store the full analysis data
+                $aiAnalysisData = json_encode($input['ai_analysis'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                
+                // Extract confidence score
+                $aiConfidence = isset($input['ai_analysis']['confidence']) 
+                    ? (float)$input['ai_analysis']['confidence'] 
+                    : null;
+                
+                // Ensure confidence is between 0 and 1
+                if ($aiConfidence !== null) {
+                    $aiConfidence = max(0, min(1, $aiConfidence));
+                }
+            } else {
+                // If no analysis data provided, set default confidence
+                // (images were verified, so we assume they passed with good confidence)
+                $aiConfidence = 0.8; // Default confidence for verified images
+            }
+        }
+        
         $stmt = $pdo->prepare("
-            INSERT INTO products (id, vendor_id, name, description, price, category, stock_quantity, image_urls, is_active) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+            INSERT INTO products (
+                id, vendor_id, name, description, price, category, stock_quantity, 
+                image_urls, is_active, ai_verified, ai_confidence, ai_analysis_data, ai_verified_at
+            ) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $productId,
@@ -126,9 +200,13 @@ function handleCreateProduct() {
             $input['name'],
             $input['description'],
             $input['price'],
-            $input['category'],
+            $normalizedCategory,
             $input['stock_quantity'] ?? 0,
-            json_encode($input['image_urls'] ?? [])
+            json_encode($input['image_urls'] ?? []),
+            $aiVerified,
+            $aiConfidence,
+            $aiAnalysisData,
+            $aiVerifiedAt
         ]);
         
         // Get vendor name for notification
@@ -918,6 +996,22 @@ function handleUpdateVendorProfile() {
         if (isset($input['location'])) {
             $vendorFields[] = "location = ?";
             $vendorValues[] = trim($input['location']);
+        }
+        
+        // Handle location IDs (county, constituency, ward)
+        if (isset($input['county_id'])) {
+            $vendorFields[] = "county_id = ?";
+            $vendorValues[] = $input['county_id'] ? (int)$input['county_id'] : null;
+        }
+        
+        if (isset($input['constituency_id'])) {
+            $vendorFields[] = "constituency_id = ?";
+            $vendorValues[] = $input['constituency_id'] ? (int)$input['constituency_id'] : null;
+        }
+        
+        if (isset($input['ward_id'])) {
+            $vendorFields[] = "ward_id = ?";
+            $vendorValues[] = $input['ward_id'] ? (int)$input['ward_id'] : null;
         }
         
         if (isset($input['id_number'])) {

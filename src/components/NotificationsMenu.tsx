@@ -15,26 +15,77 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
 
   const fetchNotifications = async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      // No token means user is not logged in - stop loading and don't poll
+      setLoading(false);
+      setNotifications([]);
+      return;
+    }
+    
     setLoading(true);
     try {
       const res = await fetch(getApiUrl('/api/notifications'), {
         headers: { Authorization: `Bearer ${token}` },
       });
+      
+      // Handle 401 (Unauthorized) - user token is invalid or expired
+      if (res.status === 401) {
+        // Token is invalid - clear notifications and stop polling
+        setNotifications([]);
+        setLoading(false);
+        // Don't log as error - this is normal when user is not authenticated
+        return;
+      }
+      
+      if (!res.ok) {
+        // Other errors - log but don't show to user
+        console.warn('Failed to fetch notifications:', res.status, res.statusText);
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
+      
       const data = await res.json();
       // Ensure we always have an array
       setNotifications(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      // Network errors or other issues - don't log if it's just a connection issue
+      // Only log actual errors, not expected failures
+      if (error instanceof Error && !error.message.includes('fetch')) {
+        console.error('Failed to fetch notifications:', error);
+      }
       setNotifications([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // User is not logged in - don't fetch or poll
+      setLoading(false);
+      setNotifications([]);
+      return;
+    }
+    
+    // Fetch immediately
     fetchNotifications();
+    
+    // Only poll if user is authenticated
     // Poll for new notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(() => {
+      const currentToken = localStorage.getItem('token');
+      if (currentToken) {
+        fetchNotifications();
+      } else {
+        // Token was removed - stop polling
+        clearInterval(interval);
+        setNotifications([]);
+        setLoading(false);
+      }
+    }, 30000);
+    
     return () => clearInterval(interval);
   }, []);
 
@@ -80,8 +131,10 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
 
   const markAsRead = async (id: number) => {
     const token = localStorage.getItem('token');
+    if (!token) return; // Don't attempt if no token
+    
     try {
-      await fetch(getApiUrl('/api/notifications/read'), {
+      const res = await fetch(getApiUrl('/api/notifications/read'), {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -89,9 +142,17 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
         },
         body: JSON.stringify({ id })
       });
-      fetchNotifications();
+      
+      if (res.ok) {
+        // Only refresh if request was successful
+        fetchNotifications();
+      } else if (res.status === 401) {
+        // Token expired - don't show error, just stop
+        setNotifications([]);
+      }
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      // Network error - don't log, just silently fail
+      // User can manually refresh if needed
     }
   };
 

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
+require_once __DIR__ . '/../services/ai/ImageAnalyzer.php';
 
 function handleImageUpload() {
     $token = getBearerToken();
@@ -96,6 +97,140 @@ function handleImageUpload() {
     
     // Move uploaded file
     if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
+        // AUTOMATIC IMAGE VERIFICATION: Verify image with AI before accepting
+        $config = require __DIR__ . '/../config/ai_config.php';
+        $verificationRequired = $config['image_verification']['required'] ?? true;
+        $autoVerify = $config['image_verification']['auto_verify_on_upload'] ?? true;
+        $minConfidence = $config['image_verification']['min_confidence'] ?? 0.6;
+        $rejectNonPoultry = $config['image_verification']['reject_non_poultry'] ?? true;
+        
+        $verificationResult = null;
+        if ($verificationRequired && $autoVerify) {
+            try {
+                $analyzer = new ImageAnalyzer();
+                $analysis = $analyzer->analyzeImage($uploadPath);
+                
+                // Check if analysis failed (error response)
+                if (isset($analysis['error']) || (isset($analysis['analysis_method']) && $analysis['analysis_method'] === 'error')) {
+                    $errorMessage = $analysis['error'] ?? $analysis['rejection_reason'] ?? 'Failed to analyze image';
+                    $isQuotaError = strpos($errorMessage, 'quota') !== false || strpos($errorMessage, 'insufficient_quota') !== false;
+                    $quotaErrorMode = $config['image_verification']['quota_error_mode'] ?? 'reject';
+                    
+                    // Handle quota errors based on configuration
+                    if ($isQuotaError && $quotaErrorMode === 'bypass') {
+                        // Bypass verification and allow upload with warning
+                        $verificationResult = [
+                            'verified' => false,
+                            'is_poultry_related' => null, // Unknown
+                            'confidence' => 0,
+                            'analysis' => null,
+                            'warning' => 'AI verification skipped due to quota error. Image uploaded but not verified.',
+                            'error' => $errorMessage
+                        ];
+                        // Continue to upload the image
+                    } elseif ($isQuotaError && $quotaErrorMode === 'warn') {
+                        // Warn but allow upload
+                        $verificationResult = [
+                            'verified' => false,
+                            'is_poultry_related' => null,
+                            'confidence' => 0,
+                            'analysis' => null,
+                            'warning' => 'AI verification failed due to quota error. Please verify image manually.',
+                            'error' => $errorMessage
+                        ];
+                        // Continue to upload the image
+                    } else {
+                        // Default: reject upload
+                        @unlink($uploadPath);
+                        http_response_code(500);
+                        echo json_encode([
+                            'success' => false,
+                            'error' => 'Image verification failed: ' . $errorMessage,
+                            'rejection_reason' => $errorMessage,
+                            'quota_error' => $isQuotaError,
+                            'verification' => [
+                                'verified' => false,
+                                'is_poultry_related' => false,
+                                'confidence' => 0,
+                                'analysis' => $analysis
+                            ]
+                        ]);
+                        return;
+                    }
+                }
+                
+                // Skip verification checks if we're in bypass mode due to quota error
+                if (isset($verificationResult) && isset($verificationResult['warning'])) {
+                    // Already handled quota error in bypass/warn mode, continue to upload
+                } else {
+                    // Check if image is poultry-related and meets confidence threshold
+                    $isPoultryRelated = $analysis['is_poultry_related'] ?? false;
+                    $confidence = $analysis['confidence'] ?? 0;
+                
+                if ($rejectNonPoultry && !$isPoultryRelated) {
+                    // Delete the uploaded file since it's not poultry-related
+                    @unlink($uploadPath);
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false,
+                        'error' => 'Image verification failed: Image does not contain poultry-related content',
+                        'rejection_reason' => $analysis['rejection_reason'] ?? 'Image must show poultry products (chickens, eggs, feed, equipment, etc.)',
+                        'verification' => [
+                            'verified' => false,
+                            'is_poultry_related' => false,
+                            'confidence' => $confidence,
+                            'analysis' => $analysis
+                        ]
+                    ]);
+                    return;
+                }
+                
+                if ($confidence < $minConfidence) {
+                    // Delete the uploaded file since confidence is too low
+                    @unlink($uploadPath);
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false,
+                        'error' => 'Image verification failed: Low confidence score',
+                        'rejection_reason' => "AI confidence ({$confidence}) is below minimum required ({$minConfidence})",
+                        'verification' => [
+                            'verified' => false,
+                            'is_poultry_related' => $isPoultryRelated,
+                            'confidence' => $confidence,
+                            'analysis' => $analysis
+                        ]
+                    ]);
+                    return;
+                }
+                
+                // Image passed verification
+                $verificationResult = [
+                    'verified' => true,
+                    'is_poultry_related' => $isPoultryRelated,
+                    'confidence' => $confidence,
+                    'analysis' => $analysis
+                ];
+                }
+                // If verificationResult is already set (from quota error handling), use it as-is
+                
+            } catch (Exception $e) {
+                error_log("Image verification error: " . $e->getMessage());
+                // If verification fails due to API error, we can either:
+                // Option 1: Reject the image (strict mode)
+                // Option 2: Accept but flag for manual review (lenient mode)
+                // Using strict mode for security
+                @unlink($uploadPath);
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Image verification failed: ' . $e->getMessage(),
+                    'rejection_reason' => $e->getMessage(),
+                    'verification' => null
+                ]);
+                return;
+            }
+        }
+        
         // Return the URL path (dynamic based on the request host)
         // SECURITY: Sanitize host header to prevent header injection
         $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
@@ -107,7 +242,8 @@ function handleImageUpload() {
         echo json_encode([
             'success' => true,
             'url' => $url,
-            'filename' => $filename
+            'filename' => $filename,
+            'verification' => $verificationResult
         ]);
     } else {
         http_response_code(500);
@@ -150,13 +286,13 @@ function handleMultipleImageUpload() {
     $fileCount = count($files['name']);
     for ($i = 0; $i < $fileCount; $i++) {
         if ($files['error'][$i] !== UPLOAD_ERR_OK) {
-            $errors[] = "File {$i}: Upload error";
+            $errors[] = "Upload error";
             continue;
         }
         
         // Check file size (max 5MB)
         if ($files['size'][$i] > 5 * 1024 * 1024) {
-            $errors[] = "File {$i}: Too large (max 5MB)";
+            $errors[] = "Image too large (max 5MB)";
             continue;
         }
         
@@ -174,7 +310,7 @@ function handleMultipleImageUpload() {
         
         // Validate both MIME type and extension
         if (!in_array($mimeType, $allowedTypes) || !in_array($extension, $allowedExtensions)) {
-            $errors[] = "File {$i}: Invalid type (only JPEG, PNG, GIF, WebP allowed)";
+            $errors[] = "Invalid image type (only JPEG, PNG, GIF, WebP allowed)";
             continue;
         }
         
@@ -197,7 +333,7 @@ function handleMultipleImageUpload() {
         }
         
         if (!$headerValid) {
-            $errors[] = "File {$i}: Invalid file format detected";
+            $errors[] = "Invalid file format detected";
             continue;
         }
         
@@ -207,19 +343,86 @@ function handleMultipleImageUpload() {
         
         // Move uploaded file
         if (move_uploaded_file($files['tmp_name'][$i], $uploadPath)) {
-            // Return the URL path (dynamic based on the request host)
-            // SECURITY: Sanitize host header to prevent header injection
-            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-            $host = filter_var($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL);
-            // SECURITY: Validate host format and prevent path traversal in filename
-            $safeFilename = basename($filename); // Ensure no path traversal
-            $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $safeFilename;
-            $uploadedFiles[] = [
-                'url' => $url,
-                'filename' => $filename
-            ];
+            // AUTOMATIC IMAGE VERIFICATION: Verify image with AI before accepting
+            $config = require __DIR__ . '/../config/ai_config.php';
+            $verificationRequired = $config['image_verification']['required'] ?? true;
+            $autoVerify = $config['image_verification']['auto_verify_on_upload'] ?? true;
+            $minConfidence = $config['image_verification']['min_confidence'] ?? 0.6;
+            $rejectNonPoultry = $config['image_verification']['reject_non_poultry'] ?? true;
+            
+            $verificationResult = null;
+            $verificationPassed = true;
+            
+            if ($verificationRequired && $autoVerify) {
+                try {
+                    $analyzer = new ImageAnalyzer();
+                    $analysis = $analyzer->analyzeImage($uploadPath);
+                    
+                    // Check if analysis failed (error response)
+                    if (isset($analysis['error']) || (isset($analysis['analysis_method']) && $analysis['analysis_method'] === 'error')) {
+                        $errorMessage = $analysis['error'] ?? $analysis['rejection_reason'] ?? 'Failed to analyze image';
+                        @unlink($uploadPath);
+                        $errors[] = "Image verification failed - " . $errorMessage . ". Please try again or check Gemini API configuration.";
+                        $verificationPassed = false;
+                        continue;
+                    }
+                    
+                    // Check if image is poultry-related and meets confidence threshold
+                    $isPoultryRelated = $analysis['is_poultry_related'] ?? false;
+                    $confidence = $analysis['confidence'] ?? 0;
+                    
+                    if ($rejectNonPoultry && !$isPoultryRelated) {
+                        // Delete the uploaded file since it's not poultry-related
+                        @unlink($uploadPath);
+                        $rejectionReason = $analysis['rejection_reason'] ?? 'Image must show poultry products (chickens, eggs, feed, equipment, etc.)';
+                        $errors[] = "Image verification failed - Not poultry-related. " . $rejectionReason;
+                        $verificationPassed = false;
+                        continue;
+                    }
+                    
+                    if ($confidence < $minConfidence) {
+                        // Delete the uploaded file since confidence is too low
+                        @unlink($uploadPath);
+                        $errors[] = "Image verification failed - Low confidence ({$confidence}). Minimum required: {$minConfidence}";
+                        $verificationPassed = false;
+                        continue;
+                    }
+                    
+                    // Image passed verification
+                    $verificationResult = [
+                        'verified' => true,
+                        'is_poultry_related' => $isPoultryRelated,
+                        'confidence' => $confidence,
+                        'analysis' => $analysis
+                    ];
+                    
+                } catch (Exception $e) {
+                    error_log("Image verification error for file {$i}: " . $e->getMessage());
+                    // Strict mode: reject on API error
+                    @unlink($uploadPath);
+                    $errors[] = "Image verification failed - " . $e->getMessage() . ". Please try again or check Gemini API configuration.";
+                    $verificationPassed = false;
+                    continue;
+                }
+            }
+            
+            // Only add to uploaded files if verification passed
+            if ($verificationPassed) {
+                // Return the URL path (dynamic based on the request host)
+                // SECURITY: Sanitize host header to prevent header injection
+                $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+                $host = filter_var($_SERVER['HTTP_HOST'], FILTER_SANITIZE_URL);
+                // SECURITY: Validate host format and prevent path traversal in filename
+                $safeFilename = basename($filename); // Ensure no path traversal
+                $url = $protocol . '://' . $host . '/poultry-hub-kenya/uploads/products/' . $safeFilename;
+                $uploadedFiles[] = [
+                    'url' => $url,
+                    'filename' => $filename,
+                    'verification' => $verificationResult
+                ];
+            }
         } else {
-            $errors[] = "File {$i}: Failed to save";
+            $errors[] = "Failed to save image";
         }
     }
     

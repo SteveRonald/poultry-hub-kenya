@@ -107,11 +107,13 @@ function handleLogin() {
     } catch (PDOException $e) {
         error_log('Database error: ' . $e->getMessage());
         http_response_code(500);
-        echo json_encode(['error' => 'Login failed: ' . $e->getMessage()]);
+        // SECURITY: Don't expose database error details to users
+        echo json_encode(['error' => 'Login failed. Please try again.']);
     } catch (Exception $e) {
         error_log('General error: ' . $e->getMessage());
         http_response_code(500);
-        echo json_encode(['error' => 'Login failed: ' . $e->getMessage()]);
+        // SECURITY: Don't expose error details to users
+        echo json_encode(['error' => 'Login failed. Please try again.']);
     }
 }
 

@@ -297,19 +297,30 @@ const Register = () => {
     
     if (!validation.isValid) {
       // Validation failed - errors are already set by validateCurrentStep for current step only
-      // Show error message but DON'T navigate to next step
-      const errorMessages = Object.values(validation.errors).filter(err => err && err.trim() !== '');
-      if (errorMessages.length > 0) {
-        if (errorMessages.length === 1) {
-          toast.error(errorMessages[0], { duration: 4000 });
-        } else {
-          const errorList = errorMessages.map((err, idx) => `${idx + 1}. ${err}`).join('\n');
-          toast.error('Please fix the following errors:', {
-            description: errorList,
-            duration: 5000,
-          });
+      // IMPORTANT: Only show errors for the CURRENT step, clear all other step errors
+      // Get only the errors for the current step
+      const currentStepErrors: { [key: string]: string } = {};
+      
+      // Map step numbers to their field names
+      const stepFields: { [key: number]: string[] } = {
+        1: ['name', 'email', 'phone'],
+        2: ['password', 'confirmPassword', 'role'],
+        3: ['countyId', 'constituencyId', 'wardId'],
+        4: ['farmName', 'idNumber']
+      };
+      
+      // Only keep errors for fields in the current step
+      const fieldsToKeep = stepFields[currentStep] || [];
+      Object.keys(validation.errors).forEach(key => {
+        if (fieldsToKeep.includes(key)) {
+          currentStepErrors[key] = validation.errors[key];
         }
-      }
+      });
+      
+      // Set only current step errors, clearing all others
+      setErrors(currentStepErrors);
+      
+      // Don't show toast notifications - let inline errors handle it
       // Don't proceed to next step - stay on current step
       return;
     }
@@ -327,25 +338,45 @@ const Register = () => {
     const totalSteps = getTotalSteps();
     
     if (nextStep <= totalSteps) {
-      setCurrentStep(nextStep);
-      // Clear errors when moving to next step - user hasn't attempted next step yet
+      // Clear ALL errors when moving to next step - user hasn't attempted next step yet
+      // This ensures no errors show when just navigating to a step
       setErrors({});
+      setCurrentStep(nextStep);
+      // Remove attemptedSteps for the next step if it exists (fresh start)
+      setAttemptedSteps(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(nextStep);
+        return newSet;
+      });
     }
   };
 
   const handlePrevious = () => {
     if (currentStep > 1) {
-      // Clear errors when going back - user shouldn't see validation errors when navigating back
+      const prevStep = currentStep - 1;
+      // Clear ALL errors when going back - user shouldn't see validation errors when navigating
       setErrors({});
-      setCurrentStep(currentStep - 1);
+      setCurrentStep(prevStep);
+      // Remove attemptedSteps for the previous step to give fresh start
+      setAttemptedSteps(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(prevStep);
+        return newSet;
+      });
     }
   };
 
   const handleStepClick = (step: number) => {
     if (canAccessStep(step)) {
-      // Clear errors when clicking on a step - only validate when user clicks Next
+      // Clear ALL errors when clicking on a step - only validate when user clicks Next or Submit
       setErrors({});
       setCurrentStep(step);
+      // Remove attemptedSteps for the clicked step to give fresh start
+      setAttemptedSteps(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(step);
+        return newSet;
+      });
     } else {
       toast.error('Please complete the previous steps first');
     }
@@ -444,34 +475,72 @@ const Register = () => {
     return { messages: errorMessages, step: firstErrorStep };
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
     
-    // Validate all steps and get all errors
-    const { messages: allErrors, step: firstErrorStep } = getAllValidationErrors();
+    // Mark that user has attempted to submit the form (all steps)
+    // This ensures errors are shown for all steps that have issues
+    const allSteps = formData.role === 'vendor' ? [1, 2, 3, 4] : [1, 2];
+    setAttemptedSteps(new Set(allSteps));
     
-    if (allErrors.length > 0) {
-      // Show detailed error message
-      if (allErrors.length === 1) {
-        toast.error(allErrors[0], { duration: 5000 });
-      } else {
-        const errorList = allErrors.slice(0, 5).map((err, idx) => `${idx + 1}. ${err}`).join('\n');
-        const remainingCount = allErrors.length - 5;
-        const errorDescription = remainingCount > 0 
-          ? `${errorList}\n\n...and ${remainingCount} more error(s). Please check all form fields.`
-          : errorList;
-        
-        toast.error('Please fix the following errors:', {
-          description: errorDescription,
-          duration: 7000,
-        });
-      }
+    // Validate all steps without showing toast - only show inline errors
+    const step1Errors: { [key: string]: string } = {};
+    const step2Errors: { [key: string]: string } = {};
+    const step3Errors: { [key: string]: string } = {};
+    const step4Errors: { [key: string]: string } = {};
+    
+    // Validate step 1
+    if (!formData.name.trim()) step1Errors.name = 'Full name is required';
+    else if (formData.name.trim().length < 2) step1Errors.name = 'Full name must be at least 2 characters';
+    if (!formData.email.trim()) step1Errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) step1Errors.email = 'Please enter a valid email address';
+    if (!formData.phone.trim()) step1Errors.phone = 'Phone number is required';
+    else if (!/^\+?254[0-9]{9}$|^0[0-9]{9}$/.test(formData.phone.replace(/\s/g, ''))) step1Errors.phone = 'Please enter a valid Kenyan phone number';
+    
+    // Validate step 2
+    if (!formData.password) step2Errors.password = 'Password is required';
+    else if (formData.password.length < 6) step2Errors.password = 'Password must be at least 6 characters long';
+    if (!formData.confirmPassword) step2Errors.confirmPassword = 'Please confirm your password';
+    else if (formData.password !== formData.confirmPassword) step2Errors.confirmPassword = 'Passwords do not match';
+    if (!formData.role) step2Errors.role = 'Please select an account type';
+    
+    // Validate vendor steps if applicable
+    if (formData.role === 'vendor') {
+      if (!formData.countyId) step3Errors.countyId = 'Please select a county';
+      if (!formData.constituencyId) step3Errors.constituencyId = 'Please select a subcounty';
+      if (!formData.wardId) step3Errors.wardId = 'Please select a ward/sublocation';
+      if (!formData.farmName.trim()) step4Errors.farmName = 'Farm name is required';
+      else if (formData.farmName.trim().length < 2) step4Errors.farmName = 'Farm name must be at least 2 characters';
+      if (!formData.idNumber.trim()) step4Errors.idNumber = 'ID number is required';
+      else if (!/^[0-9]{7,8}$/.test(formData.idNumber.trim())) step4Errors.idNumber = 'Please enter a valid Kenyan ID number';
+    }
+    
+    // Combine all errors
+    const allErrorsObj = { 
+      ...step1Errors, 
+      ...step2Errors, 
+      ...(formData.role === 'vendor' ? { ...step3Errors, ...step4Errors } : {}) 
+    };
+    
+    // If there are errors, set them and navigate to first step with errors
+    if (Object.keys(allErrorsObj).length > 0) {
+      setErrors(allErrorsObj);
       
-      // Navigate to first step with errors
+      // Find first step with errors
+      let firstErrorStep = 1;
+      if (Object.keys(step1Errors).length > 0) firstErrorStep = 1;
+      else if (Object.keys(step2Errors).length > 0) firstErrorStep = 2;
+      else if (formData.role === 'vendor' && Object.keys(step3Errors).length > 0) firstErrorStep = 3;
+      else if (formData.role === 'vendor' && Object.keys(step4Errors).length > 0) firstErrorStep = 4;
+      
+      // Navigate to first step with errors - inline errors will show, no toast
       setCurrentStep(firstErrorStep);
       return;
     }
     
+    // All validation passed - proceed with registration
     setIsLoading(true);
 
     try {
@@ -522,7 +591,7 @@ const Register = () => {
       : ['Personal Info', 'Account'];
     
     return (
-      <div className="flex items-center justify-center mb-8">
+      <div className="flex items-center justify-center mb-4 sm:mb-6">
         {Array.from({ length: totalSteps }, (_, i) => {
           const stepNumber = i + 1;
           const isCompleted = completedSteps.includes(stepNumber);
@@ -539,7 +608,7 @@ const Register = () => {
                 title={!isAccessible ? 'Complete previous steps first' : stepLabels[i]}
               >
                 <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
+                  className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 transition-colors ${
                     isCompleted
                       ? 'bg-green-500 border-green-500 text-white'
                       : isCurrent
@@ -550,12 +619,12 @@ const Register = () => {
                   }`}
                 >
                   {isCompleted ? (
-                    <CheckCircle2 className="w-5 h-5" />
+                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   ) : (
-                    <span className="font-semibold">{stepNumber}</span>
+                    <span className="font-semibold text-sm sm:text-base">{stepNumber}</span>
                   )}
                 </div>
-                <div className="ml-3 hidden sm:block">
+                <div className="ml-2 sm:ml-3 hidden sm:block">
                   <div className={`text-sm font-medium ${
                     isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : isAccessible ? 'text-gray-700' : 'text-gray-400'
                   }`}>
@@ -568,7 +637,7 @@ const Register = () => {
               </div>
               {stepNumber < totalSteps && (
                 <div
-                  className={`mx-4 h-0.5 w-12 transition-colors ${
+                  className={`mx-2 sm:mx-4 h-0.5 w-6 sm:w-12 transition-colors ${
                     isCompleted ? 'bg-green-500' : completedSteps.includes(stepNumber + 1) ? 'bg-green-500' : 'bg-gray-300'
                   }`}
                 />
@@ -581,8 +650,8 @@ const Register = () => {
   };
 
   const renderStep1 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Personal Information</h3>
+    <div className="space-y-3 sm:space-y-4">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Personal Information</h3>
       
       <div>
         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
@@ -633,8 +702,8 @@ const Register = () => {
   );
 
   const renderStep2 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Account Credentials</h3>
+    <div className="space-y-3 sm:space-y-4">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Account Credentials</h3>
       
       <div>
         <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
@@ -731,9 +800,9 @@ const Register = () => {
   );
 
   const renderStep3 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Farm Location</h3>
-      <p className="text-sm text-gray-600 mb-4">
+    <div className="space-y-3 sm:space-y-4">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">Farm Location</h3>
+      <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
         Please select your farm location to help customers find you easily.
       </p>
       
@@ -754,8 +823,8 @@ const Register = () => {
   );
 
   const renderStep4 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Farm Details</h3>
+    <div className="space-y-3 sm:space-y-4">
+      <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Farm Details</h3>
       
       <div>
         <label htmlFor="farmName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -825,48 +894,79 @@ const Register = () => {
   return (
     <div className="min-h-screen bg-beige">
       <Navbar />
-      <div className="py-12 px-4 sm:px-6 lg:px-8">
+      <div className="py-4 sm:py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto">
           <Card className="shadow-lg">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold text-primary">
+            <CardHeader className="text-center pb-4">
+              <CardTitle className="text-xl sm:text-2xl font-bold text-primary">
                 Join PoultryConnect KE
               </CardTitle>
-              <p className="text-gray-600 mt-2">
+              <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
                 Create your account to start buying or selling poultry products
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 sm:px-6">
               {/* Step Indicator */}
-              {renderStepIndicator()}
+              <div className="mb-4 sm:mb-6">
+                {renderStepIndicator()}
+              </div>
               
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Current Step Content */}
-                <div className="min-h-[400px]">
+              <form 
+                onSubmit={(e) => {
+                  // Always prevent default form submission
+                  // Form submission should ONLY happen when user clicks "Create Account" button
+                  e.preventDefault();
+                  e.stopPropagation();
+                }} 
+                onKeyDown={(e) => {
+                  // Prevent form submission on Enter key in input fields
+                  // Only allow submission when clicking the "Create Account" button
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // If user presses Enter on last step, trigger the Create Account button click
+                    if (isLastStep) {
+                      const submitButton = e.currentTarget.querySelector('button[type="button"]:last-child');
+                      if (submitButton) {
+                        (submitButton as HTMLButtonElement).click();
+                      }
+                    } else {
+                      // If not on last step, trigger Next button
+                      const nextButton = e.currentTarget.querySelector('button[type="button"]:last-child');
+                      if (nextButton) {
+                        (nextButton as HTMLButtonElement).click();
+                      }
+                    }
+                  }
+                }}
+                className="space-y-4 sm:space-y-6"
+              >
+                {/* Current Step Content - Remove fixed min-height, let content determine height */}
+                <div className="min-h-0">
                   {renderCurrentStep()}
                 </div>
                 
                 {/* Navigation Buttons */}
-                <div className="flex justify-between items-center pt-6 border-t">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0 pt-4 sm:pt-6 border-t mt-4 sm:mt-6">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handlePrevious}
                     disabled={currentStep === 1 || isLoading}
-                    className="flex items-center"
+                    className="w-full sm:w-auto flex items-center justify-center order-2 sm:order-1"
                   >
                     <ChevronLeft className="w-4 h-4 mr-1" />
                     Previous
                   </Button>
                   
-                  <div className="text-sm text-gray-500">
+                  <div className="text-xs sm:text-sm text-gray-500 order-1 sm:order-2">
                     Step {currentStep} of {totalSteps}
                   </div>
                   
                   {isLastStep ? (
                     <Button
-                      type="submit"
-                      className="btn-primary flex items-center"
+                      type="button"
+                      onClick={handleSubmit}
+                      className="btn-primary w-full sm:w-auto flex items-center justify-center order-3"
                       disabled={isLoading}
                     >
                       {isLoading ? (
@@ -883,7 +983,7 @@ const Register = () => {
                       type="button"
                       onClick={handleNext}
                       disabled={isLoading}
-                      className="btn-primary flex items-center"
+                      className="btn-primary w-full sm:w-auto flex items-center justify-center order-3"
                     >
                       Next
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -892,8 +992,8 @@ const Register = () => {
                 </div>
               </form>
 
-              <div className="mt-6 text-center">
-                <p className="text-gray-600">
+              <div className="mt-4 sm:mt-6 text-center">
+                <p className="text-sm sm:text-base text-gray-600">
                   Already have an account?{' '}
                   <Link to="/login" className="text-primary hover:underline font-medium">
                     Sign in here
@@ -902,9 +1002,9 @@ const Register = () => {
               </div>
 
               {formData.role === 'vendor' && (
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Vendor Registration Notice</h4>
-                  <p className="text-sm text-blue-700">
+                <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-sm sm:text-base text-blue-800 mb-1 sm:mb-2">Vendor Registration Notice</h4>
+                  <p className="text-xs sm:text-sm text-blue-700">
                     Your vendor account will be reviewed by our admin team before approval. 
                     You'll be notified once your account is active and you can start listing products.
                   </p>

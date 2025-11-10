@@ -33,13 +33,17 @@ try {
         // Ignore if MySQL version doesn't support max_execution_time
     }
     
-    // Set wait_timeout and interactive_timeout to prevent long-running queries
+    // Set wait_timeout and interactive_timeout to allow longer connections (for API calls)
+    // Increase timeout to handle OpenRouter API calls that may take 20+ seconds
     try {
-        $pdo->exec("SET SESSION wait_timeout = 5");
-        $pdo->exec("SET SESSION interactive_timeout = 5");
+        $pdo->exec("SET SESSION wait_timeout = 300"); // 5 minutes
+        $pdo->exec("SET SESSION interactive_timeout = 300"); // 5 minutes
     } catch (PDOException $e) {
         // Ignore if there's an issue setting timeouts
     }
+    
+    // Enable reconnection on lost connection
+    $pdo->setAttribute(PDO::ATTR_PERSISTENT, false); // Don't use persistent connections to avoid stale connections
 } catch (PDOException $e) {
     throw new PDOException($e->getMessage() . " (Connection failed to $host)", (int)$e->getCode());
 }

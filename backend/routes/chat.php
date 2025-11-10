@@ -1,10 +1,14 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/env_loader.php'; // Load environment variables
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/security.php';
 require_once __DIR__ . '/../utils/chat_helpers.php';
 require_once __DIR__ . '/../utils/advanced_nlp.php';
 require_once __DIR__ . '/../utils/chatbot_learning.php';
+require_once __DIR__ . '/../services/ai/OpenRouterChat.php';
+require_once __DIR__ . '/../utils/db_reconnect.php';
+require_once __DIR__ . '/../utils/faq_cache.php';
 
 /**
  * Generate UUID
@@ -34,15 +38,28 @@ function getOrCreateSessionId() {
     }
     
     $sessionId = 'chat_' . time() . '_' . bin2hex(random_bytes(8));
-    setcookie('chat_session_id', $sessionId, time() + (86400 * 30), '/'); // 30 days
+    // SECURITY: Set secure cookie flags (HttpOnly, Secure in production, SameSite)
+    $isProduction = getenv('APP_ENV') === 'production';
+    setcookie('chat_session_id', $sessionId, [
+        'expires' => time() + (86400 * 30), // 30 days
+        'path' => '/',
+        'httponly' => true, // Prevent JavaScript access (XSS protection)
+        'secure' => $isProduction, // Only send over HTTPS in production
+        'samesite' => 'Lax' // CSRF protection
+    ]);
     return $sessionId;
 }
 
 /**
  * Get or create conversation
  */
-function getOrCreateConversation($sessionId, $userId = null, $conversationId = null) {
+function getOrCreateConversation($sessionId, $userId = null, $conversationId = null, $language = 'en') {
     global $pdo;
+    
+    // Validate language
+    if (!in_array($language, ['en', 'sw'])) {
+        $language = 'en';
+    }
     
     try {
         // If specific conversation ID provided (for switching conversations)
@@ -106,19 +123,116 @@ function getOrCreateConversation($sessionId, $userId = null, $conversationId = n
             return $conversation['id'];
         }
         
-        // Create new conversation
+        // Create new conversation with specified language
         $newConversationId = generateUUID();
         $stmt = $pdo->prepare("
             INSERT INTO chat_conversations (id, user_id, session_id, status, language, title, last_message_at, message_count)
-            VALUES (?, ?, ?, 'active', 'en', NULL, NOW(), 0)
+            VALUES (?, ?, ?, 'active', ?, NULL, NOW(), 0)
         ");
-        $stmt->execute([$newConversationId, $userId, $sessionId]);
+        $stmt->execute([$newConversationId, $userId, $sessionId, $language]);
         
         return $newConversationId;
     } catch (PDOException $e) {
         error_log("Error in getOrCreateConversation: " . $e->getMessage());
         return null;
     }
+}
+
+/**
+ * Check if message is website/platform-related (should use local chatbot)
+ * vs general poultry farming question (should use OpenRouter AI)
+ */
+function isWebsiteQuestion($message) {
+    $messageLower = strtolower(trim($message));
+    
+    // PRIORITY 1: Check if it's a general poultry question (Kiswahili or English)
+    // If it contains general poultry terms, route to OpenRouter AI (NOT website question)
+    $generalPoultryTerms = [
+        // Kiswahili terms
+        'ugonjwa', 'kuku', 'mayai', 'chakula', 'lishe', 'afya', 'dawa', 
+        'kienyeji', 'mifugo', 'kukuzwa', 'kuzaa', 'kuku wa kienyeji',
+        // English terms (general poultry, not platform-specific)
+        'poultry disease', 'chicken disease', 'chicken health', 'chicken feed',
+        'chicken nutrition', 'chicken breeding', 'chicken farming', 'poultry farming',
+        'broiler', 'layer', 'hen', 'rooster', 'chick', 'egg production',
+        'chicken housing', 'chicken management', 'vaccination', 'medication'
+    ];
+    
+    foreach ($generalPoultryTerms as $term) {
+        if (stripos($messageLower, $term) !== false) {
+            // This is a general poultry question - route to OpenRouter AI
+            return false;
+        }
+    }
+    
+    // PRIORITY 2: Check for explicit website/platform keywords
+    // Website/platform-specific keywords (English)
+    $websiteKeywords = [
+        // Account/authentication
+        'account', 'login', 'register', 'sign up', 'sign in', 'password', 'profile',
+        'create account', 'how to register', 'how to login', 'forgot password',
+        
+        // Platform features (with context)
+        'list product', 'sell product', 'buy product', 'order', 'purchase', 'cart', 'checkout',
+        'how to list', 'how to sell', 'how to buy', 'place order', 'track order',
+        'order status', 'my order', 'my orders',
+        
+        // Platform navigation
+        'products page', 'dashboard', 'vendor dashboard', 'customer dashboard',
+        'contact page', 'about page', 'help page', 'support page',
+        
+        // Platform-specific questions
+        'how do i', 'how can i', 'where can i', 'where is', 'what is poultryhub',
+        'poultryhubkenya', 'poultry hub', 'this website', 'this platform', 'this site',
+        'your website', 'your platform', 'your site',
+        
+        // Technical/platform issues (more specific - require platform context)
+        'website error', 'site error', 'platform error', 'website bug', 'site bug',
+        'website problem', 'site problem', 'website not working', 'site not working',
+        'payment issue', 'payment problem', 'delivery issue', 'delivery problem',
+        'shipping issue', 'refund order', 'return order', 'order refund'
+    ];
+    
+    // Website/platform-specific keywords (Kiswahili) - only platform-related terms
+    $websiteKeywordsSwahili = [
+        'kuandikisha', 'kuingia', 'akaunti', 'hesabu', // register, login, account
+        'jinsi ya kuuza', 'jinsi ya kununua', // how to sell, how to buy
+        'maagizo', 'order', // orders
+        'tovuti', 'wavuti', 'website', // website
+        'poultryhub', 'poultry hub'
+    ];
+    
+    // Check if message contains website keywords (English)
+    foreach ($websiteKeywords as $keyword) {
+        if (stripos($messageLower, $keyword) !== false) {
+            return true;
+        }
+    }
+    
+    // Check if message contains website keywords (Kiswahili)
+    foreach ($websiteKeywordsSwahili as $keyword) {
+        if (stripos($messageLower, $keyword) !== false) {
+            return true;
+        }
+    }
+    
+    // Check for question patterns that are likely platform-related (English only)
+    $platformPatterns = [
+        '/^how (do|can) i (list|sell|buy|order|register|login)/i',
+        '/^where (is|can i find|do i)/i',
+        '/^what (is|are) (poultryhub|this (website|platform|site))/i',
+        '/^(show|tell) me (how|where|what)/i'
+    ];
+    
+    foreach ($platformPatterns as $pattern) {
+        if (preg_match($pattern, $messageLower)) {
+            return true;
+        }
+    }
+    
+    // Default: If it doesn't match website keywords, treat as general question (route to OpenRouter)
+    // This ensures Kiswahili questions and general poultry questions go to AI
+    return false;
 }
 
 /**
@@ -231,12 +345,14 @@ function detectIntent($message, $conversationId = null) {
         }
         
         // Get all active intents (except default)
-        $stmt = $pdo->query("
+        // SECURITY: Use prepared statement for consistency (even though no user input)
+        $stmt = $pdo->prepare("
             SELECT id, intent_name, keywords, response_template, requires_auth, action_type
             FROM chat_intents 
             WHERE is_active = TRUE AND intent_name != 'default'
             ORDER BY id ASC
         ");
+        $stmt->execute();
         $intents = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Get learned patterns for boosting
@@ -335,7 +451,10 @@ function detectIntent($message, $conversationId = null) {
             $clarification = handleAmbiguousQuery($message, $possibleMatches);
             if ($clarification) {
                 // Return a clarification response
-                $defaultIntent = $pdo->query("SELECT * FROM chat_intents WHERE intent_name = 'default'")->fetch(PDO::FETCH_ASSOC);
+                // SECURITY: Use prepared statement for consistency
+                $stmt = $pdo->prepare("SELECT * FROM chat_intents WHERE intent_name = 'default'");
+                $stmt->execute();
+                $defaultIntent = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($defaultIntent) {
                     $defaultIntent['response_template'] = $clarification;
                     return $defaultIntent;
@@ -644,81 +763,140 @@ function processIntent($intent, $message, $userId = null, $conversationId = null
 function handleChatMessage() {
     global $pdo;
     
-    $input = json_decode(file_get_contents('php://input'), true);
-    $message = sanitizeInput($input['message'] ?? '');
-    
-    // Get conversation ID - validate but don't HTML encode UUIDs
-    $requestedConversationId = isset($input['conversation_id']) ? trim($input['conversation_id']) : null;
-    if ($requestedConversationId && !preg_match('/^[a-zA-Z0-9_-]+$/', $requestedConversationId)) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Invalid conversation ID format']);
-        return;
-    }
-    
-    if (empty($message)) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Message is required']);
-        return;
-    }
-    
-    // Get user ID if logged in
-    $userId = null;
-    $token = getBearerToken();
-    if ($token) {
-        $payload = validateJWT($token);
-        if ($payload) {
-            $userId = $payload['user_id'] ?? null;
-        }
-    }
-    
-    // Get or create session
-    $sessionId = getOrCreateSessionId();
-    $conversationId = getOrCreateConversation($sessionId, $userId, $requestedConversationId);
-    
-    if (!$conversationId) {
-        http_response_code(500);
-        echo json_encode(['error' => 'Failed to create conversation']);
-        return;
-    }
-    
-    // CRITICAL SECURITY CHECK: For logged-in users, verify conversation ownership
-    // This prevents users from accessing other users' conversations even if they know the ID
-    if ($userId && $conversationId) {
-        $verifyStmt = $pdo->prepare("
-            SELECT user_id FROM chat_conversations 
-            WHERE id = ?
-        ");
-        $verifyStmt->execute([$conversationId]);
-        $verifyConv = $verifyStmt->fetch(PDO::FETCH_ASSOC);
+    // Wrap everything in try-catch to catch any fatal errors
+    try {
+        $input = json_decode(file_get_contents('php://input'), true);
         
-        if ($verifyConv) {
-            // If conversation exists but belongs to different user, deny access
-            if ($verifyConv['user_id'] !== null && $verifyConv['user_id'] !== $userId) {
-                http_response_code(403);
-                echo json_encode(['error' => 'Access denied: This conversation belongs to another user']);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Invalid JSON input']);
+            return;
+        }
+        
+        // SECURITY: Get user ID first (needed for rate limiting)
+        $userId = null;
+        $token = getBearerToken();
+        if ($token) {
+            $payload = validateJWT($token);
+            if ($payload) {
+                $userId = $payload['user_id'] ?? null;
+            }
+        }
+        
+        // SECURITY: Validate and clean message input (but don't HTML encode - React will handle escaping)
+        $rawMessage = $input['message'] ?? '';
+        
+        // Remove null bytes and trim
+        $rawMessage = str_replace(chr(0), '', $rawMessage);
+        $rawMessage = trim($rawMessage);
+        
+        // SECURITY: Validate message length to prevent DoS attacks
+        if (strlen($rawMessage) > 5000) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Message is too long. Maximum length is 5000 characters.']);
+            return;
+        }
+        
+        if (empty($rawMessage)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Message is required']);
+            return;
+        }
+        
+        // SECURITY: Rate limiting for chat messages to prevent spam/DoS
+        $clientIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $rateLimitKey = $userId ? 'chat_user_' . $userId : 'chat_ip_' . $clientIP;
+        if (!checkRateLimit($rateLimitKey, 20, 60)) { // 20 messages per minute
+            http_response_code(429);
+            echo json_encode(['success' => false, 'error' => 'Too many messages. Please wait a moment before sending another message.']);
+            return;
+        }
+        
+        // Store message as-is (React will HTML escape on display, preventing XSS)
+        $message = $rawMessage;
+        
+        // Get conversation ID - validate but don't HTML encode UUIDs
+        $requestedConversationId = isset($input['conversation_id']) ? trim($input['conversation_id']) : null;
+        if ($requestedConversationId) {
+            // SECURITY: Validate conversation ID format and length
+            if (!preg_match('/^[a-zA-Z0-9_-]+$/', $requestedConversationId) || strlen($requestedConversationId) > 100) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Invalid conversation ID format']);
                 return;
             }
+        }
+        
+        // Get language preference from request or user profile
+        $requestedLanguage = $input['language'] ?? null;
+        $language = $requestedLanguage ?? getUserLanguagePreference($userId);
+        
+        // Validate language
+        if (!in_array($language, ['en', 'sw'])) {
+            $language = 'en'; // Default to English
+        }
+        
+        // Get or create session
+        $sessionId = getOrCreateSessionId();
+        $conversationId = getOrCreateConversation($sessionId, $userId, $requestedConversationId, $language);
+        
+        if (!$conversationId) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Failed to create conversation']);
+            return;
+        }
+        
+        // CRITICAL SECURITY CHECK: For logged-in users, verify conversation ownership
+        // This prevents users from accessing other users' conversations even if they know the ID
+        if ($userId && $conversationId) {
+            $verifyStmt = $pdo->prepare("
+                SELECT user_id FROM chat_conversations 
+                WHERE id = ?
+            ");
+            $verifyStmt->execute([$conversationId]);
+            $verifyConv = $verifyStmt->fetch(PDO::FETCH_ASSOC);
             
-            // If conversation exists but has no user_id, assign it to current user (if logged in)
-            if ($verifyConv['user_id'] === null && $userId) {
-                $updateStmt = $pdo->prepare("
-                    UPDATE chat_conversations 
-                    SET user_id = ? 
-                    WHERE id = ? AND user_id IS NULL
-                ");
-                $updateStmt->execute([$userId, $conversationId]);
+            if ($verifyConv) {
+                // If conversation exists but belongs to different user, deny access
+                if ($verifyConv['user_id'] !== null && $verifyConv['user_id'] !== $userId) {
+                    http_response_code(403);
+                    echo json_encode(['success' => false, 'error' => 'Access denied: This conversation belongs to another user']);
+                    return;
+                }
+                
+                // If conversation exists but has no user_id, assign it to current user (if logged in)
+                if ($verifyConv['user_id'] === null && $userId) {
+                    $updateStmt = $pdo->prepare("
+                        UPDATE chat_conversations 
+                        SET user_id = ? 
+                        WHERE id = ? AND user_id IS NULL
+                    ");
+                    $updateStmt->execute([$userId, $conversationId]);
+                }
             }
         }
-    }
-    
-    try {
-        // Save user message
+        
+        // Save user message (with reconnection handling)
         $messageId = generateUUID();
-        $stmt = $pdo->prepare("
-            INSERT INTO chat_messages (id, conversation_id, message, sender, created_at)
-            VALUES (?, ?, ?, 'user', NOW())
-        ");
-        $stmt->execute([$messageId, $conversationId, $message]);
+        try {
+            $stmt = $pdo->prepare("
+                INSERT INTO chat_messages (id, conversation_id, message, sender, created_at)
+                VALUES (?, ?, ?, 'user', NOW())
+            ");
+            $stmt->execute([$messageId, $conversationId, $message]);
+        } catch (PDOException $e) {
+            // If MySQL connection is lost, reconnect and retry
+            if (isConnectionLostError($e->getMessage())) {
+                error_log("MySQL connection lost before API call, reconnecting...");
+                $pdo = reconnectDatabase();
+                $stmt = $pdo->prepare("
+                    INSERT INTO chat_messages (id, conversation_id, message, sender, created_at)
+                    VALUES (?, ?, ?, 'user', NOW())
+                ");
+                $stmt->execute([$messageId, $conversationId, $message]);
+            } else {
+                throw $e;
+            }
+        }
         
         // Update conversation metadata (title, last_message_at, message_count)
         // Set title from first user message if not set
@@ -769,81 +947,372 @@ function handleChatMessage() {
             }
         }
         
-        // Understand user intent with advanced NLP
-        $intentAnalysis = understandIntent($message, $conversationHistory);
+        // HYBRID CHATBOT: Route message to local chatbot or OpenRouter AI
+        // PRIORITY 1: Check if message is clearly non-poultry FIRST (before any other routing)
+        // This prevents non-poultry questions from being routed to website chatbot or AI
+        $intent = null; // Initialize for later use
+        $response = null; // Initialize response
+        $cachedResponse = null;
+        $isWebsiteQ = false; // Initialize
         
-        // Detect intent with conversation context for better understanding
-        $intent = detectIntent($message, $conversationId);
-        
-        if (!$intent) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Failed to process message']);
-            return;
+        // STEP 1: Check if message is clearly non-poultry (BEFORE checking website questions)
+        // This catches cases like "my bed is broken", "my car tire", etc.
+        if (!isPoultryRelated($message)) {
+            // Message is not poultry-related - check if it's a website question
+            $isWebsiteQ = isWebsiteQuestion($message);
+            
+            if (!$isWebsiteQ) {
+                // Non-poultry, non-website question - return polite decline with helpful suggestions
+                $declineMessages = [
+                    'en' => "I'm a poultry farming expert assistant for PoultryHubKenya. I can only help with poultry-related questions.\n\nI can help you with:\n\n• Poultry farming advice (chickens, ducks, turkeys)\n• Chicken breeds (broilers, layers, kienyeji/indigenous)\n• Feeding and nutrition\n• Health and disease management\n• Egg production\n• Housing and management\n• Market prices and trends\n\nHow can I assist you with poultry farming?",
+                    'sw' => "Mimi ni msaidizi wa mtaalamu wa ufugaji wa kuku wa PoultryHubKenya. Ninaweza kusaidia tu kuhusu masuala ya ufugaji wa kuku.\n\nNinaweza kukusaidia kuhusu:\n\n• Ushauri wa ufugaji wa kuku (kuku, bata, bata mzinga)\n• Aina za kuku (broiler, layer, kienyeji)\n• Chakula na lishe\n• Afya na udhibiti wa magonjwa\n• Uzalishaji wa mayai\n• Makao na usimamizi\n• Bei za soko na mienendo\n\nNisaidieje kuhusu ufugaji wa kuku?"
+                ];
+                
+                $quickReplies = [
+                    'en' => [
+                        ['text' => 'Chicken breeds', 'action' => 'message', 'payload' => ['message' => 'chicken breeds']],
+                        ['text' => 'Feeding advice', 'action' => 'message', 'payload' => ['message' => 'chicken feeding']],
+                        ['text' => 'Disease management', 'action' => 'message', 'payload' => ['message' => 'poultry diseases']],
+                        ['text' => 'Browse Products', 'action' => 'navigate', 'payload' => ['url' => '/products']],
+                    ],
+                    'sw' => [
+                        ['text' => 'Aina za kuku', 'action' => 'message', 'payload' => ['message' => 'aina za kuku']],
+                        ['text' => 'Ushauri wa chakula', 'action' => 'message', 'payload' => ['message' => 'chakula cha kuku']],
+                        ['text' => 'Udhiberiti wa magonjwa', 'action' => 'message', 'payload' => ['message' => 'ugonjwa wa kuku']],
+                        ['text' => 'Vinjari Bidhaa', 'action' => 'navigate', 'payload' => ['url' => '/products']],
+                    ],
+                ];
+                
+                $response = [
+                    'message' => $declineMessages[$language] ?? $declineMessages['en'],
+                    'intent' => 'non_poultry_question',
+                    'action_type' => 'message',
+                    'quick_replies' => $quickReplies[$language] ?? $quickReplies['en'],
+                    'data' => ['source' => 'local', 'non_poultry' => true]
+                ];
+                
+                error_log("Non-poultry question detected (early check) - Message: '$message', Language: $language");
+            } else {
+                // Non-poultry but website-related (e.g., "website is broken") - treat as website question
+                error_log("Non-poultry website question - Message: '$message', Language: $language");
+            }
+        } else {
+            // Message is poultry-related - determine if it's website-specific or general poultry question
+            $isWebsiteQ = isWebsiteQuestion($message);
+            error_log("Message routing - Message: '$message', IsWebsiteQuestion: " . ($isWebsiteQ ? 'YES (local chatbot)' : 'NO (OpenRouter AI)') . ", IsPoultryRelated: YES, Language: $language");
+            
+            if (!$isWebsiteQ) {
+                // General poultry question (not website-specific) - check cache first
+                $cachedResponse = getCachedFAQ($message, $language);
+                if ($cachedResponse) {
+                    error_log("Using cached FAQ response for: " . substr($message, 0, 50));
+                    $response = [
+                        'message' => $cachedResponse['answer'],
+                        'intent' => 'general_poultry_advice',
+                        'action_type' => 'ai_response',
+                        'quick_replies' => [
+                            ['text' => $language === 'sw' ? 'Uliza Swali Jingine' : 'Ask Another Question', 'action' => 'message', 'payload' => ['message' => '']],
+                            ['text' => $language === 'sw' ? 'Kurasa ya Bidhaa' : 'Browse Products', 'action' => 'navigate', 'payload' => ['url' => '/products']],
+                            ['text' => $language === 'sw' ? 'Msaada wa Tovuti' : 'Website Help', 'action' => 'message', 'payload' => ['message' => $language === 'sw' ? 'Jinsi ya kutumia tovuti hii' : 'How do I use this website?']]
+                        ],
+                        'data' => [
+                            'source' => $cachedResponse['source'],
+                            'cached' => true
+                        ]
+                    ];
+                }
+                // If no cache, will continue to OpenRouter AI below
+            }
         }
         
-        // Process intent and generate response with context
-        $response = processIntent($intent, $message, $userId, $conversationId);
+        // If we have a cached response or non-poultry response, skip API call
+        if ($response && (isset($response['data']['non_poultry']) || isset($response['data']['cached']))) {
+            // Response already set (non-poultry decline or cached), skip to saving
+        } else if ($isWebsiteQ) {
+            // Website/platform question - use local chatbot logic
+            // Understand user intent with advanced NLP
+            $intentAnalysis = understandIntent($message, $conversationHistory);
+            
+            // Detect intent with conversation context for better understanding
+            $intent = detectIntent($message, $conversationId);
+            
+            if (!$intent) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to process message']);
+                return;
+            }
+            
+            // Process intent and generate response with context
+            $response = processIntent($intent, $message, $userId, $conversationId);
+            
+            // Log before contextual enhancement
+            error_log("Before contextual enhancement - Message length: " . strlen($response['message']) . ", Intent: {$intent['intent_name']}");
+            
+            // Enhance response with contextual understanding (only if not already customized)
+            $originalMessage = $response['message'];
+            $enhancedMessage = generateContextualResponse($response['message'], $message, $conversationHistory);
+            $response['message'] = $enhancedMessage;
+            
+            // Log after contextual enhancement
+            error_log("After contextual enhancement - Message length: " . strlen($response['message']));
+        } else {
+            // General poultry farming question - use OpenRouter AI
+            try {
+                // Check if class exists before instantiating
+                if (!class_exists('OpenRouterChat')) {
+                    error_log("OpenRouterChat class not found - check if file is loaded correctly");
+                    throw new Exception("OpenRouterChat class not available");
+                }
+                
+                $openRouterChat = new OpenRouterChat();
+                
+                if (!$openRouterChat->isEnabled()) {
+                    // Fallback to local chatbot if OpenRouter is not configured
+                    error_log("OpenRouter AI is not enabled - falling back to local chatbot");
+                    $intent = detectIntent($message, $conversationId);
+                    if (!$intent) {
+                        // Use default intent
+                        $stmt = $pdo->prepare("
+                            SELECT id, intent_name, keywords, response_template, requires_auth, action_type
+                            FROM chat_intents 
+                            WHERE intent_name = 'default'
+                        ");
+                        $stmt->execute();
+                        $intent = $stmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                    if (!$intent) {
+                        // If still no intent, create a basic response
+                        $response = [
+                            'message' => "I'm here to help with poultry farming questions. For detailed advice, please configure OpenRouter API. For now, I can help you with:\n\n• How to use this website\n• Product information\n• Order status\n• Account help",
+                            'intent' => 'default',
+                            'action_type' => 'message',
+                            'quick_replies' => [
+                                ['text' => 'Website Help', 'action' => 'message', 'payload' => ['message' => 'How do I use this website?']],
+                                ['text' => 'Browse Products', 'action' => 'navigate', 'payload' => ['url' => '/products']]
+                            ]
+                        ];
+                    } else {
+                        $response = processIntent($intent, $message, $userId, $conversationId);
+                        $response['message'] = $response['message'] . "\n\n💡 Note: For detailed poultry farming advice, please configure OpenRouter API.";
+                    }
+                } else {
+                    // Use OpenRouter AI
+                    error_log("Using OpenRouter AI for message: " . substr($message, 0, 50) . ", Language: $language");
+                    $aiResponse = $openRouterChat->askAI($message, $conversationHistory, $language);
+                    
+                    if ($aiResponse['success']) {
+                        // Cache the response for future use
+                        cacheFAQ($message, $aiResponse['message'], $language, 'openrouter');
+                        
+                        $response = [
+                            'message' => $aiResponse['message'],
+                            'intent' => 'general_poultry_advice',
+                            'action_type' => 'ai_response',
+                            'quick_replies' => [
+                                ['text' => $language === 'sw' ? 'Uliza Swali Jingine' : 'Ask Another Question', 'action' => 'message', 'payload' => ['message' => '']],
+                                ['text' => $language === 'sw' ? 'Kurasa ya Bidhaa' : 'Browse Products', 'action' => 'navigate', 'payload' => ['url' => '/products']],
+                                ['text' => $language === 'sw' ? 'Msaada wa Tovuti' : 'Website Help', 'action' => 'message', 'payload' => ['message' => $language === 'sw' ? 'Jinsi ya kutumia tovuti hii' : 'How do I use this website?']]
+                            ],
+                            'data' => [
+                                'source' => 'openrouter',
+                                'model' => $aiResponse['model'] ?? null,
+                                'tokens_used' => $aiResponse['tokens_used'] ?? null,
+                                'cached' => false
+                            ]
+                        ];
+                    } else {
+                        // AI failed, fallback to local chatbot
+                        error_log("OpenRouter AI failed: " . ($aiResponse['error'] ?? 'Unknown error'));
+                        $intent = detectIntent($message, $conversationId);
+                        if (!$intent) {
+                            $stmt = $pdo->prepare("
+                                SELECT id, intent_name, keywords, response_template, requires_auth, action_type
+                                FROM chat_intents 
+                                WHERE intent_name = 'default'
+                            ");
+                            $stmt->execute();
+                            $intent = $stmt->fetch(PDO::FETCH_ASSOC);
+                        }
+                        if (!$intent) {
+                            $response = [
+                                'message' => "I'm having trouble processing that question right now. Please try again later or ask about how to use this website.",
+                                'intent' => 'default',
+                                'action_type' => 'message',
+                                'quick_replies' => [
+                                    ['text' => 'Website Help', 'action' => 'message', 'payload' => ['message' => 'How do I use this website?']]
+                                ]
+                            ];
+                        } else {
+                            $response = processIntent($intent, $message, $userId, $conversationId);
+                            $response['message'] = "I'm having trouble processing that question. " . $response['message'];
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // Catch any exceptions from OpenRouterChat
+                error_log("Exception in OpenRouter AI handling: " . $e->getMessage());
+                error_log("Stack trace: " . $e->getTraceAsString());
+                
+                // Fallback to local chatbot
+                $intent = detectIntent($message, $conversationId);
+                if (!$intent) {
+                    $stmt = $pdo->prepare("
+                        SELECT id, intent_name, keywords, response_template, requires_auth, action_type
+                        FROM chat_intents 
+                        WHERE intent_name = 'default'
+                    ");
+                    $stmt->execute();
+                    $intent = $stmt->fetch(PDO::FETCH_ASSOC);
+                }
+                if (!$intent) {
+                    $response = [
+                        'message' => "I encountered an error processing your question. Please try again or ask about how to use this website.",
+                        'intent' => 'default',
+                        'action_type' => 'message',
+                        'quick_replies' => [
+                            ['text' => 'Website Help', 'action' => 'message', 'payload' => ['message' => 'How do I use this website?']]
+                        ]
+                    ];
+                } else {
+                    $response = processIntent($intent, $message, $userId, $conversationId);
+                    $response['message'] = "I encountered an error. " . $response['message'];
+                }
+            }
+        }
         
-        // Log before contextual enhancement
-        error_log("Before contextual enhancement - Message length: " . strlen($response['message']) . ", Intent: {$intent['intent_name']}");
-        
-        // Enhance response with contextual understanding (only if not already customized)
-        $originalMessage = $response['message'];
-        $enhancedMessage = generateContextualResponse($response['message'], $message, $conversationHistory);
-        $response['message'] = $enhancedMessage;
-        
-        // Log after contextual enhancement
-        error_log("After contextual enhancement - Message length: " . strlen($response['message']));
+        // Validate response exists and has message
+        if (!$response || !is_array($response) || !isset($response['message']) || empty($response['message'])) {
+            error_log("Error: Invalid or missing response. Response: " . json_encode($response));
+            error_log("Message was: " . $message);
+            error_log("isWebsiteQ: " . ($isWebsiteQ ? 'true' : 'false'));
+            
+            // Last resort fallback
+            $response = [
+                'message' => "I'm sorry, I encountered an error processing your question. Please try rephrasing your question or ask about how to use this website.",
+                'intent' => 'default',
+                'action_type' => 'message',
+                'quick_replies' => [
+                    ['text' => 'Website Help', 'action' => 'message', 'payload' => ['message' => 'How do I use this website?']]
+                ]
+            ];
+        }
         
         // Save bot response
         $botMessageId = generateUUID();
-        $stmt = $pdo->prepare("
-            INSERT INTO chat_messages (id, conversation_id, message, sender, intent, response_type, metadata, created_at)
-            VALUES (?, ?, ?, 'bot', ?, ?, ?, NOW())
-        ");
-        $metadata = json_encode([
-            'intent' => $intent['intent_name'],
-            'action_type' => $intent['action_type'],
-            'data' => $response['data']
-        ]);
-        $stmt->execute([
-            $botMessageId, 
-            $conversationId, 
-            $response['message'], 
-            $intent['intent_name'],
-            $intent['action_type'],
-            $metadata
-        ]);
+        $intentName = isset($intent['intent_name']) ? $intent['intent_name'] : ($response['intent'] ?? 'general_poultry_advice');
+        $actionType = isset($intent['action_type']) ? $intent['action_type'] : ($response['action_type'] ?? 'ai_response');
+        
+        try {
+            $stmt = $pdo->prepare("
+                INSERT INTO chat_messages (id, conversation_id, message, sender, intent, response_type, metadata, created_at)
+                VALUES (?, ?, ?, 'bot', ?, ?, ?, NOW())
+            ");
+            $metadata = json_encode([
+                'intent' => $intentName,
+                'action_type' => $actionType,
+                'data' => $response['data'] ?? null,
+                'source' => $isWebsiteQ ? 'local_chatbot' : 'openrouter_ai'
+            ]);
+            $stmt->execute([
+                $botMessageId, 
+                $conversationId, 
+                $response['message'], 
+                $intentName,
+                $actionType,
+                $metadata
+            ]);
+        } catch (PDOException $e) {
+            error_log("Error saving bot message to database: " . $e->getMessage());
+            // If MySQL connection is lost, try to reconnect
+            if (isConnectionLostError($e->getMessage())) {
+                error_log("MySQL connection lost, attempting to reconnect...");
+                try {
+                    // Reconnect database
+                    $pdo = reconnectDatabase();
+                    // Retry saving the message
+                    $stmt = $pdo->prepare("
+                        INSERT INTO chat_messages (id, conversation_id, message, sender, intent, response_type, metadata, created_at)
+                        VALUES (?, ?, ?, 'bot', ?, ?, ?, NOW())
+                    ");
+                    $metadata = json_encode([
+                        'intent' => $intentName,
+                        'action_type' => $actionType,
+                        'data' => $response['data'] ?? null,
+                        'source' => $isWebsiteQ ? 'local_chatbot' : 'openrouter_ai'
+                    ]);
+                    $stmt->execute([
+                        $botMessageId, 
+                        $conversationId, 
+                        $response['message'], 
+                        $intentName,
+                        $actionType,
+                        $metadata
+                    ]);
+                    error_log("Successfully saved message after reconnection");
+                } catch (PDOException $e2) {
+                    error_log("Failed to save message after reconnection: " . $e2->getMessage());
+                    // Continue even if database save fails - we still want to return the response
+                }
+            } else {
+                // Continue even if database save fails - we still want to return the response
+            }
+        }
         
         // Update conversation last_message_at and message_count
-        $updateStmt = $pdo->prepare("
-            UPDATE chat_conversations 
-            SET last_message_at = NOW(),
-                message_count = message_count + 1
-            WHERE id = ?
-        ");
-        $updateStmt->execute([$conversationId]);
-        
-        // Record successful match for learning
         try {
-            recordSuccessfulMatch(
-                $conversationId, 
-                $message, 
-                $intent['intent_name'], 
-                0.8, // Default confidence score (will be improved with learning)
-                'enhanced_nlp'
-            );
-        } catch (Exception $e) {
-            // Log but don't fail the request if learning system has issues
-            error_log("Error recording match for learning: " . $e->getMessage());
+            $updateStmt = $pdo->prepare("
+                UPDATE chat_conversations 
+                SET last_message_at = NOW(),
+                    message_count = message_count + 1
+                WHERE id = ?
+            ");
+            $updateStmt->execute([$conversationId]);
+        } catch (PDOException $e) {
+            // If MySQL connection is lost, try to reconnect
+            if (isConnectionLostError($e->getMessage())) {
+                error_log("MySQL connection lost during conversation update, attempting to reconnect...");
+                try {
+                    // Reconnect database
+                    $pdo = reconnectDatabase();
+                    // Retry updating conversation
+                    $updateStmt = $pdo->prepare("
+                        UPDATE chat_conversations 
+                        SET last_message_at = NOW(),
+                            message_count = message_count + 1
+                        WHERE id = ?
+                    ");
+                    $updateStmt->execute([$conversationId]);
+                } catch (PDOException $e2) {
+                    error_log("Failed to update conversation after reconnection: " . $e2->getMessage());
+                    // Continue even if update fails
+                }
+            } else {
+                error_log("Error updating conversation: " . $e->getMessage());
+            }
+        }
+        
+        // Record successful match for learning (only for local chatbot responses)
+        if ($isWebsiteQ && isset($intent)) {
+            try {
+                recordSuccessfulMatch(
+                    $conversationId, 
+                    $message, 
+                    $intent['intent_name'], 
+                    0.8, // Default confidence score (will be improved with learning)
+                    'enhanced_nlp'
+                );
+            } catch (Exception $e) {
+                // Log but don't fail the request if learning system has issues
+                error_log("Error recording match for learning: " . $e->getMessage());
+            }
         }
         
         // Final log before sending response
         $finalResponse = [
             'success' => true,
             'response' => $response['message'], // Make sure we're sending the correct message
-            'intent' => $intent['intent_name'],
-            'action_type' => $response['action_type'] ?? null,
+            'intent' => $intentName,
+            'action_type' => $actionType,
             'quick_replies' => $response['quick_replies'] ?? [],
             'data' => $response['data'] ?? null,
             'message_id' => $botMessageId, // Include message ID for feedback
@@ -856,22 +1325,36 @@ function handleChatMessage() {
         echo json_encode($finalResponse);
         
     } catch (PDOException $e) {
-        error_log("Error in handleChatMessage: " . $e->getMessage());
+        error_log("PDO Error in handleChatMessage: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
         http_response_code(500);
+        header('Content-Type: application/json');
         echo json_encode([
             'success' => false,
             'error' => 'Failed to process message. Please try again.',
-            'debug' => getenv('APP_ENV') === 'development' ? $e->getMessage() : null
+            'debug' => (getenv('APP_ENV') === 'development' || empty(getenv('APP_ENV'))) ? $e->getMessage() : null
+        ]);
+    } catch (Error $e) {
+        // Catch fatal errors (PHP 7+)
+        error_log("Fatal Error in handleChatMessage: " . $e->getMessage());
+        error_log("File: " . $e->getFile() . " Line: " . $e->getLine());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'error' => 'An unexpected error occurred. Please try again.',
+            'debug' => (getenv('APP_ENV') === 'development' || empty(getenv('APP_ENV'))) ? $e->getMessage() : null
         ]);
     } catch (Exception $e) {
         error_log("General error in handleChatMessage: " . $e->getMessage());
         error_log("Stack trace: " . $e->getTraceAsString());
         http_response_code(500);
+        header('Content-Type: application/json');
         echo json_encode([
             'success' => false,
             'error' => 'An unexpected error occurred. Please try again.',
-            'debug' => getenv('APP_ENV') === 'development' ? $e->getMessage() : null
+            'debug' => (getenv('APP_ENV') === 'development' || empty(getenv('APP_ENV'))) ? $e->getMessage() : null
         ]);
     }
 }
@@ -1072,6 +1555,75 @@ function handleGetConversations() {
         error_log("Error in handleGetConversations: " . $e->getMessage());
         http_response_code(500);
         echo json_encode(['error' => 'Failed to fetch conversations']);
+    }
+}
+
+/**
+ * Delete a conversation
+ */
+function handleDeleteConversation($conversationId) {
+    global $pdo;
+    
+    header('Content-Type: application/json');
+    
+    // Get user ID - must be logged in
+    $userId = null;
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'error' => 'Authentication required']);
+        return;
+    }
+    
+    $payload = validateJWT($token);
+    if (!$payload) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'error' => 'Invalid token']);
+        return;
+    }
+    
+    $userId = $payload['user_id'] ?? null;
+    if (!$userId) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'error' => 'User ID not found']);
+        return;
+    }
+    
+    // Validate conversation ID
+    if (empty($conversationId)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Conversation ID is required']);
+        return;
+    }
+    
+    try {
+        // Verify conversation belongs to user
+        $stmt = $pdo->prepare("SELECT id FROM chat_conversations WHERE id = ? AND user_id = ?");
+        $stmt->execute([$conversationId, $userId]);
+        $conversation = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$conversation) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Conversation not found or access denied']);
+            return;
+        }
+        
+        // Delete all messages in the conversation
+        $stmt = $pdo->prepare("DELETE FROM chat_messages WHERE conversation_id = ?");
+        $stmt->execute([$conversationId]);
+        
+        // Delete the conversation
+        $stmt = $pdo->prepare("DELETE FROM chat_conversations WHERE id = ? AND user_id = ?");
+        $stmt->execute([$conversationId, $userId]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Conversation deleted successfully'
+        ]);
+    } catch (PDOException $e) {
+        error_log("Error in handleDeleteConversation: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Failed to delete conversation']);
     }
 }
 

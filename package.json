@@ -8,7 +8,11 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clear-cache": "powershell -ExecutionPolicy Bypass -File ./clear-vite-cache.ps1",
+    "fix-cache": "powershell -ExecutionPolicy Bypass -File ./fix-vite-cache.ps1",
+    "clean": "npm run clear-cache",
+    "clean:all": "npm run clear-cache && npm run fix-cache"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

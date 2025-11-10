@@ -21,6 +21,19 @@ return [
                 'quality_assessment' => true,
                 'description_generation' => true
             ]
+        ],
+        'openrouter' => [
+            'enabled' => true,
+            'api_key' => getenv('OPENROUTER_API_KEY') ?: '', // Use environment variable
+            'model' => 'deepseek/deepseek-chat', // Free/low-cost model, or 'mistralai/mistral-7b-instruct' for alternative
+            'base_url' => 'https://openrouter.ai/api/v1/chat/completions',
+            'max_tokens' => 1000, // Reasonable limit for chat responses
+            'temperature' => 0.7, // Balanced creativity
+            'features' => [
+                'general_chat' => true,
+                'poultry_advice' => true,
+                'farming_questions' => true
+            ]
         ]
     ],
     'limits' => [

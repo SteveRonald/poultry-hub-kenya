@@ -15,8 +15,8 @@ $allowedOrigins = [
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173', // Vite default port
-    'http://192.168.10.24:8080',
-    'http://192.168.10.24:8081',
+    'http://192.168.170.24:8080',
+    'http://192.168.170.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.14.176:3000'
 ];
@@ -66,6 +66,16 @@ $path = str_replace('/poultry-hub-kenya/backend/', '', $path);
 $path = str_replace('/backend/', '', $path);
 $path = str_replace('index.php/', '', $path); // Remove index.php/ if present
 $path = ltrim($path, '/'); // Remove leading slash
+
+// Handle dynamic routes for conversation deletion (before switch)
+if (preg_match('#^api/chat/conversations/([^/]+)$#', $path, $matches)) {
+    $conversationId = $matches[1] ?? null;
+    if ($method === 'DELETE' && $conversationId) {
+        include 'routes/chat.php';
+        handleDeleteConversation($conversationId);
+        exit;
+    }
+}
 
 // Route the request
 switch ($path) {
@@ -301,6 +311,17 @@ switch ($path) {
     case 'api/chat/feedback':
         if ($method === 'POST' || $method === 'GET') {
             include 'routes/chat_feedback.php';
+        }
+        break;
+        
+    case 'api/chat/settings/language':
+        if ($method === 'POST' || $method === 'GET') {
+            include 'routes/chat_settings.php';
+            if ($method === 'POST') {
+                handleUpdateLanguagePreference();
+            } else {
+                handleGetLanguagePreference();
+            }
         }
         break;
         

@@ -28,13 +28,14 @@ function handleGetCounties() {
             $cached = SimpleCache::get($cacheKey);
             if ($cached !== null) {
                 http_response_code(200);
+                header('Content-Type: application/json; charset=utf-8');
                 echo json_encode([
                     'success' => true, 
                     'data' => $cached,
                     'count' => count($cached),
                     'execution_time_ms' => 0,
                     'cached' => true
-                ]);
+                ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
         }
@@ -50,6 +51,7 @@ function handleGetCounties() {
             // Allow only alphanumeric, spaces, and common punctuation
             $searchTerm = preg_replace('/[^a-zA-Z0-9\s\-.,]/', '', $search);
             $searchTerm = "%" . $searchTerm . "%";
+            $query .= " WHERE (county_name LIKE ? OR county_code LIKE ?)";
             $params[] = $searchTerm;
             $params[] = $searchTerm;
         }
@@ -75,24 +77,26 @@ function handleGetCounties() {
         }
         
         http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => true, 
             'data' => $counties,
             'count' => count($counties),
             'execution_time_ms' => $executionTime,
             'cached' => false
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit; // Exit immediately after sending response
         
     } catch (PDOException $e) {
         http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
         // Log detailed error for debugging (server-side only)
         error_log("Counties query error: " . $e->getMessage());
         // Return generic error message to client (don't leak database details)
         echo json_encode([
             'success' => false, 
             'error' => 'Failed to fetch counties. Please try again later.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit; // Exit immediately after sending error
     }
 }
@@ -112,7 +116,8 @@ function handleGetConstituencies() {
         
         if (!$countyId) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'county_id is required']);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'county_id is required'], JSON_UNESCAPED_UNICODE);
             exit;
         }
         
@@ -126,7 +131,8 @@ function handleGetConstituencies() {
         
         if ($countyId === false) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'Invalid county_id']);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Invalid county_id'], JSON_UNESCAPED_UNICODE);
             exit;
         }
         
@@ -138,13 +144,14 @@ function handleGetConstituencies() {
             $cached = SimpleCache::get($cacheKey);
             if ($cached !== null) {
                 http_response_code(200);
+                header('Content-Type: application/json; charset=utf-8');
                 echo json_encode([
                     'success' => true, 
                     'data' => $cached,
                     'count' => count($cached),
                     'execution_time_ms' => 0,
                     'cached' => true
-                ]);
+                ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
         }
@@ -160,6 +167,7 @@ function handleGetConstituencies() {
             // Sanitize search term - remove any SQL wildcards that could cause issues
             $searchTerm = preg_replace('/[^a-zA-Z0-9\s\-.,]/', '', $search);
             $searchTerm = "%" . $searchTerm . "%";
+            $query .= " AND constituency_name LIKE ?";
             $params[] = $searchTerm;
         }
         
@@ -184,24 +192,26 @@ function handleGetConstituencies() {
         }
         
         http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => true, 
             'data' => $constituencies,
             'count' => count($constituencies),
             'execution_time_ms' => $executionTime,
             'cached' => false
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit; // Exit immediately after sending response
         
     } catch (PDOException $e) {
         http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
         // Log detailed error for debugging (server-side only)
         error_log("Constituencies query error: " . $e->getMessage());
         // Return generic error message to client (don't leak database details)
         echo json_encode([
             'success' => false, 
             'error' => 'Failed to fetch constituencies. Please try again later.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit; // Exit immediately after sending error
     }
 }
@@ -221,7 +231,8 @@ function handleGetWards() {
         
         if (!$constituencyId) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'constituency_id is required']);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'constituency_id is required'], JSON_UNESCAPED_UNICODE);
             exit;
         }
         
@@ -235,7 +246,8 @@ function handleGetWards() {
         
         if ($constituencyId === false) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'Invalid constituency_id']);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Invalid constituency_id'], JSON_UNESCAPED_UNICODE);
             exit;
         }
         
@@ -247,13 +259,14 @@ function handleGetWards() {
             $cached = SimpleCache::get($cacheKey);
             if ($cached !== null) {
                 http_response_code(200);
+                header('Content-Type: application/json; charset=utf-8');
                 echo json_encode([
                     'success' => true, 
                     'data' => $cached,
                     'count' => count($cached),
                     'execution_time_ms' => 0,
                     'cached' => true
-                ]);
+                ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
         }
@@ -269,6 +282,7 @@ function handleGetWards() {
             // Sanitize search term - remove any SQL wildcards that could cause issues
             $searchTerm = preg_replace('/[^a-zA-Z0-9\s\-.,]/', '', $search);
             $searchTerm = "%" . $searchTerm . "%";
+            $query .= " AND ward_name LIKE ?";
             $params[] = $searchTerm;
         }
         
@@ -293,24 +307,26 @@ function handleGetWards() {
         }
         
         http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => true, 
             'data' => $wards,
             'count' => count($wards),
             'execution_time_ms' => $executionTime,
             'cached' => false
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit; // Exit immediately after sending response
         
     } catch (PDOException $e) {
         http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
         // Log detailed error for debugging (server-side only)
         error_log("Wards query error: " . $e->getMessage());
         // Return generic error message to client (don't leak database details)
         echo json_encode([
             'success' => false, 
             'error' => 'Failed to fetch wards. Please try again later.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit; // Exit immediately after sending error
     }
 }
@@ -331,11 +347,12 @@ function handleGetAllLocations() {
         $cached = SimpleCache::get($cacheKey);
         if ($cached !== null) {
             http_response_code(200);
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => true,
                 'data' => $cached,
                 'cached' => true
-            ]);
+            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
         
@@ -372,23 +389,25 @@ function handleGetAllLocations() {
         SimpleCache::set($cacheKey, $data, 3600);
         
         http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'success' => true,
             'data' => $data,
             'execution_time_ms' => $executionTime,
             'cached' => false
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
         
     } catch (PDOException $e) {
         http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
         // Log detailed error for debugging (server-side only)
         error_log("All locations query error: " . $e->getMessage());
         // Return generic error message to client (don't leak database details)
         echo json_encode([
             'success' => false,
             'error' => 'Failed to fetch location data. Please try again later.'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageCircle, X, Send, Bot, User, Sparkles, ThumbsUp, ThumbsDown, MessageSquare, Plus, ChevronLeft } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User, Sparkles, ThumbsUp, ThumbsDown, MessageSquare, Plus, ChevronLeft, Languages, Trash2, CheckSquare, Square, Check } from 'lucide-react';
 import { getApiUrl } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -44,6 +44,13 @@ const Chatbot: React.FC = () => {
   const [conversations, setConversations] = useState<any[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [showConversations, setShowConversations] = useState(false);
+  const [language, setLanguage] = useState<'en' | 'sw'>('en');
+  const [isLoadingLanguage, setIsLoadingLanguage] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
+  const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [isDeletingMultiple, setIsDeletingMultiple] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -71,12 +78,108 @@ const Chatbot: React.FC = () => {
     return audioContextRef.current;
   };
 
-  // Load conversations list if user is logged in (but don't auto-load them)
+  // Load conversations list and language preference if user is logged in
   useEffect(() => {
     if (isOpen && user) {
       loadConversations();
+      loadLanguagePreference();
+    } else if (isOpen && !user) {
+      // For guests, use default language or check localStorage
+      const savedLanguage = localStorage.getItem('chatbot_language') as 'en' | 'sw' | null;
+      if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'sw')) {
+        setLanguage(savedLanguage);
+      }
     }
   }, [isOpen, user]);
+  
+  // Load user's language preference from backend
+  const loadLanguagePreference = async () => {
+    if (!user) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch(getApiUrl('/api/chat/settings/language'), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.language) {
+          setLanguage(data.language === 'sw' ? 'sw' : 'en');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load language preference:', error);
+    }
+  };
+  
+  // Update language preference
+  const updateLanguagePreference = async (newLanguage: 'en' | 'sw') => {
+    setLanguage(newLanguage);
+    
+    // Save to localStorage for guests
+    if (!user) {
+      localStorage.setItem('chatbot_language', newLanguage);
+      return;
+    }
+    
+    // Update on backend for logged-in users
+    try {
+      setIsLoadingLanguage(true);
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch(getApiUrl('/api/chat/settings/language'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ language: newLanguage }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Language updated successfully
+          console.log('Language preference updated:', newLanguage);
+          // Reload welcome message with new language
+          if (messages.length === 1 && messages[0].id === 'welcome') {
+            const welcomeMessages = {
+              en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+              sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+            };
+            const quickReplies = {
+              en: [
+                { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
+                { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+                { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
+              ],
+              sw: [
+                { text: 'Vinjari Bidhaa', action: 'navigate', payload: { url: '/products' } },
+                { text: 'Maagizo Yangu', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+                { text: 'Msaada wa Akaunti', action: 'intent', payload: { intent: 'account_help' } },
+              ],
+            };
+            setMessages([{
+              id: 'welcome',
+              message: welcomeMessages[newLanguage],
+              sender: 'bot',
+            }]);
+            setQuickReplies(quickReplies[newLanguage]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update language preference:', error);
+    } finally {
+      setIsLoadingLanguage(false);
+    }
+  };
   
   // Load chat history ONLY when user explicitly selects a conversation
   useEffect(() => {
@@ -137,18 +240,30 @@ const Chatbot: React.FC = () => {
           setShowConversations(false);
           // Reload conversations list
           loadConversations();
-          // Show welcome message for new conversation
+          // Show welcome message for new conversation (language-aware)
+          const welcomeMessages = {
+            en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+            sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+          };
+          const quickReplies = {
+            en: [
+              { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
+              { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+              { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
+            ],
+            sw: [
+              { text: 'Vinjari Bidhaa', action: 'navigate', payload: { url: '/products' } },
+              { text: 'Maagizo Yangu', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+              { text: 'Msaada wa Akaunti', action: 'intent', payload: { intent: 'account_help' } },
+            ],
+          };
           const welcomeMessage: Message = {
             id: 'welcome',
-            message: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+            message: welcomeMessages[language],
             sender: 'bot',
           };
           setMessages([welcomeMessage]);
-          setQuickReplies([
-            { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
-            { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
-            { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
-          ]);
+          setQuickReplies(quickReplies[language]);
         }
       }
     } catch (error) {
@@ -166,24 +281,150 @@ const Chatbot: React.FC = () => {
     await loadChatHistory(conversationId);
   };
   
+  // Toggle select mode
+  const toggleSelectMode = () => {
+    setIsSelectMode(prev => !prev);
+    if (isSelectMode) {
+      setSelectedConversations(new Set());
+    }
+  };
+  
+  // Toggle conversation selection
+  const toggleConversationSelection = (conversationId: string) => {
+    setSelectedConversations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(conversationId)) {
+        newSet.delete(conversationId);
+      } else {
+        newSet.add(conversationId);
+      }
+      return newSet;
+    });
+  };
+  
+  // Select all conversations
+  const selectAllConversations = () => {
+    if (selectedConversations.size === conversations.length) {
+      setSelectedConversations(new Set());
+    } else {
+      setSelectedConversations(new Set(conversations.map(conv => conv.id)));
+    }
+  };
+  
+  // Show delete confirmation modal for single conversation
+  const handleDeleteClick = (conversationId: string) => {
+    if (isSelectMode) {
+      toggleConversationSelection(conversationId);
+      return;
+    }
+    setConversationToDelete(conversationId);
+    setShowDeleteConfirm(true);
+  };
+  
+  // Show delete confirmation for multiple conversations
+  const handleDeleteMultipleClick = () => {
+    if (selectedConversations.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+  
+  // Cancel deletion
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setConversationToDelete(null);
+  };
+  
+  // Delete a single conversation
+  const deleteSingleConversation = async (conversationId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return false;
+      
+      const response = await fetch(getApiUrl(`/api/chat/conversations/${conversationId}`), {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.success;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      return false;
+    }
+  };
+  
+  // Confirm and delete conversation(s)
+  const handleDeleteConversation = async () => {
+    if (!user) return;
+    
+    const conversationsToDelete = conversationToDelete 
+      ? [conversationToDelete] 
+      : Array.from(selectedConversations);
+    
+    if (conversationsToDelete.length === 0) return;
+    
+    setShowDeleteConfirm(false);
+    setIsDeletingMultiple(true);
+    
+    try {
+      // Delete conversations one by one
+      const deletePromises = conversationsToDelete.map(id => deleteSingleConversation(id));
+      const results = await Promise.all(deletePromises);
+      
+      // Remove successfully deleted conversations from list
+      const deletedIds = conversationsToDelete.filter((id, index) => results[index]);
+      setConversations(prev => prev.filter(conv => !deletedIds.includes(conv.id)));
+      
+      // If current conversation was deleted, switch to fresh chat
+      if (deletedIds.includes(currentConversationId || '')) {
+        startFreshChat();
+      }
+      
+      // Clear selections
+      setSelectedConversations(new Set());
+      setIsSelectMode(false);
+    } catch (error) {
+      console.error('Failed to delete conversations:', error);
+    } finally {
+      setConversationToDelete(null);
+      setIsDeletingMultiple(false);
+    }
+  };
+  
   // Start fresh chat (clear current conversation and show welcome)
   const startFreshChat = () => {
     setCurrentConversationId(null);
     setMessages([]);
     setQuickReplies([]);
     setShowConversations(false);
-    // Show welcome message for fresh chat
+    // Show welcome message for fresh chat (language-aware)
+    const welcomeMessages = {
+      en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+      sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+    };
+    const quickReplies = {
+      en: [
+        { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
+        { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+        { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
+      ],
+      sw: [
+        { text: 'Vinjari Bidhaa', action: 'navigate', payload: { url: '/products' } },
+        { text: 'Maagizo Yangu', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+        { text: 'Msaada wa Akaunti', action: 'intent', payload: { intent: 'account_help' } },
+      ],
+    };
     const welcomeMessage: Message = {
       id: 'welcome',
-      message: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+      message: welcomeMessages[language],
       sender: 'bot',
     };
     setMessages([welcomeMessage]);
-    setQuickReplies([
-      { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
-      { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
-      { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
-    ]);
+    setQuickReplies(quickReplies[language]);
   };
 
   // Scroll to bottom when messages change
@@ -328,7 +569,8 @@ const Chatbot: React.FC = () => {
         headers,
         body: JSON.stringify({ 
           message: messageToSend,
-          conversation_id: currentConversationId 
+          conversation_id: currentConversationId,
+          language: language
         }),
       });
 
@@ -528,19 +770,31 @@ const Chatbot: React.FC = () => {
     if (isOpen && messages.length === 0 && !isLoading && !currentConversationId) {
       // Always show welcome message when opening chat (fresh start)
       // Previous conversations are available via the conversations button
+      const welcomeMessages = {
+        en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+        sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+      };
+      const quickReplies = {
+        en: [
+          { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
+          { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+          { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
+        ],
+        sw: [
+          { text: 'Vinjari Bidhaa', action: 'navigate', payload: { url: '/products' } },
+          { text: 'Maagizo Yangu', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
+          { text: 'Msaada wa Akaunti', action: 'intent', payload: { intent: 'account_help' } },
+        ],
+      };
       const welcomeMessage: Message = {
         id: 'welcome',
-        message: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+        message: welcomeMessages[language],
         sender: 'bot',
       };
       setMessages([welcomeMessage]);
-      setQuickReplies([
-        { text: 'Browse Products', action: 'navigate', payload: { url: '/products' } },
-        { text: 'My Orders', action: 'navigate', payload: { url: '/dashboard', requiresAuth: true } },
-        { text: 'Account Help', action: 'intent', payload: { intent: 'account_help' } },
-      ]);
+      setQuickReplies(quickReplies[language]);
     }
-  }, [isOpen, messages.length, isLoading, currentConversationId]);
+  }, [isOpen, messages.length, isLoading, currentConversationId, language]);
 
   // Render popup using portal for better z-index handling
   const popupContent = showWelcomeNotification && !isOpen && mounted ? (
@@ -722,10 +976,12 @@ const Chatbot: React.FC = () => {
             <div className="absolute inset-0 bg-white z-10 flex flex-col">
               {/* Conversations Header */}
               <div className="bg-gradient-to-r from-primary to-secondary text-white p-3 sm:p-4 flex items-center justify-between flex-shrink-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-1">
                   <button
                     onClick={() => {
                       setShowConversations(false);
+                      setIsSelectMode(false);
+                      setSelectedConversations(new Set());
                       // When closing conversations list, ensure we're in fresh chat mode (not viewing old conversation)
                       if (currentConversationId) {
                         startFreshChat();
@@ -737,22 +993,67 @@ const Chatbot: React.FC = () => {
                     <ChevronLeft className="h-5 w-5" />
                   </button>
                   <h3 className="font-semibold text-sm sm:text-base">Your Previous Conversations</h3>
-                  {conversations.length > 0 && (
+                  {conversations.length > 0 && !isSelectMode && (
                     <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
                       {conversations.length}
                     </span>
                   )}
+                  {isSelectMode && selectedConversations.size > 0 && (
+                    <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                      {selectedConversations.size} selected
+                    </span>
+                  )}
                 </div>
-                <button
-                  onClick={() => {
-                    createNewConversation();
-                  }}
-                  className="hover:bg-white/20 rounded-full p-1.5 transition-colors"
-                  aria-label="New conversation"
-                  title="Start new chat"
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {conversations.length > 0 && (
+                    <>
+                      {isSelectMode ? (
+                        <>
+                          {selectedConversations.size > 0 && (
+                            <button
+                              onClick={handleDeleteMultipleClick}
+                              className="hover:bg-white/20 rounded-lg px-2 py-1.5 transition-colors flex items-center gap-1.5 bg-red-500/20 border border-red-300/30"
+                              aria-label="Delete selected"
+                              title="Delete selected conversations"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="text-xs font-medium">Delete</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={toggleSelectMode}
+                            className="hover:bg-white/20 rounded-lg px-2 py-1.5 transition-colors"
+                            aria-label="Cancel selection"
+                            title="Cancel selection"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={toggleSelectMode}
+                            className="hover:bg-white/20 rounded-lg px-2 py-1.5 transition-colors"
+                            aria-label="Select conversations"
+                            title="Select conversations"
+                          >
+                            <CheckSquare className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              createNewConversation();
+                            }}
+                            className="hover:bg-white/20 rounded-full p-1.5 transition-colors"
+                            aria-label="New conversation"
+                            title="Start new chat"
+                          >
+                            <Plus className="h-5 w-5" />
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
               
               {/* Conversations List */}
@@ -764,50 +1065,116 @@ const Chatbot: React.FC = () => {
                     <p className="text-xs text-gray-400 mt-1">Start chatting to create your first conversation</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {conversations.map((conv) => (
-                      <button
-                        key={conv.id}
-                        onClick={() => switchConversation(conv.id)}
-                        className={`w-full text-left p-3 rounded-lg transition-all ${
-                          currentConversationId === conv.id
-                            ? 'bg-primary/10 border-l-4 border-primary shadow-sm'
-                            : 'hover:bg-gray-100 border-l-4 border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-medium text-sm text-gray-900 truncate">
-                                {conv.title || 'New Conversation'}
-                              </h4>
-                              {currentConversationId === conv.id && (
-                                <span className="text-xs bg-primary text-white px-1.5 py-0.5 rounded">Viewing</span>
+                  <>
+                    {/* Select All Checkbox (only in select mode) */}
+                    {isSelectMode && conversations.length > 0 && (
+                      <div className="mb-2 pb-2 border-b border-gray-200">
+                        <button
+                          onClick={selectAllConversations}
+                          className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 w-full p-2 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          {selectedConversations.size === conversations.length ? (
+                            <CheckSquare className="h-5 w-5 text-primary" />
+                          ) : (
+                            <Square className="h-5 w-5 text-gray-400" />
+                          )}
+                          <span className="font-medium">
+                            {selectedConversations.size === conversations.length 
+                              ? 'Deselect All' 
+                              : `Select All (${conversations.length})`}
+                          </span>
+                        </button>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-1">
+                      {conversations.map((conv) => {
+                        const isSelected = selectedConversations.has(conv.id);
+                        return (
+                          <div
+                            key={conv.id}
+                            className={`group w-full text-left p-3 rounded-lg transition-all ${
+                              currentConversationId === conv.id && !isSelectMode
+                                ? 'bg-primary/10 border-l-4 border-primary shadow-sm'
+                                : isSelected
+                                ? 'bg-primary/5 border-l-4 border-primary'
+                                : 'hover:bg-gray-100 border-l-4 border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              {/* Checkbox (in select mode) */}
+                              {isSelectMode && (
+                                <button
+                                  onClick={() => toggleConversationSelection(conv.id)}
+                                  className="flex-shrink-0 mt-0.5"
+                                  aria-label={isSelected ? 'Deselect conversation' : 'Select conversation'}
+                                >
+                                  {isSelected ? (
+                                    <CheckSquare className="h-5 w-5 text-primary" />
+                                  ) : (
+                                    <Square className="h-5 w-5 text-gray-400" />
+                                  )}
+                                </button>
                               )}
-                            </div>
-                            {conv.last_message && (
-                              <p className="text-xs text-gray-500 mt-1 line-clamp-2 mb-2">
-                                {conv.last_message}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 text-xs text-gray-400">
-                              <span>{conv.message_count} {conv.message_count === 1 ? 'message' : 'messages'}</span>
-                              {conv.last_message_at && (
-                                <>
-                                  <span>•</span>
-                                  <span>{new Date(conv.last_message_at).toLocaleDateString('en-US', { 
-                                    month: 'short', 
-                                    day: 'numeric',
-                                    year: new Date(conv.last_message_at).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                                  })}</span>
-                                </>
+                              
+                              <button
+                                onClick={() => {
+                                  if (isSelectMode) {
+                                    toggleConversationSelection(conv.id);
+                                  } else {
+                                    switchConversation(conv.id);
+                                  }
+                                }}
+                                className="flex-1 min-w-0 text-left"
+                              >
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-medium text-sm text-gray-900 truncate">
+                                    {conv.title || 'New Conversation'}
+                                  </h4>
+                                  {currentConversationId === conv.id && !isSelectMode && (
+                                    <span className="text-xs bg-primary text-white px-1.5 py-0.5 rounded">Viewing</span>
+                                  )}
+                                </div>
+                                {conv.last_message && (
+                                  <p className="text-xs text-gray-500 mt-1 line-clamp-2 mb-2">
+                                    {conv.last_message}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                  <span>{conv.message_count} {conv.message_count === 1 ? 'message' : 'messages'}</span>
+                                  {conv.last_message_at && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{new Date(conv.last_message_at).toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric',
+                                        year: new Date(conv.last_message_at).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+                                      })}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </button>
+                              
+                              {/* Delete Button (only when not in select mode) */}
+                              {!isSelectMode && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(conv.id);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-red-100 rounded text-red-600 hover:text-red-700 flex-shrink-0"
+                                  aria-label="Delete conversation"
+                                  title="Delete conversation"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               )}
                             </div>
                           </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -932,6 +1299,70 @@ const Chatbot: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Language Selector - Within chat area with blinking animation (only for logged-in users) */}
+            {user && (
+              <div className="border-t border-gray-200 px-3 sm:px-4 pt-2 pb-1 bg-white flex-shrink-0">
+                <div className="flex items-center justify-center">
+                  <div className="relative">
+                    <style>{`
+                      @keyframes languageBlink {
+                        0%, 100% {
+                          opacity: 1;
+                          box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                          transform: scale(1);
+                        }
+                        50% {
+                          opacity: 0.8;
+                          box-shadow: 0 0 20px 5px rgba(34, 197, 94, 0.8);
+                          transform: scale(1.02);
+                        }
+                      }
+                      .language-selector-blinking {
+                        animation: languageBlink 2s ease-in-out infinite;
+                      }
+                    `}</style>
+                    <button
+                      className="language-selector-blinking relative hover:bg-primary/10 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 transition-all flex items-center gap-2 bg-primary/5 border-2 border-primary cursor-pointer"
+                      aria-label={`Select preferred language: ${language === 'en' ? 'English' : 'Kiswahili'}`}
+                      title={`Select preferred language: ${language === 'en' ? 'English' : 'Kiswahili'}`}
+                      disabled={isLoadingLanguage}
+                      type="button"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.classList.remove('language-selector-blinking');
+                        e.currentTarget.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.6)';
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.classList.add('language-selector-blinking');
+                        e.currentTarget.style.boxShadow = '';
+                        e.currentTarget.style.transform = '';
+                      }}
+                    >
+                      <Languages className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                      <span className="text-xs sm:text-sm font-semibold text-primary">
+                        Select Preferred Language: {language === 'en' ? 'English' : 'Kiswahili'}
+                      </span>
+                      <select
+                        value={language}
+                        onChange={(e) => {
+                          const newLang = e.target.value as 'en' | 'sw';
+                          updateLanguagePreference(newLang);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                        disabled={isLoadingLanguage}
+                        style={{ fontSize: 'inherit' }}
+                      >
+                        <option value="en">English</option>
+                        <option value="sw">Kiswahili</option>
+                      </select>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Input */}
             <div className="border-t border-gray-200 p-3 sm:p-4 bg-white rounded-b-lg flex-shrink-0">
               <div className="flex gap-2">
@@ -965,6 +1396,53 @@ const Chatbot: React.FC = () => {
             </div>
             </>
           )}
+        </div>
+      )}
+      
+      {/* Custom Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 border-2 border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-red-100 rounded-full p-2">
+                  <Trash2 className="h-6 w-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {conversationToDelete ? 'Delete Conversation' : 'Delete Conversations'}
+                </h3>
+              </div>
+              <p className="text-gray-600 mb-6">
+                {conversationToDelete 
+                  ? 'Are you sure you want to delete this conversation? This action cannot be undone.'
+                  : `Are you sure you want to delete ${selectedConversations.size} ${selectedConversations.size === 1 ? 'conversation' : 'conversations'}? This action cannot be undone.`
+                }
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={handleCancelDelete}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  disabled={isDeletingMultiple}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteConversation}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={isDeletingMultiple}
+                >
+                  {isDeletingMultiple ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </>

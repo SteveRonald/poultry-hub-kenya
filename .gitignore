@@ -69,8 +69,8 @@ backend/vendor/**/Tests/**
 
 # Documentation README files (keep main README.md)
 # Ignore README.md files in subdirectories (but not root README.md)
-*/README.md
-**/*/README.md
+**/README.md
+!README.md
 
 # Database documentation prompts
 DATABASE_ER_DIAGRAM_PROMPT.md

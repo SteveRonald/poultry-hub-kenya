@@ -15,8 +15,8 @@ $allowedOrigins = [
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173', // Vite default port
-    'http://192.168.170.24:8080',
-    'http://192.168.170.24:8081',
+    'http://192.168.23.24:8080',
+    'http://192.168.23.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.14.176:3000'
 ];
@@ -758,6 +758,34 @@ switch ($path) {
         if ($method === 'POST') {
             include 'routes/advertisements.php';
             handleTrackAdClick();
+        }
+        break;
+        
+    case 'api/market-insights/prices':
+        if ($method === 'GET') {
+            include 'routes/market_insights.php';
+            handleGetMarketPrices();
+        }
+        break;
+        
+    case 'api/market-insights/predictions':
+        if ($method === 'GET') {
+            include 'routes/market_insights.php';
+            handleGetPredictedPrices();
+        }
+        break;
+        
+    case 'api/market-insights/combined':
+        if ($method === 'GET') {
+            include 'routes/market_insights.php';
+            handleGetCombinedPrices();
+        }
+        break;
+        
+    case 'api/market-insights/filter-options':
+        if ($method === 'GET') {
+            include 'routes/market_insights.php';
+            handleGetFilterOptions();
         }
         break;
         

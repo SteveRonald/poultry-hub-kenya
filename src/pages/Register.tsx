@@ -328,20 +328,20 @@ const Register = () => {
     // Validation passed - clear ALL errors and move to next step
     setErrors({});
     
-    // Mark current step as completed
-    if (!completedSteps.includes(currentStep)) {
-      setCompletedSteps(prev => [...prev, currentStep]);
-    }
-    
-    // Move to next step
-    const nextStep = currentStep + 1;
-    const totalSteps = getTotalSteps();
-    
-    if (nextStep <= totalSteps) {
+      // Mark current step as completed
+      if (!completedSteps.includes(currentStep)) {
+        setCompletedSteps(prev => [...prev, currentStep]);
+      }
+      
+      // Move to next step
+      const nextStep = currentStep + 1;
+      const totalSteps = getTotalSteps();
+      
+      if (nextStep <= totalSteps) {
       // Clear ALL errors when moving to next step - user hasn't attempted next step yet
       // This ensures no errors show when just navigating to a step
       setErrors({});
-      setCurrentStep(nextStep);
+        setCurrentStep(nextStep);
       // Remove attemptedSteps for the next step if it exists (fresh start)
       setAttemptedSteps(prev => {
         const newSet = new Set(prev);
@@ -477,7 +477,7 @@ const Register = () => {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) {
-      e.preventDefault();
+    e.preventDefault();
     }
     
     // Mark that user has attempted to submit the form (all steps)
@@ -586,10 +586,10 @@ const Register = () => {
 
   const renderStepIndicator = () => {
     const totalSteps = getTotalSteps();
-    const stepLabels = formData.role === 'vendor' 
-      ? ['Personal Info', 'Account', 'Location', 'Farm Details']
-      : ['Personal Info', 'Account'];
-    
+      const stepLabels = formData.role === 'vendor' 
+        ? ['Personal Info', 'Account', 'Location', 'Farm Details']
+        : ['Personal Info', 'Account'];
+      
     return (
       <div className="flex items-center justify-center mb-4 sm:mb-6">
         {Array.from({ length: totalSteps }, (_, i) => {
@@ -601,52 +601,52 @@ const Register = () => {
           return (
             <React.Fragment key={stepNumber}>
               <div
-                className={`flex items-center ${
-                  isAccessible ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed opacity-50'
-                }`}
+          className={`flex items-center ${
+            isAccessible ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed opacity-50'
+          }`}
                 onClick={() => isAccessible && handleStepClick(stepNumber)}
                 title={!isAccessible ? 'Complete previous steps first' : stepLabels[i]}
-              >
-                <div
+        >
+          <div
                   className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 transition-colors ${
-                    isCompleted
-                      ? 'bg-green-500 border-green-500 text-white'
-                      : isCurrent
-                      ? 'bg-primary border-primary text-white'
-                      : isAccessible
-                      ? 'bg-white border-gray-300 text-gray-600 hover:border-primary'
-                      : 'bg-gray-100 border-gray-300 text-gray-400'
-                  }`}
-                >
-                  {isCompleted ? (
+              isCompleted
+                ? 'bg-green-500 border-green-500 text-white'
+                : isCurrent
+                ? 'bg-primary border-primary text-white'
+                : isAccessible
+                ? 'bg-white border-gray-300 text-gray-600 hover:border-primary'
+                : 'bg-gray-100 border-gray-300 text-gray-400'
+            }`}
+          >
+            {isCompleted ? (
                     <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                  ) : (
+            ) : (
                     <span className="font-semibold text-sm sm:text-base">{stepNumber}</span>
-                  )}
-                </div>
+            )}
+          </div>
                 <div className="ml-2 sm:ml-3 hidden sm:block">
-                  <div className={`text-sm font-medium ${
-                    isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : isAccessible ? 'text-gray-700' : 'text-gray-400'
-                  }`}>
+            <div className={`text-sm font-medium ${
+              isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : isAccessible ? 'text-gray-700' : 'text-gray-400'
+            }`}>
                     Step {stepNumber}
-                  </div>
-                  <div className={`text-xs ${
-                    isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-500'
+            </div>
+            <div className={`text-xs ${
+              isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-500'
                   }`}>{stepLabels[i]}</div>
-                </div>
+          </div>
               </div>
               {stepNumber < totalSteps && (
-                <div
+            <div
                   className={`mx-2 sm:mx-4 h-0.5 w-6 sm:w-12 transition-colors ${
                     isCompleted ? 'bg-green-500' : completedSteps.includes(stepNumber + 1) ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                />
-              )}
+              }`}
+            />
+          )}
             </React.Fragment>
           );
         })}
-      </div>
-    );
+        </div>
+      );
   };
 
   const renderStep1 = () => (
@@ -908,14 +908,14 @@ const Register = () => {
             <CardContent className="px-4 sm:px-6">
               {/* Step Indicator */}
               <div className="mb-4 sm:mb-6">
-                {renderStepIndicator()}
-              </div>
-              
+              {renderStepIndicator()}
+                </div>
+                
               <form 
                 onSubmit={(e) => {
                   // Always prevent default form submission
                   // Form submission should ONLY happen when user clicks "Create Account" button
-                  e.preventDefault();
+    e.preventDefault();
                   e.stopPropagation();
                 }} 
                 onKeyDown={(e) => {
@@ -929,7 +929,7 @@ const Register = () => {
                       if (submitButton) {
                         (submitButton as HTMLButtonElement).click();
                       }
-                    } else {
+        } else {
                       // If not on last step, trigger Next button
                       const nextButton = e.currentTarget.querySelector('button[type="button"]:last-child');
                       if (nextButton) {

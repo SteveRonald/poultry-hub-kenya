@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Eye, Package, ShoppingCart, TrendingUp, X, Menu } from 'lucide-react';
 import { getApiUrl } from '../config/api';
+import MarketInsightsWidget from '../components/MarketInsightsWidget';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -342,6 +343,8 @@ const Dashboard = () => {
                   <h2 className="text-xl font-semibold text-primary">Order Overview</h2>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Market Insights Widget */}
+                    <MarketInsightsWidget limit={3} showViewAll={true} />
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-lg">Recent Orders</CardTitle>

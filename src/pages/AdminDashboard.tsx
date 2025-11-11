@@ -16,6 +16,7 @@ import Analytics from '../components/Analytics';
 import BackupManagement from '../components/BackupManagement';
 import AdminAdvertisementManager from '../components/AdminAdvertisementManager';
 import { useAdmin } from '../contexts/AdminContext';
+import MarketInsightsWidget from '../components/MarketInsightsWidget';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -1292,6 +1293,11 @@ const AdminDashboard = () => {
               {activeTab === 'overview' && (
                 <div id="tab-section-overview" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">Platform Overview</h2>
+                  
+                  {/* Market Insights Widget */}
+                  <div className="mb-6">
+                    <MarketInsightsWidget limit={4} showViewAll={true} />
+                  </div>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
                     <Card>

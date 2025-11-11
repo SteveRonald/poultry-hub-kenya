@@ -15,6 +15,7 @@ import VendorAnalytics from '../components/VendorAnalytics';
 import AIProductAssistant from '../components/AIProductAssistant';
 import AdvertisementManager from '../components/AdvertisementManager';
 import CreateAdvertisementForm from '../components/CreateAdvertisementForm';
+import MarketInsightsWidget from '../components/MarketInsightsWidget';
 import { useToast } from '../hooks/use-toast';
 import {
   AlertDialog,
@@ -1577,6 +1578,9 @@ const VendorDashboard = () => {
                   </div>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 w-full">
+                    {/* Market Insights Widget */}
+                    <MarketInsightsWidget limit={3} showViewAll={true} />
+                    
                     <Card className="flex flex-col">
                       <CardHeader>
                         <CardTitle className="text-lg">Latest Orders</CardTitle>

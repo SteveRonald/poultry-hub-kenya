@@ -18,6 +18,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Training from "./pages/Training";
 import Blog from "./pages/Blog";
 import Contact from "./pages/Contact";
+import MarketInsights from "./pages/MarketInsights";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLogin from "./pages/AdminLogin";
@@ -41,6 +42,7 @@ const App = () => (
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/products" element={<Products />} />
+                <Route path="/market-insights" element={<MarketInsights />} />
                 <Route path="/training" element={<Training />} />
                 <Route path="/blog" element={<Blog />} />
                 <Route path="/contact" element={<Contact />} />

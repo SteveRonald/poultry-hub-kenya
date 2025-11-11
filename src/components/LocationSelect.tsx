@@ -94,7 +94,7 @@ export const LocationSelect: React.FC<LocationSelectProps> = ({
       if (error.name === 'AbortError') {
         console.error('Request timeout: Failed to fetch counties within 5 seconds');
       } else {
-        console.error('Failed to fetch counties:', error);
+      console.error('Failed to fetch counties:', error);
       }
       setCounties([]);
     } finally {
@@ -367,46 +367,46 @@ export const LocationSelect: React.FC<LocationSelectProps> = ({
       </div>
       
       {/* Constituency (Subcounty) Selection */}
-      <div>
+        <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
           Subcounty <span className="text-red-500">*</span>
-        </label>
-        <Combobox
+          </label>
+          <Combobox
           options={constituencies.map(constituency => ({
             value: constituency.constituency_id,
             label: constituency.constituency_name,
-          }))}
-          value={constituencyId}
-          onValueChange={handleConstituencyChange}
-          onSearch={handleConstituencySearch}
+            }))}
+            value={constituencyId}
+            onValueChange={handleConstituencyChange}
+            onSearch={handleConstituencySearch}
           placeholder={countyId ? "Select subcounty..." : "Select a county first"}
-          searchPlaceholder="Search subcounties..."
+            searchPlaceholder="Search subcounties..."
           emptyMessage={countyId ? "No subcounties found." : "Please select a county first"}
           disabled={disabled || !countyId || loadingConstituencies}
-          loading={loadingConstituencies}
-        />
-      </div>
+            loading={loadingConstituencies}
+          />
+        </div>
       
       {/* Ward Selection */}
-      <div>
+        <div>
         <label className="block text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
           Ward/Sublocation <span className="text-red-500">*</span>
-        </label>
-        <Combobox
+          </label>
+          <Combobox
           options={wards.map(ward => ({
             value: ward.ward_id,
             label: ward.ward_name,
-          }))}
-          value={wardId}
-          onValueChange={handleWardChange}
-          onSearch={handleWardSearch}
+            }))}
+            value={wardId}
+            onValueChange={handleWardChange}
+            onSearch={handleWardSearch}
           placeholder={constituencyId ? "Select ward..." : "Select a subcounty first"}
-          searchPlaceholder="Search wards..."
+            searchPlaceholder="Search wards..."
           emptyMessage={constituencyId ? "No wards found." : "Please select a subcounty first"}
           disabled={disabled || !constituencyId || loadingWards}
-          loading={loadingWards}
-        />
-      </div>
+            loading={loadingWards}
+          />
+        </div>
     </div>
   );
 };

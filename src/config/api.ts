@@ -36,6 +36,7 @@ export const API_BASE_URL = getApiBaseUrl();
 
 // Helper function to get full API URL
 export const getApiUrl = (endpoint: string) => {
+  if (!endpoint) return API_BASE_URL;
   return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 };
 

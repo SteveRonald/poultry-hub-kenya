@@ -70,6 +70,7 @@ const Navbar = () => {
   const navLinks = [
     { path: '/', label: 'Home' },
     { path: '/products', label: 'Products' },
+    { path: '/market-insights', label: 'Market Insights' },
     { path: '/training', label: 'Training' },
     { path: '/blog', label: 'Blog' },
     { path: '/contact', label: 'Contact' },

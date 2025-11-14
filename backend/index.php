@@ -15,8 +15,8 @@ $allowedOrigins = [
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173', // Vite default port
-    'http://192.168.23.24:8080',
-    'http://192.168.23.24:8081',
+    'http://192.168.52.24:8080',
+    'http://192.168.52.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.14.176:3000'
 ];
@@ -90,6 +90,20 @@ switch ($path) {
         }
         break;
         
+    case 'api/auth/send-login-otp':
+        if ($method === 'POST') {
+            include 'routes/login_2fa.php';
+            handleSendLoginOTP();
+        }
+        break;
+        
+    case 'api/auth/verify-login-otp':
+        if ($method === 'POST') {
+            include 'routes/login_2fa.php';
+            handleVerifyLoginOTP();
+        }
+        break;
+        
     case 'api/users/register':
         if ($method === 'POST') {
             include 'routes/users.php';
@@ -101,6 +115,13 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/users.php';
             handleGetUser();
+        }
+        break;
+        
+    case 'api/users/profile':
+        if ($method === 'PUT') {
+            include 'routes/users.php';
+            handleUpdateUserProfile();
         }
         break;
         
@@ -803,6 +824,12 @@ switch ($path) {
         } elseif (strpos($path, 'api/admin/users/') === 0 && $method === 'DELETE') {
             include 'routes/admin.php';
             handleDeleteUser();
+        } elseif (strpos($path, 'api/admin/sms-logs/') === 0 && $method === 'DELETE') {
+            include 'routes/sms.php';
+            handleDeleteSMSLog();
+        } elseif (strpos($path, 'api/admin/sms-logs/') === 0 && strpos($path, '/retry') && $method === 'POST') {
+            include 'routes/sms.php';
+            handleRetrySMS();
         } else {
             http_response_code(404);
             echo json_encode(['error' => 'Endpoint not found']);

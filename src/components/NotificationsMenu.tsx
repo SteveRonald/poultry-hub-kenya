@@ -156,6 +156,29 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
     }
   };
 
+  const deleteNotification = async (id: number) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      const res = await fetch(getApiUrl('/api/notifications/' + id), {
+        method: 'DELETE',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (res.ok) {
+        fetchNotifications();
+      } else if (res.status === 401) {
+        setNotifications([]);
+      }
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (

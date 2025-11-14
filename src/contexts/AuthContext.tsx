@@ -44,8 +44,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper to get token
-  const getToken = () => localStorage.getItem('token');
+  // Helper to get token - supports both old 'token' key and new 'session_token' key
+  const getToken = () => {
+    return localStorage.getItem('session_token') || localStorage.getItem('token');
+  };
 
   // Fetch user profile from backend
   const fetchUser = async () => {
@@ -63,10 +65,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Only remove token on 401 (unauthorized) - but verify it's actually expired
       if (res.status === 401) {
         // Double-check: try to get token from localStorage
-        const currentToken = localStorage.getItem('token');
+        const currentToken = getToken();
         if (currentToken === token) {
           // Token is the same, so it's actually expired
           setUser(null);
+          localStorage.removeItem('session_token');
           localStorage.removeItem('token');
         }
         setIsLoading(false);
@@ -127,11 +130,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(errorData.error || 'Invalid credentials');
       }
       const data = await res.json();
-      localStorage.setItem('token', data.token);
+      // Support both old 'token' and new 'session_token' keys
+      localStorage.setItem('session_token', data.token);
+      localStorage.setItem('token', data.token); // For backward compatibility
       setUser({
         id: data.user.id,
         email: data.user.email,
-        name: data.user.full_name,
+        name: data.user.name,
         role: data.user.role,
         phone: data.user.phone,
         isApproved: data.user.isApproved,
@@ -199,6 +204,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    localStorage.removeItem('session_token');
     localStorage.removeItem('token');
     setUser(null);
   };

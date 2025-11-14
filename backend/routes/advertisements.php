@@ -385,7 +385,15 @@ function handleGetAdminAdvertisements() {
                 p.name as product_name,
                 COALESCE(an.views_count, 0) as views_count,
                 COALESCE(an.clicks_count, 0) as clicks_count,
-                COALESCE(an.revenue_generated, 0.00) as revenue_generated
+                COALESCE(
+                    (
+                        SELECT COALESCE(SUM(o.total_amount), 0) 
+                        FROM orders o 
+                        WHERE o.advertisement_id = a.id 
+                        AND o.status = 'delivered'
+                    ),
+                    COALESCE(an.revenue_generated, 0.00)
+                ) as revenue_generated
             FROM advertisements a
             JOIN vendors v ON a.vendor_id = v.id
             JOIN products p ON a.product_id = p.id

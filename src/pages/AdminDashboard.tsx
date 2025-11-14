@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3, DollarSign, Menu } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
@@ -57,6 +58,9 @@ const AdminDashboard = () => {
     onConfirm: () => {},
     type: 'info'
   });
+  // Vendor details modal state
+  const [selectedVendor, setSelectedVendor] = useState<any | null>(null);
+  const [showVendorModal, setShowVendorModal] = useState(false);
   
   // Profile update states
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -71,8 +75,10 @@ const AdminDashboard = () => {
   // Delete confirmation states
   const [showDeleteContactModal, setShowDeleteContactModal] = useState(false);
   const [showDeleteOrderModal, setShowDeleteOrderModal] = useState(false);
+  const [showDeleteSMSModal, setShowDeleteSMSModal] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<any>(null);
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [smsToDelete, setSmsToDelete] = useState<any>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   
@@ -544,6 +550,26 @@ const AdminDashboard = () => {
     }
   };
 
+  const viewVendor = (vendor: any) => {
+    try {
+      console.log('viewVendor clicked', vendor);
+    } catch (e) {
+      // ignore
+    }
+    try {
+      toast.success(`Opening vendor: ${vendor?.name || vendor?.email || vendor?.id}`);
+    } catch (e) {}
+    setSelectedVendor(vendor);
+    setShowVendorModal(true);
+  };
+
+  // Debug: log modal state changes to help diagnose why modal might not appear
+  useEffect(() => {
+    try {
+      console.log('Vendor modal state changed:', { selectedVendor, showVendorModal });
+    } catch (e) {}
+  }, [selectedVendor, showVendorModal]);
+
   const viewProduct = (product: any) => {
     setSelectedProduct(product);
     setShowViewProductModal(true);
@@ -984,6 +1010,77 @@ const AdminDashboard = () => {
     fetchUsers();
   }, []);
 
+  // SMS handler functions
+  const handleDeleteSMS = async (smsId: string, smsLog: any) => {
+    setSmsToDelete({ id: smsId, ...smsLog });
+    setShowDeleteSMSModal(true);
+  };
+
+  const confirmDeleteSMS = async () => {
+    if (!smsToDelete) return;
+
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/admin/sms-logs/' + smsToDelete.id), {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setSmsLogs(prev => prev.filter(log => log.id !== smsToDelete.id));
+        toast.success('SMS log deleted successfully');
+        setShowDeleteSMSModal(false);
+        setSmsToDelete(null);
+        // Refresh stats
+        fetchSMSLogs();
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.error || 'Failed to delete SMS log');
+      }
+    } catch (error) {
+      console.error('Error deleting SMS log:', error);
+      toast.error('Failed to delete SMS log. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleRetrySMS = async (smsId: string) => {
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/admin/sms-logs/' + smsId + '/retry'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setSmsLogs(prev => prev.map(log => 
+          log.id === smsId ? { ...log, status: result.status } : log
+        ));
+        toast.success('SMS retry initiated');
+        // Refresh logs
+        fetchSMSLogs();
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.error || 'Failed to retry SMS');
+      }
+    } catch (error) {
+      console.error('Error retrying SMS:', error);
+      toast.error('Failed to retry SMS. Please try again.');
+    }
+  };
+
+  // Fetch all on mount
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   // Fetch admin profile data when profile tab is accessed
   useEffect(() => {
     if (activeTab === 'profile') {
@@ -1139,6 +1236,9 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      {import.meta.env.DEV && selectedVendor && showVendorModal && (
+        <div className="fixed top-4 right-4 z-60 bg-yellow-100 border border-yellow-300 text-sm text-yellow-800 px-3 py-2 rounded">Vendor modal state: open</div>
+      )}
       
       <div className="flex">
         {/* Sidebar */}
@@ -1250,17 +1350,22 @@ const AdminDashboard = () => {
                 <div className="text-center">
                   <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
                   <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Platform Revenue</p>
-                  <p className="text-xs sm:text-sm md:text-base font-bold text-primary truncate" title={`KSH ${stats?.totalRevenue?.toFixed(2) || '0.00'}`}>KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
-                  <p className="text-[8px] min-[375px]:text-[10px] text-gray-500 mt-1 hidden lg:block">
+                  <p
+                    className="text-xs sm:text-sm md:text-base font-bold text-primary whitespace-normal break-words"
+                    title={`KSH ${stats?.totalRevenue?.toFixed(2) || '0.00'}`}
+                  >
+                    KSH {stats?.totalRevenue?.toFixed(2) || '0.00'}
+                  </p>
+                  <div className="text-[8px] min-[375px]:text-[10px] text-gray-500 mt-1 flex flex-col items-center gap-0.5">
                     {stats?.commissionRevenue || stats?.advertisementRevenue ? (
                       <>
-                        Commission: KSH {stats?.commissionRevenue?.toFixed(2) || '0.00'} | 
-                        Ads: KSH {stats?.advertisementRevenue?.toFixed(2) || '0.00'}
+                        <span>Commission: KSH {stats?.commissionRevenue?.toFixed(2) || '0.00'}</span>
+                        <span>Ads: KSH {stats?.advertisementRevenue?.toFixed(2) || '0.00'}</span>
                       </>
                     ) : (
-                      '10% commission + ad revenue'
+                      <span>10% commission + ad revenue</span>
                     )}
-                  </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1434,7 +1539,7 @@ const AdminDashboard = () => {
                               </div>
                             </div>
                             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 lg:ml-4">
-                              <Button size="sm" variant="outline" className="w-full sm:w-auto">
+                              <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => viewVendor(vendor)}>
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Details
                               </Button>
@@ -1844,6 +1949,8 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   )}
+
+                    {/* Vendor Details Modal is rendered near other modals to avoid z-index/overflow issues */}
                 </div>
               )}
 
@@ -2246,6 +2353,7 @@ const AdminDashboard = () => {
                                 <th className="text-left py-2 px-4">Order ID</th>
                                 <th className="text-left py-2 px-4">Sent At</th>
                                 <th className="text-left py-2 px-4">Created</th>
+                                <th className="text-left py-2 px-4">Actions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2282,6 +2390,28 @@ const AdminDashboard = () => {
                                   </td>
                                   <td className="py-2 px-4">
                                     {new Date(log.created_at).toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-4">
+                                    <div className="flex gap-2">
+                                      {log.status === 'failed' && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleRetrySMS(log.id)}
+                                          className="text-blue-600 hover:text-blue-800"
+                                        >
+                                          Retry
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleDeleteSMS(log.id, log)}
+                                        className="text-red-600 hover:text-red-800"
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -2445,6 +2575,78 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                 )}
+
+                  {/* Vendor Details Modal (moved here so it renders with same stacking as other modals) */}
+                  {showVendorModal && selectedVendor && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                          <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-primary">Vendor Details</h2>
+                            <button
+                              onClick={() => { setShowVendorModal(false); setSelectedVendor(null); }}
+                              className="text-gray-400 hover:text-gray-600"
+                              title="Close modal"
+                              aria-label="Close modal"
+                            >
+                              <X className="h-6 w-6" />
+                            </button>
+                          </div>
+
+                          <div className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
+                                <p className="text-lg font-semibold text-gray-900">{selectedVendor.name}</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <p className="text-lg text-gray-900">{selectedVendor.email}</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Farm Name</label>
+                                <p className="text-lg text-gray-900">{selectedVendor.farmName || selectedVendor.farm_name || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                <p className="text-lg text-gray-900">{selectedVendor.location || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                <p className="text-lg text-gray-900">{selectedVendor.phone || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Applied</label>
+                                <p className="text-lg text-gray-900">{selectedVendor.registrationDate || selectedVendor.applied_at || 'N/A'}</p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <Badge className={selectedVendor.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                                  {selectedVendor.status || 'N/A'}
+                                </Badge>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Products</label>
+                                <p className="text-lg text-gray-900">{selectedVendor.productCount || selectedVendor.product_count || 'N/A'}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
+                              <Button variant="outline" onClick={() => { setShowVendorModal(false); setSelectedVendor(null); }}>Close</Button>
+                              {selectedVendor.status !== 'approved' ? (
+                                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => { handleApproveVendor(selectedVendor.id); setShowVendorModal(false); setSelectedVendor(null); }}>Approve</Button>
+                              ) : (
+                                <Button variant="destructive" onClick={() => { handleDisapproveVendor(selectedVendor.id); setShowVendorModal(false); setSelectedVendor(null); }}>Disapprove</Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                 {/* Product Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3030,6 +3232,69 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Delete SMS Log Confirmation Modal */}
+      {showDeleteSMSModal && smsToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md mx-auto max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center mb-4">
+                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                  <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Delete SMS Log</h3>
+                <p className="text-sm text-gray-500 mb-4 break-words">
+                  <strong>Are you sure?</strong> You are about to delete this SMS log entry.
+                </p>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-6 text-left">
+                  <p className="text-sm text-yellow-800 font-medium mb-2">SMS Details:</p>
+                  <ul className="text-xs text-yellow-700 space-y-1">
+                    <li>• <strong>Phone:</strong> {smsToDelete.phone}</li>
+                    <li>• <strong>Status:</strong> {smsToDelete.status}</li>
+                    <li>• <strong>Type:</strong> {smsToDelete.recipient_type}</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-gray-600 mb-6">
+                  This action will permanently remove the SMS log from the system.
+                </p>
+                <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDeleteSMSModal(false);
+                      setSmsToDelete(null);
+                    }}
+                    disabled={deleting}
+                    className="w-full sm:w-auto order-2 sm:order-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={confirmDeleteSMS}
+                    disabled={deleting}
+                    className="bg-red-600 hover:bg-red-700 text-white disabled:bg-gray-400 w-full sm:w-auto order-1 sm:order-2"
+                  >
+                    {deleting ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Deleting...
+                      </div>
+                    ) : (
+                      'Delete SMS Log'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+
       </div>
 
       <Footer />

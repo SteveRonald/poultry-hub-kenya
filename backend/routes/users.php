@@ -325,4 +325,172 @@ function handleGetUser() {
         echo json_encode(['error' => 'Failed to fetch user: ' . $e->getMessage()]);
     }
 }
+
+function handleUpdateUserProfile() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+
+    $payload = validateJWT($token);
+    if (!$payload || empty($payload['user_id'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid token']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!$input) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid JSON payload']);
+        return;
+    }
+
+    $userId = $payload['user_id'];
+    $updateFields = [];
+    $updateValues = [];
+
+    if (array_key_exists('full_name', $input)) {
+        $fullName = trim((string)$input['full_name']);
+        if ($fullName === '') {
+            http_response_code(400);
+            echo json_encode(['error' => 'Full name cannot be empty']);
+            return;
+        }
+        $updateFields[] = "full_name = ?";
+        $updateValues[] = $fullName;
+    }
+
+    if (array_key_exists('email', $input)) {
+        $email = trim((string)$input['email']);
+        if ($email === '' || !validateEmail($email)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid email address']);
+            return;
+        }
+
+        try {
+            $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE email = ? AND id != ?");
+            $stmt->execute([$email, $userId]);
+            if ($stmt->fetch()) {
+                http_response_code(409);
+                echo json_encode(['error' => 'Email already in use by another account']);
+                return;
+            }
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to validate email: ' . $e->getMessage()]);
+            return;
+        }
+
+        $updateFields[] = "email = ?";
+        $updateValues[] = $email;
+    }
+
+    if (array_key_exists('phone', $input)) {
+        $phone = $input['phone'];
+        if ($phone !== null) {
+            $phone = trim((string)$phone);
+            if ($phone !== '' && !validatePhone($phone)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid phone number']);
+                return;
+            }
+            $phone = $phone !== '' ? $phone : null;
+        }
+
+        try {
+            if ($phone) {
+                $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE phone = ? AND id != ?");
+                $stmt->execute([$phone, $userId]);
+                if ($stmt->fetch()) {
+                    http_response_code(409);
+                    echo json_encode(['error' => 'Phone number already in use by another account']);
+                    return;
+                }
+            }
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to validate phone number: ' . $e->getMessage()]);
+            return;
+        }
+
+        $updateFields[] = "phone = ?";
+        $updateValues[] = $phone;
+    }
+
+    if (array_key_exists('language_preference', $input)) {
+        $language = trim((string)$input['language_preference']);
+        if ($language !== '') {
+            $updateFields[] = "language_preference = ?";
+            $updateValues[] = $language;
+        } else {
+            $updateFields[] = "language_preference = NULL";
+        }
+    }
+
+    if (empty($updateFields)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No valid fields to update']);
+        return;
+    }
+
+    // Append updated_at field
+    $updateFields[] = "updated_at = NOW()";
+
+    try {
+        $sql = "UPDATE user_profiles SET " . implode(', ', $updateFields) . " WHERE id = ?";
+        $updateValues[] = $userId;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($updateValues);
+
+        // Return updated profile
+        $stmt = $pdo->prepare("SELECT id, email, full_name, phone, role FROM user_profiles WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user) {
+            http_response_code(404);
+            echo json_encode(['error' => 'User not found']);
+            return;
+        }
+
+        // Include vendor status when applicable
+        $isApproved = true;
+        $vendorData = null;
+        if ($user['role'] === 'vendor') {
+            $stmt = $pdo->prepare("
+                SELECT status, farm_name, farm_description, location, id_number,
+                       county_id, constituency_id, ward_id
+                FROM vendors
+                WHERE user_id = ?
+            ");
+            $stmt->execute([$userId]);
+            $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+            $isApproved = $vendor && $vendor['status'] === 'approved';
+            $vendorData = $vendor;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'user' => [
+                'id' => $user['id'],
+                'email' => $user['email'],
+                'full_name' => $user['full_name'],
+                'phone' => $user['phone'],
+                'role' => $user['role'],
+                'isApproved' => $isApproved,
+                'vendorData' => $vendorData
+            ]
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to update profile: ' . $e->getMessage()]);
+    }
+}
 ?>

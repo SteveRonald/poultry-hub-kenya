@@ -225,6 +225,20 @@ const AdminAdvertisementManager: React.FC = () => {
     return false;
   };
 
+  const getDaysRemaining = (ad: Advertisement) => {
+    if (!ad.end_date) return 'N/A';
+    try {
+      const end = new Date(ad.end_date).getTime();
+      const now = Date.now();
+      const diff = end - now;
+      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      if (isNaN(days)) return 'N/A';
+      return days > 0 ? `${days} days` : 'Expired';
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
   const uploadImage = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('image', file);
@@ -420,10 +434,10 @@ const AdminAdvertisementManager: React.FC = () => {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Revenue</p>
+        <div>
+                <p className="text-xs text-gray-600">Total Revenue</p>
                 <p className="text-2xl font-bold text-primary">
-                  KSh {advertisements.reduce((sum, ad) => sum + (ad.price || 0), 0).toLocaleString()}
+                  KSh {advertisements.reduce((sum, ad) => sum + (Number(ad.price) || 0), 0).toLocaleString()}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />
@@ -524,15 +538,15 @@ const AdminAdvertisementManager: React.FC = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
                       <p className="text-xs text-gray-600">Price</p>
-                      <p className="font-semibold">KSh {ad.price.toLocaleString()}</p>
+                      <p className="font-semibold">KSh {(Number(ad.price) || 0).toLocaleString()}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Duration</p>
                       <p className="font-semibold">{ad.duration_days} days</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-600">Content Duration</p>
-                      <p className="font-semibold">{ad.content_duration || 'N/A'}s</p>
+                      <p className="text-xs text-gray-600">Days Remaining</p>
+                      <p className="font-semibold">{getDaysRemaining(ad)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600">Created</p>
@@ -554,9 +568,9 @@ const AdminAdvertisementManager: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Revenue</p>
-                        <p className="font-semibold text-green-600">
-                          KSh {(ad.revenue_generated || 0).toLocaleString()}
-                        </p>
+                          <p className="font-semibold text-green-600">
+                            KSh {(Number((ad as any).revenue_generated) || 0).toLocaleString()}
+                          </p>
                       </div>
                     </div>
                   )}

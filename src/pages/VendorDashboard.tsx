@@ -1512,7 +1512,7 @@ const VendorDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Spent on Ads</p>
-                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-orange-600 truncate">
+                    <p className="text-sm sm:text-lg md:text-2xl font-bold text-orange-600 whitespace-normal break-words">
                       {(() => {
                         if (!Array.isArray(advertisements)) {
                           return 'KSh 0.00';

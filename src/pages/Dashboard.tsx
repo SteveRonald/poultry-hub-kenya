@@ -12,7 +12,7 @@ import { getApiUrl } from '../config/api';
 import MarketInsightsWidget from '../components/MarketInsightsWidget';
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, fetchUser } = useAuth();
   const [stats, setStats] = useState({
     totalOrders: 0,
     activeOrders: 0,
@@ -225,17 +225,33 @@ const Dashboard = () => {
   const handleProfileSave = async () => {
     const token = localStorage.getItem('token');
     if (!user || !token) return;
-    await fetch(getApiUrl(`/api/admin/users/${user.id}`), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        email: profileForm.email,
-        full_name: profileForm.name,
-        phone: profileForm.phone,
-        role: user.role,
-      }),
-    });
-    setEditingProfile(false);
+
+    try {
+      const response = await fetch(getApiUrl('/api/users/profile'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          email: profileForm.email?.trim(),
+          full_name: profileForm.name?.trim(),
+          phone: profileForm.phone?.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        if (import.meta.env.DEV) {
+          const error = await response.json().catch(() => ({}));
+          console.error('Failed to update profile:', error);
+        }
+        return;
+      }
+
+      await fetchUser();
+      setEditingProfile(false);
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Network error updating profile:', error);
+      }
+    }
   };
 
   if (!user) {

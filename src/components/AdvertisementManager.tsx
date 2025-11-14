@@ -143,6 +143,20 @@ const AdvertisementManager: React.FC = () => {
     return false;
   };
 
+  const getDaysRemaining = (ad: Advertisement) => {
+    try {
+      if (!ad.end_date) return 'N/A';
+      const end = new Date(ad.end_date);
+      const now = new Date();
+      const diff = end.getTime() - now.getTime();
+      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      if (days <= 0) return 'Expired';
+      return `${days} day${days === 1 ? '' : 's'}`;
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
   const handleEdit = (ad: Advertisement) => {
     setEditingAd(ad);
     setEditFormData({
@@ -289,9 +303,9 @@ const AdvertisementManager: React.FC = () => {
           <div className="text-center">
             <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-green-600 mx-auto mb-2" />
             <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Revenue Generated from Ads</p>
-            <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600">
+                <p className="text-lg sm:text-2xl md:text-3xl font-bold text-green-600">
               KSh {(() => {
-                const total = advertisements.reduce((sum, ad) => sum + (parseFloat(ad.revenue_generated) || 0), 0);
+                const total = advertisements.reduce((sum, ad) => sum + (Number(ad.revenue_generated) || 0), 0);
                 return total.toLocaleString('en-US', { 
                   minimumFractionDigits: total > 0 ? 2 : 0, 
                   maximumFractionDigits: 2 
@@ -310,8 +324,8 @@ const AdvertisementManager: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Spent</p>
-                <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-600 truncate">
-                  KSh {advertisements.reduce((sum, ad) => sum + (parseFloat(ad.price) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-600 whitespace-normal break-words">
+                  KSh {advertisements.reduce((sum, ad) => sum + (Number(ad.price) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <DollarSign className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-orange-600 flex-shrink-0 ml-2" />
@@ -498,6 +512,7 @@ const AdvertisementManager: React.FC = () => {
                   <div>
                     <p className="text-gray-600">Duration</p>
                     <p className="font-semibold">{ad.duration_days} days</p>
+                    <p className="text-gray-500 text-xs mt-1">Days Remaining: <span className="font-medium text-sm">{getDaysRemaining(ad)}</span></p>
                   </div>
                 </div>
 
@@ -518,7 +533,7 @@ const AdvertisementManager: React.FC = () => {
                     <span className="text-gray-600">Revenue Generated:</span>
                     <span className="font-semibold text-green-600 text-base">
                       KSh {(() => {
-                        const revenue = parseFloat(ad.revenue_generated || 0);
+                        const revenue = Number(ad.revenue_generated) || 0;
                         return revenue.toLocaleString('en-US', { 
                           minimumFractionDigits: revenue > 0 ? 2 : 0, 
                           maximumFractionDigits: 2 
@@ -731,8 +746,8 @@ const AdvertisementManager: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Revenue</p>
                 <p className="text-2xl font-bold text-green-600">
-                  KSh {parseFloat(analytics.revenue_generated || 0).toLocaleString('en-US', { 
-                    minimumFractionDigits: analytics.revenue_generated > 0 ? 2 : 0, 
+                  KSh {(Number(analytics.revenue_generated) || 0).toLocaleString('en-US', { 
+                    minimumFractionDigits: (Number(analytics.revenue_generated) || 0) > 0 ? 2 : 0, 
                     maximumFractionDigits: 2 
                   })}
                 </p>

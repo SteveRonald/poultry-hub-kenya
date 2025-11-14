@@ -58,6 +58,8 @@ function getEmailTemplate($type, $data = []) {
             return getAdminNotificationTemplate($data, $baseUrl);
         case 'otp_email':
             return getOTPEmailTemplate($data, $baseUrl);
+        case 'login_otp':
+            return getLoginOTPEmailTemplate($data, $baseUrl);
         case 'backup_notification':
             return getBackupNotificationTemplate($data, $baseUrl);
         case 'contact_notification':
@@ -616,6 +618,46 @@ function getOTPEmailTemplate($data, $baseUrl) {
     ";
     
     return getBaseTemplate('Password Reset OTP - Poultry Hub Kenya', $content, $baseUrl);
+}
+
+function getLoginOTPEmailTemplate($data, $baseUrl) {
+    $otp = $data['otp'];
+    $userName = $data['user_name'] ?? 'User';
+    
+    $content = "
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Login Verification Code</h2>
+        <p>Dear $userName,</p>
+        <p>You have initiated a login to your Poultry Hub Kenya account. Please use the verification code below to complete your login.</p>
+        
+        <div class='order-details'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Your Verification Code</h3>
+            <div style='text-align: center; margin: 20px 0;'>
+                <div style='background-color: #1a4d2e; color: white; padding: 20px; border-radius: 8px; display: inline-block;'>
+                    <div style='font-size: 32px; font-weight: bold; letter-spacing: 8px;'>$otp</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class='warning'>
+            <strong>Important Security Information:</strong><br>
+            &bull; This verification code will expire in 10 minutes<br>
+            &bull; Do not share this code with anyone<br>
+            &bull; If you did not attempt to login, please ignore this email and change your password<br>
+            &bull; Our team will never ask for your verification code
+        </div>
+        
+        <div class='highlight'>
+            <strong>How to use this code:</strong><br>
+            1. Enter the 6-digit code above on the login verification page<br>
+            2. Your login will be completed immediately<br>
+            3. You will be taken to your dashboard
+        </div>
+        
+        <p>If you have any questions or need assistance, please contact our support team.</p>
+        <p>Thank you for using Poultry Hub Kenya!</p>
+    ";
+    
+    return getBaseTemplate('Login Verification Code - Poultry Hub Kenya', $content, $baseUrl);
 }
 
 function getDefaultTemplate($data, $baseUrl) {

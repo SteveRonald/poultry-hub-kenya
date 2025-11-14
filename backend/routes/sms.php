@@ -147,3 +147,114 @@ function handleGetSMSStats() {
     }
 }
 
+/**
+ * Delete SMS log (Admin only)
+ */
+function handleDeleteSMSLog() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+    
+    try {
+        
+        // Get SMS ID from URL path
+        $pathParts = explode('/', trim($_SERVER['REQUEST_URI'], '/'));
+        $smsId = end($pathParts);
+        
+        // If SMS ID is 'retry' or 'delete', get the previous part
+        if ($smsId === 'retry' || $smsId === 'delete') {
+            $smsId = prev($pathParts);
+        }
+        
+        require_once __DIR__ . '/../utils/security.php';
+        $smsId = sanitizeInput($smsId);
+        
+        // Delete the SMS log
+        $stmt = $pdo->prepare("DELETE FROM sms_logs WHERE id = ?");
+        $stmt->execute([$smsId]);
+        
+        if ($stmt->rowCount() > 0) {
+            http_response_code(200);
+            echo json_encode([
+                'success' => true,
+                'message' => 'SMS log deleted successfully'
+            ]);
+        } else {
+            http_response_code(404);
+            echo json_encode(['error' => 'SMS log not found']);
+        }
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        error_log("Delete SMS log error: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to delete SMS log: ' . $e->getMessage()]);
+    }
+}
+
+/**
+ * Retry sending SMS (Admin only)
+ */
+function handleRetrySMS() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+    
+    try {
+        
+        // Get SMS ID from URL path
+        $pathParts = explode('/', trim($_SERVER['REQUEST_URI'], '/'));
+        // Find the SMS ID before 'retry'
+        $retryIndex = array_search('retry', $pathParts);
+        $smsId = $pathParts[$retryIndex - 1] ?? null;
+        
+        require_once __DIR__ . '/../utils/security.php';
+        $smsId = sanitizeInput($smsId);
+        
+        // Get the SMS log
+        $stmt = $pdo->prepare("SELECT * FROM sms_logs WHERE id = ?");
+        $stmt->execute([$smsId]);
+        $smsLog = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$smsLog) {
+            http_response_code(404);
+            echo json_encode(['error' => 'SMS log not found']);
+            return;
+        }
+        
+        // Retry sending the SMS
+        $smsService = new SMSService();
+        $result = $smsService->sendSMS($smsLog['phone'], $smsLog['message'], [
+            'recipient_type' => $smsLog['recipient_type'],
+            'related_order_id' => $smsLog['related_order_id'],
+            'related_user_id' => $smsLog['related_user_id']
+        ]);
+        
+        // Update the log entry with new status
+        $newStatus = $result ? 'sent' : 'failed';
+        $stmt = $pdo->prepare("UPDATE sms_logs SET status = ?, sent_at = NOW() WHERE id = ?");
+        $stmt->execute([$newStatus, $smsId]);
+        
+        http_response_code(200);
+        echo json_encode([
+            'success' => true,
+            'message' => 'SMS retry completed',
+            'status' => $newStatus
+        ]);
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        error_log("Retry SMS error: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to retry SMS: ' . $e->getMessage()]);
+    }
+}
+

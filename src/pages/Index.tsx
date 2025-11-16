@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Users, ShieldCheck, TrendingUp, Star, ChevronRight } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
@@ -10,6 +11,7 @@ import AdvertisementBanner from '../components/AdvertisementBanner';
 import { getApiUrl } from '../config/api';
 
 const Index = () => {
+  const { user } = useAuth();
   const [advertisements, setAdvertisements] = useState<any[]>([]);
   const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
 
@@ -128,11 +130,13 @@ const Index = () => {
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
-                <Link to="/register">
-                  <Button variant="outline" className="border-white text-primary hover:bg-white hover:text-black px-8 py-3 text-lg">
-                    Become a Vendor
-                  </Button>
-                </Link>
+                {!user && (
+                  <Link to="/register">
+                    <Button variant="outline" className="border-white text-primary hover:bg-white hover:text-black px-8 py-3 text-lg">
+                      Become a Vendor
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
             
@@ -276,11 +280,13 @@ const Index = () => {
             Join Kenya's largest poultry marketplace today and connect with trusted farmers and customers
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/register">
-              <Button className="bg-accent hover:bg-accent/90 text-black font-semibold px-8 py-3 text-lg">
-                Start Selling
-              </Button>
-            </Link>
+            {!user && (
+              <Link to="/register">
+                <Button className="bg-accent hover:bg-accent/90 text-black font-semibold px-8 py-3 text-lg">
+                  Start Selling
+                </Button>
+              </Link>
+            )}
             <Link to="/products">
               <Button variant="outline" className="border-white text-black hover:bg-white hover:text-primary px-8 py-3 text-lg">
                 Start Shopping

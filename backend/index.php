@@ -15,8 +15,8 @@ $allowedOrigins = [
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173', // Vite default port
-    'http://192.168.52.24:8080',
-    'http://192.168.52.24:8081',
+    'http://192.168.19.24:8080',
+    'http://192.168.198.24:8081',
     'http://192.168.83.24:8082',
     'http://192.168.14.176:3000'
 ];
@@ -101,6 +101,27 @@ switch ($path) {
         if ($method === 'POST') {
             include 'routes/login_2fa.php';
             handleVerifyLoginOTP();
+        }
+        break;
+
+    case 'api/auth/send-register-otp':
+        if ($method === 'POST') {
+            include 'routes/register_2fa.php';
+            handleSendRegisterOTP();
+        }
+        break;
+
+    case 'api/auth/verify-register-otp':
+        if ($method === 'POST') {
+            include 'routes/register_2fa.php';
+            handleVerifyRegisterOTP();
+        }
+        break;
+
+    case 'api/auth/resend-register-otp':
+        if ($method === 'POST') {
+            include 'routes/register_2fa.php';
+            handleResendRegisterOTP();
         }
         break;
         
@@ -824,6 +845,9 @@ switch ($path) {
         } elseif (strpos($path, 'api/admin/users/') === 0 && $method === 'DELETE') {
             include 'routes/admin.php';
             handleDeleteUser();
+        } elseif (strpos($path, 'api/notifications/') === 0 && $method === 'DELETE') {
+            include 'routes/notifications.php';
+            handleDeleteNotification();
         } elseif (strpos($path, 'api/admin/sms-logs/') === 0 && $method === 'DELETE') {
             include 'routes/sms.php';
             handleDeleteSMSLog();

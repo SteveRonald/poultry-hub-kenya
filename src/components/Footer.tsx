@@ -2,8 +2,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Facebook, Twitter, Instagram, Mail, Phone, MapPin } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const Footer = () => {
+  const { user } = useAuth();
+
   return (
     <footer className="bg-primary text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -56,7 +59,7 @@ const Footer = () => {
               <li><Link to="/training" className="text-gray-200 hover:text-accent transition-colors">Training</Link></li>
               <li><Link to="/blog" className="text-gray-200 hover:text-accent transition-colors">Blog</Link></li>
               <li><Link to="/contact" className="text-gray-200 hover:text-accent transition-colors">Contact</Link></li>
-              <li><Link to="/register" className="text-gray-200 hover:text-accent transition-colors">Become a Vendor</Link></li>
+              {!user && <li><Link to="/register" className="text-gray-200 hover:text-accent transition-colors">Become a Vendor</Link></li>}
             </ul>
           </div>
 

@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/sms_config.php';
+require_once __DIR__ . '/../../utils/notifications.php';
 
 class SMSService {
     private $pdo;
@@ -93,8 +94,7 @@ class SMSService {
             'from' => AFRICASTALKING_SENDER_ID
         ];
         
-        // SECURITY: Log request details without exposing credential status
-        error_log("SMS Service: Sending SMS to {$normalizedPhone} via " . ($isSandbox ? 'SANDBOX' : 'PRODUCTION') . " endpoint");
+        // SECURITY: Do not emit verbose debug logs in production.
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -150,11 +150,7 @@ class SMSService {
             // It might just mean delivery confirmation wasn't received, but SMS was actually delivered
             $success = in_array($recipient['status'] ?? '', ['Success', 'Sent', 'Queued']);
             
-            if ($success) {
-                error_log("SMS Service: SMS sent successfully. Message ID: " . ($recipient['messageId'] ?? 'N/A') . ", Status: " . ($recipient['status'] ?? 'Unknown'));
-            } else {
-                error_log("SMS Service: SMS status: " . ($recipient['status'] ?? 'Unknown') . ". Note: DeliveryFailure may not mean SMS wasn't delivered.");
-            }
+            // Success or non-success handled by caller; avoid noisy debug logs here.
             
             return [
                 'success' => $success,
@@ -164,7 +160,7 @@ class SMSService {
             ];
         }
         
-        error_log("SMS Service: Unexpected API response: " . $response);
+        error_log("SMS Service: Unexpected API response from provider");
         return ['success' => false, 'error' => 'Unexpected API response', 'response' => $responseData];
     }
     
@@ -176,7 +172,7 @@ class SMSService {
         $relatedOrderId = $options['related_order_id'] ?? null;
         $relatedUserId = $options['related_user_id'] ?? null;
         
-        error_log("SMS Service: sendSMS called with phone: {$phone}, message length: " . strlen($message));
+        // Intentionally avoid verbose logs for normal send operations.
         
         // Normalize phone number
         $normalizedPhone = $this->normalizePhoneNumber($phone);
@@ -185,7 +181,7 @@ class SMSService {
             return ['success' => false, 'error' => 'Invalid phone number format'];
         }
         
-        error_log("SMS Service: Normalized phone: {$normalizedPhone}");
+        // Normalized phone obtained; proceed.
         
         // Generate SMS log ID
         $smsLogId = $this->generateUUID();
@@ -207,6 +203,12 @@ class SMSService {
                 $relatedOrderId,
                 $relatedUserId
             ]);
+            // Notify admins that an SMS log was created
+            $adminMessage = "SMS queued to {$normalizedPhone} (type: {$recipientType})";
+            if ($relatedOrderId) {
+                $adminMessage .= " related_order_id={$relatedOrderId}";
+            }
+            notifyAllAdmins($adminMessage, 'sms');
         } catch (PDOException $e) {
             error_log("SMS Service: Failed to create SMS log: " . $e->getMessage());
             return ['success' => false, 'error' => 'Failed to create SMS log'];

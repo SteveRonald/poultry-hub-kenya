@@ -68,33 +68,19 @@ function handleGetSMSLogs() {
         $cleanFilters['limit'] = (int)$cleanFilters['limit'];
         $cleanFilters['offset'] = (int)$cleanFilters['offset'];
         
-        error_log("SMS Logs API: Fetching with filters: " . json_encode($cleanFilters));
-        
         $logs = $smsService->getSMSLogs($cleanFilters);
-        
-        // Log for debugging
-        error_log("SMS Logs API: Service returned " . count($logs) . " logs");
-        if (count($logs) > 0) {
-            error_log("SMS Logs API: First log ID: " . $logs[0]['id']);
-            error_log("SMS Logs API: First log phone: " . $logs[0]['phone']);
-        } else {
-            error_log("SMS Logs API: WARNING - No logs returned from service!");
-        }
-        
-        // Ensure logs is always an array
+
+        // Ensure logs is an array to avoid downstream errors
         if (!is_array($logs)) {
-            error_log("SMS Logs API: ERROR - Service did not return an array! Type: " . gettype($logs));
+            error_log("SMS Logs API: Service did not return an array; returning empty list");
             $logs = [];
         }
-        
+
         $response = [
             'success' => true,
             'logs' => $logs,
             'count' => count($logs)
         ];
-        
-        error_log("SMS Logs API: Sending response with " . count($logs) . " logs");
-        error_log("SMS Logs API: Response JSON length: " . strlen(json_encode($response)) . " bytes");
         
         // Output JSON response (headers already set by index.php)
         // Don't use return - just echo like other routes
@@ -103,7 +89,6 @@ function handleGetSMSLogs() {
     } catch (Exception $e) {
         http_response_code(500);
         error_log("SMS Logs API: Exception - " . $e->getMessage());
-        error_log("SMS Logs API: Stack trace - " . $e->getTraceAsString());
         echo json_encode(['error' => 'Failed to fetch SMS logs: ' . $e->getMessage()]);
     }
 }

@@ -60,6 +60,8 @@ function getEmailTemplate($type, $data = []) {
             return getOTPEmailTemplate($data, $baseUrl);
         case 'login_otp':
             return getLoginOTPEmailTemplate($data, $baseUrl);
+        case 'register_otp':
+            return getRegisterOTPEmailTemplate($data, $baseUrl);
         case 'backup_notification':
             return getBackupNotificationTemplate($data, $baseUrl);
         case 'contact_notification':
@@ -658,6 +660,47 @@ function getLoginOTPEmailTemplate($data, $baseUrl) {
     ";
     
     return getBaseTemplate('Login Verification Code - Poultry Hub Kenya', $content, $baseUrl);
+}
+
+function getRegisterOTPEmailTemplate($data, $baseUrl) {
+    $otp = $data['otp'];
+    $email = $data['email'] ?? 'User';
+    
+    $content = "
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Registration Verification Code</h2>
+        <p>Hello,</p>
+        <p>Thank you for signing up with Poultry Hub Kenya! Please use the verification code below to verify your email address and complete your registration.</p>
+        
+        <div class='order-details'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Your Verification Code</h3>
+            <div style='text-align: center; margin: 20px 0;'>
+                <div style='background-color: #1a4d2e; color: white; padding: 20px; border-radius: 8px; display: inline-block;'>
+                    <div style='font-size: 32px; font-weight: bold; letter-spacing: 8px;'>$otp</div>
+                </div>
+            </div>
+            <p style='text-align: center; margin: 0; font-size: 14px; color: #666;'>Verification code is: $otp</p>
+        </div>
+        
+        <div class='warning'>
+            <strong>Important Security Information:</strong><br>
+            &bull; This verification code will expire in 10 minutes<br>
+            &bull; Do not share this code with anyone<br>
+            &bull; If you did not create this account, please ignore this email<br>
+            &bull; Our team will never ask for your verification code
+        </div>
+        
+        <div class='highlight'>
+            <strong>How to verify your email:</strong><br>
+            1. Enter the 6-digit code above on the registration page<br>
+            2. Complete your registration form<br>
+            3. Your account will be ready to use immediately
+        </div>
+        
+        <p>If you have any questions or need assistance, please contact our support team.</p>
+        <p>Welcome to Poultry Hub Kenya!</p>
+    ";
+    
+    return getBaseTemplate('Email Verification - Poultry Hub Kenya', $content, $baseUrl);
 }
 
 function getDefaultTemplate($data, $baseUrl) {

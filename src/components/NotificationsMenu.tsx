@@ -10,11 +10,13 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
   const mobileModalRef = useRef<HTMLDivElement>(null);
   const desktopDropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
-    const token = localStorage.getItem('token');
+    const token = isAdmin ? localStorage.getItem('admin_session_token') : localStorage.getItem('token');
     if (!token) {
       // No token means user is not logged in - stop loading and don't poll
       setLoading(false);
@@ -61,7 +63,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = isAdmin ? localStorage.getItem('admin_session_token') : localStorage.getItem('token');
     if (!token) {
       // User is not logged in - don't fetch or poll
       setLoading(false);
@@ -129,8 +131,26 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
     };
   }, [open]);
 
+  // Prevent body scroll when delete confirmation is open
+  useEffect(() => {
+    if (confirmOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Only clear overflow if notifications modal isn't open
+      if (!open) {
+        document.body.style.overflow = '';
+      }
+    }
+
+    return () => {
+      if (!open) {
+        document.body.style.overflow = '';
+      }
+    };
+  }, [confirmOpen, open]);
+
   const markAsRead = async (id: number) => {
-    const token = localStorage.getItem('token');
+    const token = isAdmin ? localStorage.getItem('admin_session_token') : localStorage.getItem('token');
     if (!token) return; // Don't attempt if no token
     
     try {
@@ -156,10 +176,19 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
     }
   };
 
-  const deleteNotification = async (id: number) => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    
+  const openDeleteConfirm = (id: number) => {
+    setConfirmId(id);
+    setConfirmOpen(true);
+  };
+
+  const performDelete = async (id: number) => {
+    const token = isAdmin ? localStorage.getItem('admin_session_token') : localStorage.getItem('token');
+    if (!token) {
+      setConfirmOpen(false);
+      setConfirmId(null);
+      return;
+    }
+
     try {
       const res = await fetch(getApiUrl('/api/notifications/' + id), {
         method: 'DELETE',
@@ -168,7 +197,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (res.ok) {
         fetchNotifications();
       } else if (res.status === 401) {
@@ -176,6 +205,9 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
       }
     } catch (error) {
       // Silently fail
+    } finally {
+      setConfirmOpen(false);
+      setConfirmId(null);
     }
   };
 
@@ -258,14 +290,24 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
                             {new Date(n.created_at).toLocaleString()}
                           </div>
                         </div>
-                        {!n.is_read && (
-                          <button 
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-100 flex-shrink-0" 
-                            onClick={() => markAsRead(n.id)}
-                          >
-                            Mark read
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {!n.is_read ? (
+                            <button 
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-100" 
+                              onClick={() => markAsRead(n.id)}
+                            >
+                              Mark
+                            </button>
+                          ) : (
+                            <button
+                              className="text-xs text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50"
+                              onClick={() => openDeleteConfirm(n.id)}
+                              title="Delete notification"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -318,14 +360,23 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
                             {new Date(n.created_at).toLocaleString()}
                           </div>
                         </div>
-                        {!n.is_read && (
-                          <button 
-                            className="text-xs text-blue-600 hover:underline flex-shrink-0" 
-                            onClick={() => markAsRead(n.id)}
-                          >
-                            Mark as read
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {!n.is_read ? (
+                            <button 
+                              className="text-xs text-blue-600 hover:underline flex-shrink-0" 
+                              onClick={() => markAsRead(n.id)}
+                            >
+                              Mark as read
+                            </button>
+                          ) : (
+                            <button
+                              className="text-xs text-red-600 hover:underline flex-shrink-0"
+                              onClick={() => openDeleteConfirm(n.id)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -335,6 +386,30 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
           </>
         )}
       </div>
+      {/* Delete Confirmation Modal */}
+      {confirmOpen && (
+        <div className="fixed inset-0 flex items-center justify-center px-3" style={{ zIndex: 9999 }} role="dialog" aria-modal="true">
+          <div className="fixed inset-0 bg-black bg-opacity-40" style={{ zIndex: 9998 }} onClick={() => { setConfirmOpen(false); setConfirmId(null); }} />
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-4 mx-auto" style={{ zIndex: 10000 }}>
+            <h3 className="text-lg font-semibold text-gray-800">Delete notification</h3>
+            <p className="text-sm text-gray-600 mt-2">Are you sure you want to delete this notification? This action cannot be undone.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => { setConfirmOpen(false); setConfirmId(null); }}
+                className="px-4 py-2 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 touch-manipulation"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { if (confirmId) performDelete(confirmId); }}
+                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 touch-manipulation"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

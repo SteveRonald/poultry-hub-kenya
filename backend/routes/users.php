@@ -97,10 +97,7 @@ function handleLogin() {
             ]
         ];
         
-        // Debug logging for vendor data
-        if ($user['role'] === 'vendor') {
-            error_log('Vendor login - vendorData: ' . json_encode($vendorData));
-        }
+        // No debug logging here (avoid leaking vendor data to logs)
         
         echo json_encode($response);
         

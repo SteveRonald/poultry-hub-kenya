@@ -10,6 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
 import Navbar from '../components/Navbar';
 import { LocationSelect } from '../components/LocationSelect';
+import { getApiUrl } from '../config/api';
 
 const Register = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -34,6 +35,13 @@ const Register = () => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // OTP Registration states
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [otpError, setOtpError] = useState('');
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -52,6 +60,129 @@ const Register = () => {
       }
     }
   }, []);
+
+  // OTP countdown timer
+  useEffect(() => {
+    if (otpCountdown > 0) {
+      const timer = setTimeout(() => setOtpCountdown(otpCountdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [otpCountdown]);
+
+  // Auto-send OTP on email blur during step 1
+  const handleEmailBlur = async () => {
+    if (!formData.email.trim()) return;
+    
+    // Validate email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      return;
+    }
+
+    // Only send OTP if not already sent and we're on step 1
+    if (!otpSent && currentStep === 1) {
+      await handleSendOTP();
+    }
+  };
+
+  // Send registration OTP
+  const handleSendOTP = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(getApiUrl('/api/auth/send-register-otp'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: formData.email.trim() }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setOtpError(errorData.error || 'Failed to send verification code');
+        toast.error(errorData.error || 'Failed to send verification code');
+        return;
+      }
+
+      setOtpSent(true);
+      setShowOtpInput(true);
+      setOtpCountdown(30);
+      setOtp('');
+      setOtpError('');
+      toast.success('Verification code sent to your email');
+    } catch (error) {
+      setOtpError('Failed to send verification code. Please try again.');
+      toast.error('Failed to send verification code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Verify registration OTP
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) {
+      setOtpError('Please enter a 6-digit code');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await fetch(getApiUrl('/api/auth/verify-register-otp'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          otp: otp.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setOtpError(errorData.error || 'Invalid verification code');
+        toast.error(errorData.error || 'Invalid verification code');
+        return;
+      }
+
+      setOtpVerified(true);
+      setOtpError('');
+      toast.success('Email verified successfully');
+    } catch (error) {
+      setOtpError('Failed to verify code. Please try again.');
+      toast.error('Failed to verify code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Resend OTP
+  const handleResendOTP = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(getApiUrl('/api/auth/resend-register-otp'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: formData.email.trim() }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast.error(errorData.error || 'Failed to resend code');
+        return;
+      }
+
+      setOtpCountdown(30);
+      setOtp('');
+      setOtpError('');
+      toast.success('Verification code resent');
+    } catch (error) {
+      toast.error('Failed to resend code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleChange = (name: string, value: string | number | null) => {
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -480,6 +611,13 @@ const Register = () => {
     e.preventDefault();
     }
     
+    // Check if OTP is verified before allowing submission
+    if (otpSent && !otpVerified) {
+      toast.error('Please verify your email to complete registration');
+      setCurrentStep(1);
+      return;
+    }
+    
     // Mark that user has attempted to submit the form (all steps)
     // This ensures errors are shown for all steps that have issues
     const allSteps = formData.role === 'vendor' ? [1, 2, 3, 4] : [1, 2];
@@ -677,6 +815,7 @@ const Register = () => {
           type="email"
           value={formData.email}
           onChange={(e) => handleChange('email', e.target.value)}
+          onBlur={handleEmailBlur}
           placeholder="Enter your email"
           className={currentStep === 1 && attemptedSteps.has(1) && errors.email ? 'border-red-500' : ''}
         />
@@ -698,6 +837,85 @@ const Register = () => {
         {currentStep === 1 && attemptedSteps.has(1) && errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
         <p className="mt-1 text-xs text-gray-500">Format: +254 700 000 000 or 0700 000 000</p>
       </div>
+
+      {/* OTP Verification Widget - Non-blocking */}
+      {showOtpInput && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+          <div className="mb-3">
+            <p className="text-sm font-medium text-gray-700 mb-2">
+              Email Verification
+            </p>
+            <p className="text-xs text-gray-600">
+              We sent a verification code to <strong>{formData.email}</strong>
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <Input
+              type="text"
+              value={otp}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                setOtp(val);
+                setOtpError('');
+                // Auto-verify when 6 digits are entered
+                if (val.length === 6) {
+                  setTimeout(() => handleVerifyOTP(), 100);
+                }
+              }}
+              onBlur={() => {
+                if (otp.length === 6) {
+                  handleVerifyOTP();
+                }
+              }}
+              placeholder="Enter 6-digit code"
+              maxLength={6}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+              className="text-center text-lg tracking-widest font-mono"
+            />
+
+            {otpError && <p className="text-sm text-red-600">{otpError}</p>}
+
+            {otpVerified ? (
+              <div className="bg-green-100 border border-green-300 rounded p-2 text-center">
+                <p className="text-sm text-green-700 font-medium">✓ Email verified</p>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleVerifyOTP}
+                disabled={otp.length !== 6 || isLoading || otpVerified}
+                className="w-full btn-primary text-sm"
+              >
+                {isLoading ? 'Verifying...' : 'Verify Code'}
+              </Button>
+            )}
+
+            <div className="text-center text-xs">
+              {otpCountdown > 0 ? (
+                <p className="text-gray-600">Resend in {otpCountdown}s</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendOTP}
+                  disabled={isLoading}
+                  className="text-primary hover:underline font-medium disabled:text-gray-400 text-xs"
+                >
+                  Didn't receive the code? Resend
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {otpSent && !otpVerified && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
+          ⚠️ Please verify your email to complete registration
+        </div>
+      )}
     </div>
   );
 

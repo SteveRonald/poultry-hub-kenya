@@ -33,6 +33,8 @@ interface CartContextType {
   removeFromCart: (cartId: number) => Promise<boolean>;
   clearCart: (silent?: boolean) => Promise<boolean>;
   refreshCart: () => Promise<void>;
+  mergeLocalCart: () => Promise<void>;
+  getLocalCart: () => any[];
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -94,7 +96,8 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   const addToCart = async (productId: string, quantity: number): Promise<boolean> => {
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.error('Please login to add items to cart');
+      // Don't show error - allow adding to local storage cart
+      // This will be handled by the calling component
       return false;
     }
 
@@ -128,6 +131,38 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
       return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Merge local storage cart with database cart after login
+  const mergeLocalCart = async (): Promise<void> => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const localCart = JSON.parse(localStorage.getItem('local_cart') || '[]');
+    if (localCart.length === 0) return;
+
+    try {
+      // Add each item from local cart to database cart
+      for (const item of localCart) {
+        await fetch(getApiUrl('/api/cart'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            product_id: item.product_id,
+            quantity: item.quantity
+          })
+        });
+      }
+
+      // Clear local cart after merging
+      localStorage.removeItem('local_cart');
+      await fetchCart(); // Refresh cart
+    } catch (error) {
+      console.error('Error merging local cart:', error);
     }
   };
 
@@ -256,6 +291,10 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     fetchCart();
   }, []);
 
+  const getLocalCart = (): any[] => {
+    return JSON.parse(localStorage.getItem('local_cart') || '[]');
+  };
+
   const value: CartContextType = {
     cartItems,
     cartSummary,
@@ -264,7 +303,9 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
-    refreshCart
+    refreshCart,
+    mergeLocalCart,
+    getLocalCart
   };
 
   return (

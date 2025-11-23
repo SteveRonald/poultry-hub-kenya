@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Plus, Minus, Trash2, MapPin, Phone, CreditCard } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -15,16 +15,34 @@ interface CartProps {
 }
 
 const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
-  const { cartItems, cartSummary, loading, updateCartItem, removeFromCart, clearCart } = useCart();
+  const { cartItems, cartSummary, loading, updateCartItem, removeFromCart, clearCart, getLocalCart } = useCart();
   const { user } = useAuth();
+  const [localCartItems, setLocalCartItems] = useState<any[]>([]);
+  const [localCartTotal, setLocalCartTotal] = useState(0);
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutData, setCheckoutData] = useState({
     shipping_address: '',
     contact_phone: '',
     payment_method: 'mpesa',
+    payment_account_number: '',
     notes: ''
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // Update local cart items when not logged in
+  useEffect(() => {
+    if (isOpen) {
+      if (!user) {
+        const localCart = getLocalCart();
+        setLocalCartItems(localCart || []);
+        const total = (localCart || []).reduce((sum: number, item: any) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
+        setLocalCartTotal(total);
+      } else {
+        setLocalCartItems([]);
+        setLocalCartTotal(0);
+      }
+    }
+  }, [user, getLocalCart, isOpen]); // Re-check when cart opens
 
   const handleQuantityChange = async (cartId: number, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -43,6 +61,16 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
 
     if (!checkoutData.shipping_address.trim() || !checkoutData.contact_phone.trim()) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (checkoutData.payment_method === 'mpesa' && !checkoutData.payment_account_number.trim()) {
+      toast.error('M-Pesa number is required');
+      return;
+    }
+
+    if (checkoutData.payment_method === 'mpesa' && checkoutData.payment_account_number.length !== 10) {
+      toast.error('M-Pesa number must be 10 digits');
       return;
     }
 
@@ -66,7 +94,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
           toast.warning('Order may have been placed, but we could not confirm. Please check your orders.');
           await clearCart(true);
           setShowCheckout(false);
-          setCheckoutData({ shipping_address: '', contact_phone: '', payment_method: 'mpesa', notes: '' });
+          setCheckoutData({ shipping_address: '', contact_phone: '', payment_method: 'mpesa', payment_account_number: '', notes: '' });
           onClose();
           return;
         } else {
@@ -128,7 +156,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
             </button>
           </div>
 
-          {cartItems.length === 0 ? (
+          {(user ? cartItems : localCartItems).length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-600 mb-2">Your cart is empty</h3>
@@ -143,8 +171,10 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                 <>
                   {/* Cart Items */}
                   <div className="space-y-4">
-                    {cartItems.map((item) => (
-                      <Card key={item.cart_id} className="p-4">
+                    {(user ? cartItems : localCartItems).map((item, index) => {
+                      const cartId = user ? item.cart_id : `local_${index}`;
+                      return (
+                      <Card key={cartId} className="p-4">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                           {/* Product Image */}
                           <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -167,8 +197,8 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                           {/* Product Details */}
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-900">{item.product_name}</h3>
-                            <p className="text-sm text-gray-600 capitalize">{item.category}</p>
-                            <p className="text-sm text-gray-500">Vendor: {item.vendor_name}</p>
+                            {item.category && <p className="text-sm text-gray-600 capitalize">{item.category}</p>}
+                            {user && item.vendor_name && <p className="text-sm text-gray-500">Vendor: {item.vendor_name}</p>}
                             <p className="text-lg font-bold text-primary">KSH {Number(item.price).toFixed(2)}</p>
                           </div>
 
@@ -177,7 +207,24 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleQuantityChange(item.cart_id, item.quantity - 1)}
+                              onClick={() => {
+                                if (user) {
+                                  handleQuantityChange(item.cart_id, item.quantity - 1);
+                                } else {
+                                  // Update local cart
+                                  const localCart = getLocalCart();
+                                  const itemIndex = localCart.findIndex((i: any) => i.product_id === item.product_id);
+                                  if (itemIndex >= 0 && localCart[itemIndex].quantity > 1) {
+                                    localCart[itemIndex].quantity -= 1;
+                                    localStorage.setItem('local_cart', JSON.stringify(localCart));
+                                    setLocalCartItems([...localCart]);
+                                    const total = localCart.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
+                                    setLocalCartTotal(total);
+                                    // Dispatch storage event to update Navbar count
+                                    window.dispatchEvent(new Event('storage'));
+                                  }
+                                }
+                              }}
                               disabled={loading || item.quantity <= 1}
                             >
                               <Minus className="h-4 w-4" />
@@ -186,8 +233,25 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleQuantityChange(item.cart_id, item.quantity + 1)}
-                              disabled={loading || item.quantity >= item.stock_quantity}
+                              onClick={() => {
+                                if (user) {
+                                  handleQuantityChange(item.cart_id, item.quantity + 1);
+                                } else {
+                                  // Update local cart
+                                  const localCart = getLocalCart();
+                                  const itemIndex = localCart.findIndex((i: any) => i.product_id === item.product_id);
+                                  if (itemIndex >= 0) {
+                                    localCart[itemIndex].quantity += 1;
+                                    localStorage.setItem('local_cart', JSON.stringify(localCart));
+                                    setLocalCartItems([...localCart]);
+                                    const total = localCart.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
+                                    setLocalCartTotal(total);
+                                    // Dispatch storage event to update Navbar count
+                                    window.dispatchEvent(new Event('storage'));
+                                  }
+                                }
+                              }}
+                              disabled={loading || (user && item.quantity >= item.stock_quantity)}
                             >
                               <Plus className="h-4 w-4" />
                             </Button>
@@ -196,12 +260,24 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                           {/* Total Price */}
                           <div className="text-left sm:text-right">
                             <p className="text-lg font-bold text-primary">
-                              KSH {Number(item.total_price).toFixed(2)}
+                              KSH {Number(user ? item.total_price : (item.price * item.quantity)).toFixed(2)}
                             </p>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleRemoveItem(item.cart_id)}
+                              onClick={() => {
+                                if (user) {
+                                  handleRemoveItem(item.cart_id);
+                                } else {
+                                  // Remove from local cart
+                                  const localCart = getLocalCart();
+                                  const filtered = localCart.filter((i: any) => i.product_id !== item.product_id);
+                                  localStorage.setItem('local_cart', JSON.stringify(filtered));
+                                  setLocalCartItems(filtered);
+                                  const total = filtered.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
+                                  setLocalCartTotal(total);
+                                }
+                              }}
                               disabled={loading}
                               className="text-red-600 hover:text-red-700 mt-2"
                             >
@@ -210,7 +286,8 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                           </div>
                         </div>
                       </Card>
-                    ))}
+                    );
+                    })}
                   </div>
 
                   {/* Cart Summary */}
@@ -218,25 +295,48 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                     <CardContent className="p-6">
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-lg font-semibold">Total Items:</span>
-                        <span className="text-lg font-bold">{cartSummary.total_items}</span>
+                        <span className="text-lg font-bold">
+                          {user 
+                            ? cartSummary.items_count 
+                            : localCartItems.length
+                          }
+                        </span>
                       </div>
                       <div className="flex justify-between items-center mb-6">
                         <span className="text-xl font-bold">Total Amount:</span>
                         <span className="text-2xl font-bold text-primary">
-                          KSH {Number(cartSummary.total_amount).toFixed(2)}
+                          KSH {Number(user ? cartSummary.total_amount : localCartTotal).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-3">
                         <Button
-                          onClick={() => setShowCheckout(true)}
+                          onClick={() => {
+                            if (!user) {
+                              // Navigate to checkout page for non-logged-in users
+                              onClose();
+                              window.location.href = '/checkout';
+                            } else {
+                              setShowCheckout(true);
+                            }
+                          }}
                           className="flex-1 btn-primary"
                           disabled={loading}
                         >
                           <CreditCard className="h-4 w-4 mr-2" />
-                          Proceed to Checkout
+                          {user ? 'Proceed to Checkout' : 'Go to Checkout'}
                         </Button>
                         <Button
-                          onClick={() => clearCart()}
+                          onClick={() => {
+                            if (user) {
+                              clearCart();
+                            } else {
+                              // Clear local cart
+                              localStorage.removeItem('local_cart');
+                              setLocalCartItems([]);
+                              setLocalCartTotal(0);
+                              toast.success('Cart cleared');
+                            }
+                          }}
                           variant="outline"
                           disabled={loading}
                         >
@@ -301,15 +401,56 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                         <select
                           id="payment_method"
                           value={checkoutData.payment_method}
-                          onChange={(e) => setCheckoutData(prev => ({ ...prev, payment_method: e.target.value }))}
+                          onChange={(e) => setCheckoutData(prev => ({ ...prev, payment_method: e.target.value, payment_account_number: '' }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                           required
                         >
                           <option value="mpesa">M-Pesa</option>
-                          <option value="bank">Bank Transfer</option>
-                          <option value="paypal">PayPal</option>
+                          <option value="bank" disabled>Bank Transfer (Coming Soon)</option>
                         </select>
                       </div>
+
+                      {checkoutData.payment_method === 'mpesa' && (
+                        <div>
+                          <label htmlFor="payment_account_number" className="block text-sm font-medium text-gray-700 mb-1">
+                            M-Pesa Number <span className="text-red-500">*</span>
+                          </label>
+                          <Input
+                            id="payment_account_number"
+                            type="tel"
+                            value={checkoutData.payment_account_number}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, ''); // Only numbers
+                              if (value.length <= 10) {
+                                setCheckoutData(prev => ({ ...prev, payment_account_number: value }));
+                              }
+                            }}
+                            placeholder="07XX XXX XXX"
+                            required
+                            maxLength={10}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Enter your M-Pesa phone number (10 digits)</p>
+                        </div>
+                      )}
+
+                      {checkoutData.payment_method === 'bank' && (
+                        <div>
+                          <label htmlFor="payment_account_number" className="block text-sm font-medium text-gray-700 mb-1">
+                            Bank Account Number <span className="text-red-500">*</span>
+                          </label>
+                          <Input
+                            id="payment_account_number"
+                            type="text"
+                            value={checkoutData.payment_account_number}
+                            onChange={(e) => setCheckoutData(prev => ({ ...prev, payment_account_number: e.target.value }))}
+                            placeholder="Enter bank account number"
+                            required
+                            disabled
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Bank transfer is coming soon</p>
+                        </div>
+                      )}
+
                       <div>
                         <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                           Order Notes (Optional)

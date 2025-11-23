@@ -124,7 +124,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
     };
   }, [advertisement.id, sessionId, userId, pageLocation, minViewableTime, viewTracked]);
 
-  // Auto-dismiss timer for basic tier ads
+  // Auto-dismiss timer for basic tier ads only (premium ads should not auto-dismiss)
   useEffect(() => {
     if (advertisement.tier === 'basic' && isVisible) {
       setTimeRemaining(displayDuration);
@@ -153,9 +153,10 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     
-    // Track click
+    // Track click and get current product_id (handles product changes during reactivation)
+    let currentProductId = advertisement.product_id;
     try {
-      await fetch(getApiUrl('/api/advertisements/track-click'), {
+      const response = await fetch(getApiUrl('/api/advertisements/track-click'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -164,6 +165,14 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
           user_id: userId
         })
       });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Use the product_id returned from API (handles product changes during reactivation)
+        if (data.product_id) {
+          currentProductId = data.product_id;
+        }
+      }
 
       // Set cookie to track ad click for order attribution
       document.cookie = `ad_click=${advertisement.id}; path=/; max-age=${60 * 60 * 24}`; // 24 hours
@@ -175,7 +184,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
     if (!user) {
       // Store order context for after login/register
       const orderContext = {
-        product_id: advertisement.product_id,
+        product_id: currentProductId,
         advertisement_id: advertisement.id,
         quantity: 1,
         source: 'advertisement',
@@ -183,13 +192,13 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
       };
       sessionStorage.setItem('pending_order', JSON.stringify(orderContext));
       
-      // Redirect to login with return URL
-      navigate(`/login?redirect=/products&product=${advertisement.product_id}&ad=${advertisement.id}`);
+      // Redirect to login with return URL to product details page
+      navigate(`/login?redirect=/product/${currentProductId}&ad=${advertisement.id}`);
       return;
     }
 
-    // User is logged in, navigate to product page
-    navigate(`/products?product=${advertisement.product_id}&ad=${advertisement.id}`);
+    // User is logged in, navigate to product details page
+    navigate(`/product/${currentProductId}?ad=${advertisement.id}`);
   };
 
   if (!isVisible) {
@@ -219,17 +228,37 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
 
   // Premium ads: Top fixed banner using Leaderboard standard (728×90 px)
   // Responsive: scales down on mobile while maintaining aspect ratio
+  // Positioned below navbar (z-40) so navbar (z-50) stays on top
   if (advertisement.tier === 'premium') {
     return (
       <div
         ref={adRef}
-        className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-50 to-orange-50 border-b-2 border-yellow-400 shadow-lg"
+        className="fixed top-16 sm:top-20 md:top-24 left-0 right-0 z-40 bg-gradient-to-r from-yellow-50 to-orange-50 border-b-2 border-yellow-400 shadow-lg transition-all duration-500 ease-in-out"
         style={{ 
           height: '90px',
-          minHeight: '90px'
+          minHeight: '90px',
+          transform: isVisible ? 'translateY(0)' : 'translateY(-100%)',
+          opacity: isVisible ? 1 : 0
         }}
       >
-        <div className="w-full h-full max-w-[728px] mx-auto px-2 sm:px-4">
+        <div className="w-full h-full max-w-[728px] mx-auto px-2 sm:px-4 relative">
+          {/* Close Button */}
+          <button
+            onClick={handleClose}
+            className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5 transition-colors"
+            aria-label="Close advertisement"
+            title="Close advertisement"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          {/* Timer */}
+          {timeRemaining > 0 && (
+            <div className="absolute top-2 left-2 z-10 bg-black/50 text-white px-2 py-1 rounded text-xs">
+              {timeRemaining}s
+            </div>
+          )}
+
           <div className="flex items-center gap-2 sm:gap-4 h-full">
             {/* Premium Badge */}
             <div className="bg-yellow-400 text-black px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-bold whitespace-nowrap flex-shrink-0">

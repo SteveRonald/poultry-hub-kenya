@@ -40,7 +40,7 @@ function getGDBearerToken() {
 
     // SECURITY: Validate and sanitize token from GET parameter
     if (isset($_GET['token']) && is_string($_GET['token'])) {
-        $token = filter_var($_GET['token'], FILTER_SANITIZE_STRING);
+        $token = filter_var($_GET['token'], FILTER_SANITIZE_FULL_SPECIAL_CHARS);
         // Validate token format (alphanumeric, base64-like, or UUID) and reasonable length
         if (preg_match('/^[a-zA-Z0-9._-]+$/', $token) && strlen($token) > 10 && strlen($token) < 2000) {
             return $token;
@@ -157,7 +157,7 @@ function handleGoogleDriveDelete() {
     
     // SECURITY: Validate and sanitize file ID to prevent injection
     if ($fileId) {
-        $fileId = filter_var($fileId, FILTER_SANITIZE_STRING);
+        $fileId = filter_var($fileId, FILTER_SANITIZE_FULL_SPECIAL_CHARS);
         // Validate file ID format (Google Drive file IDs are alphanumeric)
         if (!preg_match('/^[a-zA-Z0-9_-]+$/', $fileId) || strlen($fileId) > 100) {
             http_response_code(400);

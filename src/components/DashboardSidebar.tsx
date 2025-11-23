@@ -17,7 +17,8 @@ import {
   Mail,
   MessageSquare,
   Database,
-  Shield
+  Shield,
+  FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -247,7 +248,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           icon: MessageSquare,
           badge: stats.newMessages || 0
         },
-        { id: 'sms', label: 'SMS Logs', icon: MessageSquare }
+        { id: 'sms', label: 'SMS Logs', icon: MessageSquare },
+        { id: 'system-logs', label: 'System Logs', icon: FileText }
       ]
     },
     {

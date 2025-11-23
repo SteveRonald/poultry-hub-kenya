@@ -2,6 +2,9 @@
 // Set timezone to Nairobi (UTC+3) for consistent date/time handling
 date_default_timezone_set('Africa/Nairobi');
 
+// Load environment variables FIRST before CORS configuration
+require_once __DIR__ . '/config/env_loader.php';
+
 header('Content-Type: application/json');
 // Restrict CORS to specific origins for security
 $allowedOrigins = [
@@ -14,15 +17,19 @@ $allowedOrigins = [
     'http://127.0.0.1:8081',
     'http://127.0.0.1:8082',
     'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173', // Vite default port
-    'http://192.168.19.24:8080',
-    'http://192.168.198.24:8081',
-    'http://192.168.83.24:8082',
-    'http://192.168.14.176:3000'
+    'http://127.0.0.1:5173' // Vite default port
 ];
 
+// Add local network IPs from environment variable (for development)
+// Use $_ENV or $_SERVER as fallback since getenv() might not work in all PHP configurations
+$localNetworkIPs = getenv('LOCAL_NETWORK_ORIGINS') ?: ($_ENV['LOCAL_NETWORK_ORIGINS'] ?? $_SERVER['LOCAL_NETWORK_ORIGINS'] ?? '');
+if ($localNetworkIPs) {
+    $localIPs = explode(',', $localNetworkIPs);
+    $allowedOrigins = array_merge($allowedOrigins, array_map('trim', $localIPs));
+}
+
 // Add production domains from environment
-$productionDomains = getenv('ALLOWED_ORIGINS');
+$productionDomains = getenv('ALLOWED_ORIGINS') ?: ($_ENV['ALLOWED_ORIGINS'] ?? $_SERVER['ALLOWED_ORIGINS'] ?? '');
 if ($productionDomains) {
     $productionDomains = explode(',', $productionDomains);
     $allowedOrigins = array_merge($allowedOrigins, array_map('trim', $productionDomains));
@@ -30,7 +37,7 @@ if ($productionDomains) {
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 // Default to Vite's default port (5173) or allow from environment
-$defaultOrigin = getenv('DEFAULT_CORS_ORIGIN') ?: 'http://localhost:5173';
+$defaultOrigin = getenv('DEFAULT_CORS_ORIGIN') ?: ($_ENV['DEFAULT_CORS_ORIGIN'] ?? $_SERVER['DEFAULT_CORS_ORIGIN'] ?? 'http://localhost:5173');
 
 if (in_array($origin, $allowedOrigins) || strpos($origin, 'ngrok') !== false) {
     header('Access-Control-Allow-Origin: ' . $origin);
@@ -73,6 +80,16 @@ if (preg_match('#^api/chat/conversations/([^/]+)$#', $path, $matches)) {
     if ($method === 'DELETE' && $conversationId) {
         include 'routes/chat.php';
         handleDeleteConversation($conversationId);
+        exit;
+    }
+}
+
+// Handle dynamic route for single product (before switch)
+if (preg_match('#^api/products/([^/]+)$#', $path, $matches)) {
+    $productId = $matches[1] ?? null;
+    if ($method === 'GET' && $productId) {
+        include 'routes/products.php';
+        handleGetProduct($productId);
         exit;
     }
 }
@@ -803,6 +820,13 @@ switch ($path) {
         }
         break;
         
+    case 'api/advertisements/reactivate':
+        if ($method === 'POST') {
+            include 'routes/advertisements.php';
+            handleReactivateAdvertisement();
+        }
+        break;
+        
     case 'api/market-insights/prices':
         if ($method === 'GET') {
             include 'routes/market_insights.php';
@@ -814,6 +838,20 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/market_insights.php';
             handleGetPredictedPrices();
+        }
+        break;
+        
+    case 'api/admin/system-logs':
+        if ($method === 'GET') {
+            include 'routes/system_logs.php';
+            handleGetSystemLogs();
+        }
+        break;
+        
+    case 'api/admin/system-logs/actions':
+        if ($method === 'GET') {
+            include 'routes/system_logs.php';
+            handleGetLogActions();
         }
         break;
         
@@ -829,6 +867,11 @@ switch ($path) {
             include 'routes/market_insights.php';
             handleGetFilterOptions();
         }
+        break;
+        
+    case 'api/ratings':
+        include 'routes/ratings.php';
+        // Functions handle routing internally based on method and query params
         break;
         
     default:

@@ -3,6 +3,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
 require_once __DIR__ . '/../utils/security.php';
+require_once __DIR__ . '/../utils/system_logs.php';
 
 function handleLogin() {
     global $pdo;
@@ -97,7 +98,15 @@ function handleLogin() {
             ]
         ];
         
-        // No debug logging here (avoid leaking vendor data to logs)
+        // Log successful login
+        $userType = $user['role'] === 'vendor' ? 'vendor' : 'customer';
+        logActivity(
+            $user['id'],
+            $userType,
+            'login',
+            "User logged in successfully",
+            ['email' => $user['email'], 'role' => $user['role']]
+        );
         
         echo json_encode($response);
         
@@ -142,6 +151,26 @@ function handleRegister() {
     }
     
     try {
+        // SECURITY: Verify that email was verified via OTP before allowing registration
+        // Check if there's a verified (used = TRUE) OTP for this email (purpose = 'registration')
+        // The OTP must have been verified (used = TRUE) and used_at should be recent (within last 30 minutes)
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count 
+            FROM email_otps 
+            WHERE email = ? 
+            AND purpose = 'registration' 
+            AND used = TRUE
+            AND used_at > DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+        ");
+        $stmt->execute([$email]);
+        $otpResult = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($otpResult['count'] == 0) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Email verification required. Please verify your email address before registering.']);
+            return;
+        }
+        
         // Check if email already exists
         $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE email = ?");
         $stmt->execute([$email]);
@@ -194,6 +223,16 @@ function handleRegister() {
         $id = uniqid();
         $stmt = $pdo->prepare("INSERT INTO user_profiles (id, email, password, full_name, phone, role) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$id, $email, $password, $full_name, $phone, $role]);
+        
+        // Log registration
+        $userType = $role === 'vendor' ? 'vendor' : 'customer';
+        logActivity(
+            $id,
+            $userType,
+            'register',
+            "New {$userType} account registered",
+            ['email' => $email, 'role' => $role, 'name' => $full_name]
+        );
         
         // If vendor, create vendor profile
         if ($role === 'vendor') {

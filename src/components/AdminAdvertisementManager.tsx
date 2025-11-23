@@ -11,7 +11,8 @@ import {
   BarChart3,
   AlertCircle,
   Edit,
-  Trash2
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { getApiUrl, getImageUrl } from '../config/api';
 import { toast } from 'sonner';
@@ -28,6 +29,7 @@ import {
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import {
   Dialog,
   DialogContent,
@@ -85,6 +87,20 @@ const AdminAdvertisementManager: React.FC = () => {
   });
   const [uploadingImage, setUploadingImage] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Advertisement | null>(null);
+  const [reactivatingAd, setReactivatingAd] = useState<Advertisement | null>(null);
+  const [reactivateFormData, setReactivateFormData] = useState({
+    tier: 'basic' as 'basic' | 'premium',
+    duration_days: 7,
+    ad_title: '',
+    ad_description: '',
+    ad_image: '',
+    previous_price: '',
+    current_price: '',
+    content_duration: 15,
+    page_locations: ['homepage', 'products'] as string[],
+    activate_immediately: true
+  });
+  const [reactivating, setReactivating] = useState(false);
 
   useEffect(() => {
     fetchAdvertisements();
@@ -233,9 +249,76 @@ const AdminAdvertisementManager: React.FC = () => {
       const diff = end - now;
       const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
       if (isNaN(days)) return 'N/A';
-      return days > 0 ? `${days} days` : 'Expired';
+      if (days <= 0) return 'Expired';
+      if (days === 1) return '1 day';
+      return `${days} days`;
     } catch (e) {
       return 'N/A';
+    }
+  };
+
+  const handleReactivateClick = (ad: Advertisement) => {
+    setReactivatingAd(ad);
+    // Initialize form with current ad values
+    const pageLocations = (ad as any).page_locations || ['homepage', 'products'];
+    setReactivateFormData({
+      tier: ad.tier,
+      duration_days: ad.duration_days,
+      ad_title: ad.ad_title || '',
+      ad_description: ad.ad_description || '',
+      ad_image: ad.ad_image || '',
+      previous_price: (ad as any).previous_price?.toString() || '',
+      current_price: (ad as any).current_price?.toString() || '',
+      content_duration: (ad as any).content_duration || (ad.tier === 'basic' ? 15 : 30),
+      page_locations: Array.isArray(pageLocations) ? pageLocations : ['homepage', 'products'],
+      activate_immediately: true
+    });
+  };
+
+  const calculateReactivatePrice = () => {
+    const tierPrice = reactivateFormData.tier === 'premium' ? 300 : 128;
+    return tierPrice * reactivateFormData.duration_days;
+  };
+
+  const handleReactivate = async () => {
+    if (!reactivatingAd) return;
+
+    setReactivating(true);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/advertisements/reactivate'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          advertisement_id: reactivatingAd.id,
+          tier: reactivateFormData.tier,
+          duration_days: reactivateFormData.duration_days,
+          ad_title: reactivateFormData.ad_title,
+          ad_description: reactivateFormData.ad_description,
+          ad_image: reactivateFormData.ad_image,
+          previous_price: reactivateFormData.previous_price ? parseFloat(reactivateFormData.previous_price) : null,
+          current_price: reactivateFormData.current_price ? parseFloat(reactivateFormData.current_price) : null,
+          content_duration: reactivateFormData.content_duration,
+          page_locations: reactivateFormData.page_locations,
+          activate_immediately: reactivateFormData.activate_immediately
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message || 'Advertisement reactivated successfully');
+        setReactivatingAd(null);
+        fetchAdvertisements();
+      } else {
+        toast.error(data.error || 'Failed to reactivate advertisement');
+      }
+    } catch (error) {
+      toast.error('Failed to reactivate advertisement');
+    } finally {
+      setReactivating(false);
     }
   };
 
@@ -633,15 +716,28 @@ const AdminAdvertisementManager: React.FC = () => {
                       const isExpired = ad.status === 'expired' || 
                         (ad.end_date && new Date(ad.end_date) < new Date());
                       return isExpired && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => setDeleteConfirm(ad)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-green-600 hover:text-green-700"
+                            onClick={() => handleReactivateClick(ad)}
+                            title="Reactivate Advertisement"
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            Reactivate
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setDeleteConfirm(ad)}
+                            title="Delete Advertisement"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </>
                       );
                     })()}
                   </div>
@@ -866,6 +962,263 @@ const AdminAdvertisementManager: React.FC = () => {
             </Button>
             <Button onClick={handleUpdateAd} disabled={uploadingImage}>
               Update Advertisement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reactivate Advertisement Dialog */}
+      <Dialog open={!!reactivatingAd} onOpenChange={(open) => !open && setReactivatingAd(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Reactivate Advertisement</DialogTitle>
+            <DialogDescription>
+              Edit advertisement details and reactivate it. As admin, you can activate it immediately or set it to pending.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Tier Selection */}
+            <div>
+              <Label htmlFor="reactivate_tier">Advertisement Tier *</Label>
+              <Select
+                value={reactivateFormData.tier}
+                onValueChange={(value) => {
+                  const newTier = value as 'basic' | 'premium';
+                  setReactivateFormData({
+                    ...reactivateFormData,
+                    tier: newTier,
+                    content_duration: newTier === 'basic' ? 15 : 30
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="basic">
+                    Basic - KSh 128/day
+                    <span className="text-xs text-gray-500 ml-2">(15-30 seconds)</span>
+                  </SelectItem>
+                  <SelectItem value="premium">
+                    Premium - KSh 300/day
+                    <span className="text-xs text-gray-500 ml-2">(up to 60 seconds)</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Duration */}
+            <div>
+              <Label htmlFor="reactivate_duration_days">Duration (Days) *</Label>
+              <Input
+                id="reactivate_duration_days"
+                type="number"
+                min="1"
+                value={reactivateFormData.duration_days}
+                onChange={(e) => {
+                  const days = parseInt(e.target.value) || 1;
+                  setReactivateFormData({ ...reactivateFormData, duration_days: days });
+                }}
+              />
+            </div>
+
+            {/* Calculated Price Display */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-gray-700">New Price:</span>
+                <span className="text-2xl font-bold text-primary">
+                  KSh {calculateReactivatePrice().toLocaleString()}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 mt-1">
+                {reactivateFormData.tier === 'premium' ? 'KSh 300' : 'KSh 128'} × {reactivateFormData.duration_days} days
+              </p>
+            </div>
+
+            {/* Content Duration */}
+            <div>
+              <Label htmlFor="reactivate_content_duration">
+                Content Duration (seconds) *
+                {reactivateFormData.tier === 'basic' && ' (15-30 seconds)'}
+                {reactivateFormData.tier === 'premium' && ' (up to 60 seconds)'}
+              </Label>
+              <Input
+                id="reactivate_content_duration"
+                type="number"
+                min={reactivateFormData.tier === 'basic' ? 15 : 1}
+                max={reactivateFormData.tier === 'basic' ? 30 : 60}
+                value={reactivateFormData.content_duration}
+                onChange={(e) => {
+                  const duration = parseInt(e.target.value) || (reactivateFormData.tier === 'basic' ? 15 : 30);
+                  setReactivateFormData({ ...reactivateFormData, content_duration: duration });
+                }}
+              />
+            </div>
+
+            {/* Page Locations */}
+            <div>
+              <Label>Select Pages * (Multiple selections allowed)</Label>
+              <div className="space-y-2 mt-2">
+                {[
+                  { value: 'homepage', label: 'Home Page' },
+                  { value: 'products', label: 'Products Page' },
+                  { value: 'blog', label: 'Blog Page' },
+                  { value: 'training', label: 'Training Page' }
+                ].map((page) => (
+                  <label key={page.value} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={reactivateFormData.page_locations.includes(page.value)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setReactivateFormData({
+                            ...reactivateFormData,
+                            page_locations: [...reactivateFormData.page_locations, page.value]
+                          });
+                        } else {
+                          setReactivateFormData({
+                            ...reactivateFormData,
+                            page_locations: reactivateFormData.page_locations.filter(p => p !== page.value)
+                          });
+                        }
+                      }}
+                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm">{page.label}</span>
+                  </label>
+                ))}
+              </div>
+              {reactivateFormData.page_locations.length === 0 && (
+                <p className="text-xs text-red-600 mt-1">Please select at least one page</p>
+              )}
+            </div>
+
+            {/* Activate Immediately (Admin only) */}
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="activate_immediately"
+                checked={reactivateFormData.activate_immediately}
+                onChange={(e) => setReactivateFormData({ ...reactivateFormData, activate_immediately: e.target.checked })}
+                className="rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="activate_immediately" className="cursor-pointer">
+                Activate immediately (skip approval)
+              </Label>
+            </div>
+
+            {/* Ad Title */}
+            <div>
+              <Label htmlFor="reactivate_ad_title">Advertisement Title</Label>
+              <Input
+                id="reactivate_ad_title"
+                value={reactivateFormData.ad_title}
+                onChange={(e) => setReactivateFormData({ ...reactivateFormData, ad_title: e.target.value })}
+                placeholder="Enter a catchy title for your ad"
+              />
+            </div>
+
+            {/* Ad Description */}
+            <div>
+              <Label htmlFor="reactivate_ad_description">Advertisement Description</Label>
+              <Textarea
+                id="reactivate_ad_description"
+                value={reactivateFormData.ad_description}
+                onChange={(e) => setReactivateFormData({ ...reactivateFormData, ad_description: e.target.value })}
+                placeholder="Describe your product or promotion"
+                rows={4}
+              />
+            </div>
+
+            {/* Discount Prices */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="reactivate_previous_price">Previous Price (Optional)</Label>
+                <Input
+                  id="reactivate_previous_price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={reactivateFormData.previous_price}
+                  onChange={(e) => setReactivateFormData({ ...reactivateFormData, previous_price: e.target.value })}
+                  placeholder="e.g., 5000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="reactivate_current_price">Current/Discounted Price (Optional)</Label>
+                <Input
+                  id="reactivate_current_price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={reactivateFormData.current_price}
+                  onChange={(e) => setReactivateFormData({ ...reactivateFormData, current_price: e.target.value })}
+                  placeholder="e.g., 3500"
+                />
+              </div>
+            </div>
+
+            {/* Ad Image */}
+            <div>
+              <Label>Advertisement Image/Video</Label>
+              <Input
+                type="file"
+                accept="image/*,video/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+                    toast.error('Please select an image or video file');
+                    return;
+                  }
+                  try {
+                    setUploadingImage(true);
+                    const url = await uploadImage(file);
+                    setReactivateFormData({ ...reactivateFormData, ad_image: url });
+                    toast.success('Image uploaded successfully');
+                  } catch (error) {
+                    toast.error('Failed to upload image');
+                  } finally {
+                    setUploadingImage(false);
+                  }
+                }}
+                className="mt-2"
+                disabled={uploadingImage}
+              />
+              {reactivateFormData.ad_image && (
+                <div className="mt-2">
+                  {reactivateFormData.ad_image.endsWith('.mp4') || 
+                   reactivateFormData.ad_image.endsWith('.webm') || 
+                   reactivateFormData.ad_image.endsWith('.mov') ? (
+                    <video
+                      src={getImageUrl(reactivateFormData.ad_image)}
+                      className="w-full h-48 object-cover rounded-lg border"
+                      controls
+                    />
+                  ) : (
+                    <img
+                      src={getImageUrl(reactivateFormData.ad_image)}
+                      alt="Preview"
+                      className="w-full h-48 object-cover rounded-lg border"
+                    />
+                  )}
+                </div>
+              )}
+              {uploadingImage && (
+                <p className="text-sm text-gray-500 mt-2">Uploading...</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReactivatingAd(null)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleReactivate} 
+              disabled={reactivating || uploadingImage || reactivateFormData.page_locations.length === 0}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {reactivating ? 'Reactivating...' : reactivateFormData.activate_immediately ? 'Reactivate & Activate Now' : 'Reactivate (Pending Approval)'}
             </Button>
           </DialogFooter>
         </DialogContent>

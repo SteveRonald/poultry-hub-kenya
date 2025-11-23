@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, User, Eye, MessageCircle, Search, Tag } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -7,18 +7,137 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import AdvertisementBanner from '../components/AdvertisementBanner';
+import { getApiUrl } from '../config/api';
 
 const Blog = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [expandedPost, setExpandedPost] = useState<number | null>(null);
+  const [advertisements, setAdvertisements] = useState<any[]>([]);
+  const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
+  const [currentAdIndex, setCurrentAdIndex] = useState(0);
+  const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const postsGridRef = useRef<HTMLDivElement>(null);
 
-  const categories = [
-    { id: 'all', name: 'All Posts', count: 15 },
-    { id: 'tips', name: 'Tips & Guides', count: 6 },
-    { id: 'news', name: 'Industry News', count: 4 },
-    { id: 'stories', name: 'Farmer Stories', count: 5 }
-  ];
+  useEffect(() => {
+    fetchAdvertisements();
+    return () => {
+      if (adRotationIntervalRef.current) {
+        clearInterval(adRotationIntervalRef.current);
+      }
+    };
+  }, []);
+  
+  useEffect(() => {
+    setupScrollAnimations();
+  }, [searchTerm, selectedCategory]);
+  
+  const setupScrollAnimations = () => {
+    const observerOptions = {
+      threshold: 0.05,
+      rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('animate-in');
+          entry.target.classList.remove('animate-out');
+        } else {
+          // Reset animation when element leaves viewport - allows re-animation on scroll
+          entry.target.classList.remove('animate-in');
+          entry.target.classList.add('animate-out');
+        }
+      });
+    }, observerOptions);
+    
+    // Observe all blog post cards - animations trigger every scroll
+    setTimeout(() => {
+      const postCards = document.querySelectorAll('.blog-post-card');
+      postCards.forEach((card) => observer.observe(card));
+    }, 100);
+  };
+
+  const fetchAdvertisements = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/advertisements?limit=10&page_location=blog'));
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setAdvertisements(data);
+        const premiumAds = data.filter((ad: any) => ad.tier === 'premium');
+        const firstAd = premiumAds.length > 0 ? premiumAds[0] : data[0];
+        if (firstAd) {
+          setVisibleAds(new Set([firstAd.id]));
+          setCurrentAdIndex(0);
+          if (data.length > 1) {
+            startAdRotation(data);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch advertisements:', error);
+    }
+  };
+
+  const startAdRotation = (ads: any[]) => {
+    if (adRotationIntervalRef.current) {
+      clearInterval(adRotationIntervalRef.current);
+    }
+
+    // Rotate ads based on their content_duration for fairness
+    // Each ad gets equal time based on its configured duration (default 30 seconds)
+    const rotateToNext = () => {
+      setCurrentAdIndex((prevIndex) => {
+        const currentAd = ads[prevIndex];
+        const duration = currentAd?.content_duration ? currentAd.content_duration * 1000 : 30000; // Convert to ms, default 30s
+        
+        // Schedule next rotation based on current ad's duration
+        if (adRotationIntervalRef.current) {
+          clearInterval(adRotationIntervalRef.current);
+        }
+        
+        adRotationIntervalRef.current = setTimeout(() => {
+          const nextIndex = (prevIndex + 1) % ads.length;
+          const nextAd = ads[nextIndex];
+          setVisibleAds(new Set([nextAd.id]));
+          setCurrentAdIndex(nextIndex);
+          rotateToNext(); // Continue rotation
+        }, duration);
+        
+        return prevIndex;
+      });
+    };
+
+    // Start rotation with first ad's duration
+    const firstAd = ads[0];
+    const firstDuration = firstAd?.content_duration ? firstAd.content_duration * 1000 : 30000;
+    adRotationIntervalRef.current = setTimeout(() => {
+      const nextIndex = 1 % ads.length;
+      const nextAd = ads[nextIndex];
+      setVisibleAds(new Set([nextAd.id]));
+      setCurrentAdIndex(nextIndex);
+      rotateToNext();
+    }, firstDuration);
+  };
+
+  const handleAdClose = (adId: string) => {
+    setVisibleAds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(adId);
+      if (newSet.size === 0 && advertisements.length > 0) {
+        const nextIndex = (currentAdIndex + 1) % advertisements.length;
+        const nextAd = advertisements[nextIndex];
+        newSet.add(nextAd.id);
+        setCurrentAdIndex(nextIndex);
+      }
+      return newSet;
+    });
+  };
+
+  const hasPremiumAd = advertisements.some(ad => 
+    visibleAds.has(ad.id) && ad.tier === 'premium'
+  );
 
   const blogPosts = [
     {
@@ -202,6 +321,21 @@ Mary's story demonstrates that with determination, proper knowledge, and communi
     }
   ];
 
+  // Calculate category counts dynamically from actual blog posts
+  const getCategoryCount = (categoryId: string) => {
+    if (categoryId === 'all') {
+      return blogPosts.length;
+    }
+    return blogPosts.filter(post => post.category === categoryId).length;
+  };
+
+  const categories = [
+    { id: 'all', name: 'All Posts', count: getCategoryCount('all') },
+    { id: 'tips', name: 'Tips & Guides', count: getCategoryCount('tips') },
+    { id: 'news', name: 'Industry News', count: getCategoryCount('news') },
+    { id: 'stories', name: 'Farmer Stories', count: getCategoryCount('stories') }
+  ];
+
   const filteredPosts = blogPosts.filter(post => {
     const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          post.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -242,6 +376,20 @@ Mary's story demonstrates that with determination, proper knowledge, and communi
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      {/* Add padding-top if premium ad is displayed at top */}
+      {hasPremiumAd && <div style={{ height: '90px' }} />}
+      
+      {/* Advertisements */}
+      {advertisements.length > 0 && advertisements
+        .filter(ad => visibleAds.has(ad.id))
+        .map((ad) => (
+          <AdvertisementBanner
+            key={ad.id}
+            advertisement={ad}
+            onClose={() => handleAdClose(ad.id)}
+            pageLocation="blog"
+          />
+        ))}
       
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -403,7 +551,7 @@ Mary's story demonstrates that with determination, proper knowledge, and communi
 
             {/* Main Content */}
             <div className="lg:col-span-3">
-              <div className="flex justify-between items-center mb-6">
+              <div ref={postsGridRef} className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-semibold text-primary">
                   {selectedCategory === 'all' 
                     ? 'Latest Posts' 
@@ -416,8 +564,8 @@ Mary's story demonstrates that with determination, proper knowledge, and communi
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {filteredPosts.slice(1).map(post => (
-                  <Card key={post.id} className="card-hover overflow-hidden">
+                {filteredPosts.slice(1).map((post, index) => (
+                  <Card key={post.id} className="blog-post-card card-hover overflow-hidden opacity-0 translate-y-8 transition-all duration-500 ease-out animate-out" style={{ transitionDelay: `${(index % 6) * 50}ms` }}>
                     <div className="relative h-48">
                       <img 
                         src={post.image} 

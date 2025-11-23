@@ -17,6 +17,7 @@ const ForgotPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
   // Countdown timer for resend OTP
@@ -51,20 +52,33 @@ const ForgotPassword = () => {
           errorData = JSON.parse(errorText);
         } catch (e) {
           console.error('Failed to parse error response:', errorText);
-          toast.error('Server error. Please try again.');
+          toast.error('Server error. Please try again.', {
+            duration: 5000,
+            position: 'top-right',
+          });
           return;
         }
-        toast.error(errorData.error || 'Failed to send reset code');
+        toast.error(errorData.error || 'Failed to send reset code', {
+          duration: 5000,
+          position: 'top-right',
+        });
         return;
       }
 
       const data = await response.json();
-      toast.success(data.message);
+      // Show success toast with longer duration
+      toast.success(data.message || 'Password reset code has been sent to your email. Please check your inbox.', {
+        duration: 6000,
+        position: 'top-right',
+      });
       setStep(2);
       setCountdown(60); // 60 seconds countdown
     } catch (error) {
       console.error('Error sending OTP:', error);
-      toast.error('Failed to send reset code. Please try again.');
+      toast.error('Failed to send reset code. Please try again.', {
+        duration: 5000,
+        position: 'top-right',
+      });
     } finally {
       setLoading(false);
     }
@@ -191,9 +205,9 @@ const ForgotPassword = () => {
   };
 
   const handleResendOTP = async () => {
-    if (countdown > 0) return;
+    if (countdown > 0 || resending) return;
 
-    setLoading(true);
+    setResending(true);
     try {
       const response = await fetch(getApiUrl('/api/resend-otp'), {
         method: 'POST',
@@ -224,7 +238,7 @@ const ForgotPassword = () => {
       console.error('Error resending OTP:', error);
       toast.error('Failed to resend code. Please try again.');
     } finally {
-      setLoading(false);
+      setResending(false);
     }
   };
 
@@ -321,10 +335,15 @@ const ForgotPassword = () => {
                     type="button"
                     variant="outline"
                     onClick={handleResendOTP}
-                    disabled={loading || countdown > 0}
+                    disabled={resending || countdown > 0}
                     className="text-sm"
                   >
-                    {countdown > 0 ? (
+                    {resending ? (
+                      <>
+                        <Clock className="h-4 w-4 mr-1 animate-spin" />
+                        Sending...
+                      </>
+                    ) : countdown > 0 ? (
                       <>
                         <Clock className="h-4 w-4 mr-1" />
                         Resend in {countdown}s

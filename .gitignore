@@ -27,6 +27,10 @@ backend/.env.*
 .env.development
 .env.test
 
+# Security: Test files that may expose configuration
+backend/test_*.php
+backend/*_test.php
+
 # Security sensitive files
 backend/config/database.php.backup
 backend/config/email_config.php.backup

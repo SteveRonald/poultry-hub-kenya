@@ -3,6 +3,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
 require_once __DIR__ . '/../utils/security.php';
+require_once __DIR__ . '/../utils/system_logs.php';
 
 // Ensure validateAdminSession is available (from admin.php)
 if (!function_exists('validateAdminSession')) {
@@ -172,6 +173,21 @@ function handleCreateAdvertisement() {
         ");
         $stmt->execute([$analyticsId, $adId]);
         
+        // Log advertisement creation
+        logActivity(
+            $payload['user_id'],
+            'vendor',
+            'create_advertisement',
+            "Created new advertisement: {$input['ad_title']}",
+            [
+                'advertisement_id' => $adId,
+                'tier' => $input['tier'],
+                'duration_days' => $durationDays,
+                'price' => $totalPrice,
+                'product_id' => $input['product_id']
+            ]
+        );
+        
         // Notify admins
         require_once __DIR__ . '/../utils/notifications.php';
         $adminMessage = "New advertisement created by vendor. Tier: {$input['tier']}, Duration: {$durationDays} days, Price: KSh " . number_format($totalPrice, 2);
@@ -238,7 +254,13 @@ function handleGetVendorAdvertisements() {
                 a.current_price,
                 COALESCE(an.views_count, 0) as views_count,
                 COALESCE(an.clicks_count, 0) as clicks_count,
-                COALESCE(an.orders_count, 0) as orders_count,
+                COALESCE(
+                    (SELECT COUNT(*) 
+                     FROM orders o 
+                     WHERE o.advertisement_id = a.id
+                    ), 
+                    COALESCE(an.orders_count, 0)
+                ) as orders_count,
                 COALESCE(
                     (SELECT SUM(o.total_amount) 
                      FROM orders o 
@@ -386,6 +408,13 @@ function handleGetAdminAdvertisements() {
                 COALESCE(an.views_count, 0) as views_count,
                 COALESCE(an.clicks_count, 0) as clicks_count,
                 COALESCE(
+                    (SELECT COUNT(*) 
+                     FROM orders o 
+                     WHERE o.advertisement_id = a.id
+                    ), 
+                    COALESCE(an.orders_count, 0)
+                ) as orders_count,
+                COALESCE(
                     (
                         SELECT COALESCE(SUM(o.total_amount), 0) 
                         FROM orders o 
@@ -435,7 +464,13 @@ function handleGetAdminAdvertisements() {
                 'views_count' => intval($ad['views_count']),
                 'clicks_count' => intval($ad['clicks_count']),
                 'revenue_generated' => floatval($ad['revenue_generated']),
-                'page_locations' => isset($ad['page_locations']) ? json_decode($ad['page_locations'], true) : ['homepage', 'products'],
+                'page_locations' => (function($ad) {
+                    if (isset($ad['page_locations']) && !empty($ad['page_locations'])) {
+                        $decoded = json_decode($ad['page_locations'], true);
+                        return ($decoded !== null && is_array($decoded)) ? $decoded : ['homepage', 'products'];
+                    }
+                    return ['homepage', 'products'];
+                })($ad),
                 'previous_price' => isset($ad['previous_price']) && $ad['previous_price'] !== null ? floatval($ad['previous_price']) : null,
                 'current_price' => isset($ad['current_price']) && $ad['current_price'] !== null ? floatval($ad['current_price']) : null
             ];
@@ -544,6 +579,24 @@ function handleApproveAdvertisement() {
         $stmt->execute([$startDate, $endDate, $adminUserId, $pageLocationsJson, $input['advertisement_id']]);
         
         $pdo->commit();
+        
+        // Log admin action
+        logActivity(
+            $adminUserId,
+            'admin',
+            'approve_advertisement',
+            "Approved advertisement: {$ad['ad_title']}",
+            ['advertisement_id' => $input['advertisement_id'], 'tier' => $ad['tier'], 'vendor_id' => $ad['vendor_id']]
+        );
+        
+        // Log vendor event
+        logActivity(
+            $ad['vendor_user_id'],
+            'vendor',
+            'advertisement_approved',
+            "Advertisement approved and activated",
+            ['advertisement_id' => $input['advertisement_id'], 'tier' => $ad['tier']]
+        );
         
         // Notify vendor
         require_once __DIR__ . '/../utils/notifications.php';
@@ -721,11 +774,12 @@ function handleTrackAdClick() {
         $userId = $input['user_id'] ?? null;
         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
         
-        // Check if ad is active
+        // Check if ad is active and get current product_id (handles product changes during reactivation)
         $stmt = $pdo->prepare("
-            SELECT id, status, end_date 
-            FROM advertisements 
-            WHERE id = ? AND status = 'active' AND (end_date IS NULL OR end_date > NOW())
+            SELECT a.id, a.status, a.end_date, a.product_id, p.is_active as product_is_active
+            FROM advertisements a
+            LEFT JOIN products p ON a.product_id = p.id
+            WHERE a.id = ? AND a.status = 'active' AND (a.end_date IS NULL OR a.end_date > NOW())
         ");
         $stmt->execute([$adId]);
         $ad = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -733,6 +787,13 @@ function handleTrackAdClick() {
         if (!$ad) {
             http_response_code(404);
             echo json_encode(['error' => 'Advertisement not found or not active']);
+            return;
+        }
+        
+        // Check if product is still active (might have been deactivated)
+        if (!$ad['product_is_active']) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Product associated with this advertisement is no longer available']);
             return;
         }
         
@@ -769,7 +830,11 @@ function handleTrackAdClick() {
             $stmt->execute([$adId]);
         }
         
-        echo json_encode(['success' => true]);
+        // Return success with current product_id (handles product changes during reactivation)
+        echo json_encode([
+            'success' => true,
+            'product_id' => $ad['product_id']
+        ]);
         
     } catch (PDOException $e) {
         http_response_code(500);
@@ -795,6 +860,7 @@ function handleGetActiveAdvertisements() {
     
     try {
         // Get active ads that match the page location
+        // Only show ads from approved vendors
         // page_locations is a JSON array, so we need to check if it contains the requested page_location
         $query = "
             SELECT 
@@ -806,7 +872,9 @@ function handleGetActiveAdvertisements() {
                 a.current_price
             FROM advertisements a
             JOIN products p ON a.product_id = p.id
+            JOIN vendors v ON a.vendor_id = v.id
             WHERE a.status = 'active'
+            AND v.status = 'approved'
             AND (a.end_date IS NULL OR a.end_date > NOW())
             AND JSON_CONTAINS(a.page_locations, ?)
             ORDER BY a.priority DESC, a.created_at DESC
@@ -833,6 +901,7 @@ function handleGetActiveAdvertisements() {
         // Re-fetch if needed (for backward compatibility with ads that don't have page_locations set)
         if (count($ads) < $limit) {
             // Try to get ads without page_locations filter (for backward compatibility)
+            // Only show ads from approved vendors
             $fallbackQuery = "
                 SELECT 
                     a.*,
@@ -844,7 +913,9 @@ function handleGetActiveAdvertisements() {
                     a.current_price
                 FROM advertisements a
                 JOIN products p ON a.product_id = p.id
+                JOIN vendors v ON a.vendor_id = v.id
                 WHERE a.status = 'active'
+                AND v.status = 'approved'
                 AND (a.end_date IS NULL OR a.end_date > NOW())
                 AND (a.page_locations IS NULL OR a.page_locations = '[]')
                 AND p.is_active = 1
@@ -1301,6 +1372,305 @@ function handleDeleteAdvertisement() {
     } catch (PDOException $e) {
         http_response_code(500);
         echo json_encode(['error' => 'Failed to delete advertisement: ' . $e->getMessage()]);
+    }
+}
+
+/**
+ * Handle reactivating an expired advertisement with optional edits
+ * Can be called by vendor (creates pending ad) or admin (can activate directly)
+ */
+function handleReactivateAdvertisement() {
+    global $pdo;
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!isset($input['advertisement_id'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Advertisement ID is required']);
+        return;
+    }
+    
+    // Check if user is vendor or admin
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+    
+    $payload = validateJWT($token);
+    if (!$payload) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid token']);
+        return;
+    }
+    
+    $isAdmin = $payload['role'] === 'admin';
+    $isVendor = $payload['role'] === 'vendor';
+    
+    if (!$isAdmin && !$isVendor) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Only vendors and admins can reactivate advertisements']);
+        return;
+    }
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // Get advertisement details
+        $stmt = $pdo->prepare("
+            SELECT a.*, v.user_id as vendor_user_id
+            FROM advertisements a
+            JOIN vendors v ON a.vendor_id = v.id
+            WHERE a.id = ?
+        ");
+        $stmt->execute([$input['advertisement_id']]);
+        $ad = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$ad) {
+            $pdo->rollBack();
+            http_response_code(404);
+            echo json_encode(['error' => 'Advertisement not found']);
+            return;
+        }
+        
+        // Verify vendor owns the ad (if vendor is reactivating)
+        // Use null-safe check to handle cases where vendor_user_id might be NULL
+        if ($isVendor && (!isset($ad['vendor_user_id']) || $ad['vendor_user_id'] === null || $ad['vendor_user_id'] !== $payload['user_id'])) {
+            $pdo->rollBack();
+            http_response_code(403);
+            echo json_encode(['error' => 'You can only reactivate your own advertisements']);
+            return;
+        }
+        
+        // Only allow reactivation of expired ads
+        if ($ad['status'] !== 'expired') {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'Only expired advertisements can be reactivated']);
+            return;
+        }
+        
+        // Get updated values from input (or use existing values)
+        $tier = isset($input['tier']) ? $input['tier'] : $ad['tier'];
+        $durationDays = isset($input['duration_days']) ? intval($input['duration_days']) : $ad['duration_days'];
+        $adTitle = isset($input['ad_title']) ? sanitizeInput($input['ad_title']) : $ad['ad_title'];
+        $adDescription = isset($input['ad_description']) ? sanitizeInput($input['ad_description']) : $ad['ad_description'];
+        $adImage = isset($input['ad_image']) ? sanitizeInput($input['ad_image']) : $ad['ad_image'];
+        $contentDuration = isset($input['content_duration']) ? intval($input['content_duration']) : $ad['content_duration'];
+        $previousPrice = isset($input['previous_price']) && $input['previous_price'] !== null 
+            ? floatval($input['previous_price']) 
+            : $ad['previous_price'];
+        $currentPrice = isset($input['current_price']) && $input['current_price'] !== null 
+            ? floatval($input['current_price']) 
+            : $ad['current_price'];
+        // For vendors, don't allow changing page_locations (admin sets during approval)
+        // For admins, allow setting page_locations
+        if ($isVendor) {
+            // Vendor reactivation: keep existing page_locations or use default
+            if (isset($ad['page_locations']) && !empty($ad['page_locations'])) {
+                $decoded = json_decode($ad['page_locations'], true);
+                $pageLocations = ($decoded !== null && is_array($decoded)) ? $decoded : ['homepage', 'products'];
+            } else {
+                $pageLocations = ['homepage', 'products'];
+            }
+        } else {
+            // Admin reactivation: allow setting page_locations
+            if (isset($input['page_locations']) && is_array($input['page_locations'])) {
+                $pageLocations = $input['page_locations'];
+            } elseif (isset($ad['page_locations']) && !empty($ad['page_locations'])) {
+                $decoded = json_decode($ad['page_locations'], true);
+                $pageLocations = ($decoded !== null && is_array($decoded)) ? $decoded : ['homepage', 'products'];
+            } else {
+                $pageLocations = ['homepage', 'products'];
+            }
+        }
+        
+        // Validate tier
+        if (!in_array($tier, ['basic', 'premium'])) {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid tier. Must be "basic" or "premium"']);
+            return;
+        }
+        
+        // Validate duration
+        if ($durationDays < 1) {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'Duration must be at least 1 day']);
+            return;
+        }
+        
+        // Validate content duration based on tier
+        if ($contentDuration !== null) {
+            if ($tier === 'basic' && ($contentDuration < 15 || $contentDuration > 30)) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['error' => 'Basic tier ads must be between 15-30 seconds']);
+                return;
+            }
+            if ($tier === 'premium' && $contentDuration > 60) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['error' => 'Premium tier ads must be up to 60 seconds']);
+                return;
+            }
+        }
+        
+        // Validate discount prices if provided
+        if ($previousPrice !== null && $currentPrice !== null) {
+            if ($currentPrice >= $previousPrice) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['error' => 'Current price must be less than previous price for discount']);
+                return;
+            }
+        }
+        
+        // Calculate new price based on tier and duration
+        $tierPrice = $tier === 'premium' ? 300 : 128; // KSh per day
+        $totalPrice = $tierPrice * $durationDays;
+        
+        // Set priority (premium = 100, basic = 50)
+        $priority = $tier === 'premium' ? 100 : 50;
+        
+        // Convert page_locations to JSON
+        $pageLocationsJson = json_encode($pageLocations);
+        
+        // Determine new status
+        // If admin reactivates, can set to 'active' directly
+        // If vendor reactivates, set to 'pending' for admin approval
+        $newStatus = ($isAdmin && isset($input['activate_immediately']) && $input['activate_immediately']) 
+            ? 'active' 
+            : 'pending';
+        
+        // Calculate dates
+        $startDate = date('Y-m-d H:i:s');
+        $endDate = date('Y-m-d H:i:s', strtotime("+{$durationDays} days"));
+        
+        // Update advertisement
+        if ($newStatus === 'active') {
+            // Admin activating directly
+            $stmt = $pdo->prepare("
+                UPDATE advertisements 
+                SET tier = ?,
+                    price = ?,
+                    duration_days = ?,
+                    ad_title = ?,
+                    ad_description = ?,
+                    ad_image = ?,
+                    content_duration = ?,
+                    previous_price = ?,
+                    current_price = ?,
+                    page_locations = ?,
+                    priority = ?,
+                    status = 'active',
+                    start_date = ?,
+                    end_date = ?,
+                    created_at = NOW(),
+                    activated_at = NOW(),
+                    activated_by = ?
+                WHERE id = ?
+            ");
+            $adminUserId = $payload['user_id'];
+            $stmt->execute([
+                $tier, $totalPrice, $durationDays, $adTitle, $adDescription, $adImage,
+                $contentDuration, $previousPrice, $currentPrice, $pageLocationsJson,
+                $priority, $startDate, $endDate, $adminUserId, $input['advertisement_id']
+            ]);
+        } else {
+            // Vendor reactivating (needs approval) or admin setting to pending
+            $stmt = $pdo->prepare("
+                UPDATE advertisements 
+                SET tier = ?,
+                    price = ?,
+                    duration_days = ?,
+                    ad_title = ?,
+                    ad_description = ?,
+                    ad_image = ?,
+                    content_duration = ?,
+                    previous_price = ?,
+                    current_price = ?,
+                    page_locations = ?,
+                    priority = ?,
+                    status = 'pending',
+                    created_at = NOW(),
+                    start_date = NULL,
+                    end_date = NULL,
+                    activated_at = NULL,
+                    activated_by = NULL
+                WHERE id = ?
+            ");
+            $stmt->execute([
+                $tier, $totalPrice, $durationDays, $adTitle, $adDescription, $adImage,
+                $contentDuration, $previousPrice, $currentPrice, $pageLocationsJson,
+                $priority, $input['advertisement_id']
+            ]);
+        }
+        
+        $pdo->commit();
+        
+        // Log reactivation
+        if ($isVendor) {
+            logActivity(
+                $ad['vendor_user_id'],
+                'vendor',
+                'reactivate_advertisement',
+                "Reactivated advertisement: {$adTitle}",
+                [
+                    'advertisement_id' => $input['advertisement_id'],
+                    'tier' => $tier,
+                    'duration_days' => $durationDays,
+                    'new_price' => $totalPrice
+                ]
+            );
+            
+            require_once __DIR__ . '/../utils/notifications.php';
+            $adminMessage = "Vendor has reactivated an expired advertisement. Tier: {$tier}, Duration: {$durationDays} days, New Price: KSh " . number_format($totalPrice, 2);
+            notifyAllAdmins($adminMessage, 'advertisement');
+        } else {
+            // Admin reactivation
+            logActivity(
+                $payload['user_id'],
+                'admin',
+                'reactivate_advertisement',
+                "Reactivated advertisement: {$adTitle}",
+                [
+                    'advertisement_id' => $input['advertisement_id'],
+                    'tier' => $tier,
+                    'duration_days' => $durationDays,
+                    'new_price' => $totalPrice,
+                    'vendor_id' => $ad['vendor_id'],
+                    'activated_immediately' => $newStatus === 'active'
+                ]
+            );
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'message' => $newStatus === 'active' 
+                ? 'Advertisement reactivated and activated successfully' 
+                : 'Advertisement reactivated and pending approval',
+            'advertisement' => [
+                'id' => $input['advertisement_id'],
+                'status' => $newStatus,
+                'price' => $totalPrice,
+                'tier' => $tier,
+                'duration_days' => $durationDays
+            ]
+        ]);
+        
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        error_log('Database error in handleReactivateAdvertisement: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to reactivate advertisement: ' . $e->getMessage()]);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log('Error in handleReactivateAdvertisement: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to reactivate advertisement']);
     }
 }
 

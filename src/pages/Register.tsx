@@ -39,9 +39,12 @@ const Register = () => {
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
+  const [verifiedEmail, setVerifiedEmail] = useState<string>(''); // Store the verified email address
   const [otpCountdown, setOtpCountdown] = useState(0);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
+  const [isResendingOTP, setIsResendingOTP] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -61,27 +64,90 @@ const Register = () => {
     }
   }, []);
 
-  // OTP countdown timer
+  // Restore OTP state from localStorage when email changes or on mount
   useEffect(() => {
-    if (otpCountdown > 0) {
-      const timer = setTimeout(() => setOtpCountdown(otpCountdown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [otpCountdown]);
-
-  // Auto-send OTP on email blur during step 1
-  const handleEmailBlur = async () => {
-    if (!formData.email.trim()) return;
-    
-    // Validate email format
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (!formData.email.trim()) {
+      // Clear OTP state if email is empty
+      setOtpSent(false);
+      setOtpVerified(false);
+      setVerifiedEmail('');
+      setShowOtpInput(false);
       return;
     }
 
-    // Only send OTP if not already sent and we're on step 1
-    if (!otpSent && currentStep === 1) {
-      await handleSendOTP();
+    const savedOtpState = localStorage.getItem('register_otp_state');
+    if (savedOtpState) {
+      try {
+        const state = JSON.parse(savedOtpState);
+        // Only restore if the email matches and OTP was sent less than 10 minutes ago
+        const now = Date.now();
+        if (state.email === formData.email && state.timestamp && (now - state.timestamp) < 600000) {
+          setOtpSent(state.otpSent || false);
+          setOtpVerified(state.otpVerified || false);
+          setVerifiedEmail(state.verifiedEmail || state.email || '');
+          setShowOtpInput(state.showOtpInput || false);
+          const remainingTime = Math.max(0, Math.floor((600000 - (now - state.timestamp)) / 1000));
+          setOtpCountdown(Math.min(remainingTime, 30));
+        } else if (state.email !== formData.email) {
+          // Email changed, clear old state - require re-verification
+          localStorage.removeItem('register_otp_state');
+          setOtpSent(false);
+          setOtpVerified(false);
+          setVerifiedEmail('');
+          setShowOtpInput(false);
+        }
+      } catch (e) {
+        // Ignore parsing errors
+        localStorage.removeItem('register_otp_state');
+      }
+    } else {
+      // No saved state, reset OTP fields
+      setOtpSent(false);
+      setOtpVerified(false);
+      setVerifiedEmail('');
+      setShowOtpInput(false);
     }
+  }, [formData.email]);
+
+  // Check if email changed after verification - if so, require re-verification
+  useEffect(() => {
+    if (verifiedEmail && formData.email.trim() && formData.email.trim() !== verifiedEmail) {
+      // Email was changed after verification - reset verification
+      setOtpVerified(false);
+      setVerifiedEmail('');
+      setOtpSent(false);
+      setShowOtpInput(false);
+      setOtp('');
+      toast.warning('Email address changed. Please verify your new email address.');
+    }
+  }, [formData.email, verifiedEmail]);
+
+  // OTP countdown timer
+  useEffect(() => {
+    if (otpCountdown > 0) {
+      const timer = setTimeout(() => {
+        setOtpCountdown(otpCountdown - 1);
+        // Update localStorage with updated countdown
+        const savedOtpState = localStorage.getItem('register_otp_state');
+        if (savedOtpState) {
+          try {
+            const state = JSON.parse(savedOtpState);
+            if (state.email === formData.email) {
+              state.otpCountdown = otpCountdown - 1;
+              localStorage.setItem('register_otp_state', JSON.stringify(state));
+            }
+          } catch (e) {
+            // Ignore parsing errors
+          }
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [otpCountdown, formData.email]);
+
+  // Check if email is valid and OTP can be sent
+  const canSendOTP = () => {
+    return formData.email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
   };
 
   // Send registration OTP
@@ -108,6 +174,18 @@ const Register = () => {
       setOtpCountdown(30);
       setOtp('');
       setOtpError('');
+
+      // Save OTP state to localStorage to persist across page refreshes
+      const otpState = {
+        email: formData.email.trim(),
+        otpSent: true,
+        otpVerified: false,
+        showOtpInput: true,
+        otpCountdown: 30,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('register_otp_state', JSON.stringify(otpState));
+
       toast.success('Verification code sent to your email');
     } catch (error) {
       setOtpError('Failed to send verification code. Please try again.');
@@ -125,7 +203,7 @@ const Register = () => {
     }
 
     try {
-      setIsLoading(true);
+      setIsVerifyingOTP(true);
       const response = await fetch(getApiUrl('/api/auth/verify-register-otp'), {
         method: 'POST',
         headers: {
@@ -145,20 +223,34 @@ const Register = () => {
       }
 
       setOtpVerified(true);
+      setVerifiedEmail(formData.email.trim()); // Store the verified email
       setOtpError('');
+
+      // Update localStorage with verified state
+      const otpState = {
+        email: formData.email.trim(),
+        verifiedEmail: formData.email.trim(), // Store verified email separately
+        otpSent: true,
+        otpVerified: true,
+        showOtpInput: true,
+        otpCountdown: 0,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('register_otp_state', JSON.stringify(otpState));
+
       toast.success('Email verified successfully');
     } catch (error) {
       setOtpError('Failed to verify code. Please try again.');
       toast.error('Failed to verify code');
     } finally {
-      setIsLoading(false);
+      setIsVerifyingOTP(false);
     }
   };
 
   // Resend OTP
   const handleResendOTP = async () => {
     try {
-      setIsLoading(true);
+      setIsResendingOTP(true);
       const response = await fetch(getApiUrl('/api/auth/resend-register-otp'), {
         method: 'POST',
         headers: {
@@ -176,11 +268,23 @@ const Register = () => {
       setOtpCountdown(30);
       setOtp('');
       setOtpError('');
+
+      // Update localStorage with new OTP state
+      const otpState = {
+        email: formData.email.trim(),
+        otpSent: true,
+        otpVerified: false,
+        showOtpInput: true,
+        otpCountdown: 30,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('register_otp_state', JSON.stringify(otpState));
+
       toast.success('Verification code resent');
     } catch (error) {
       toast.error('Failed to resend code');
     } finally {
-      setIsLoading(false);
+      setIsResendingOTP(false);
     }
   };
 
@@ -611,9 +715,16 @@ const Register = () => {
     e.preventDefault();
     }
     
-    // Check if OTP is verified before allowing submission
-    if (otpSent && !otpVerified) {
-      toast.error('Please verify your email to complete registration');
+    // Check if email is verified before allowing submission
+    if (!otpVerified || !verifiedEmail) {
+      toast.error('Please verify your email address before creating an account');
+      setCurrentStep(1);
+      return;
+    }
+    
+    // Ensure the current email matches the verified email
+    if (formData.email.trim() !== verifiedEmail) {
+      toast.error('Email address has changed. Please verify your email address again');
       setCurrentStep(1);
       return;
     }
@@ -682,15 +793,20 @@ const Register = () => {
     setIsLoading(true);
 
     try {
-      // Prepare registration data
+      // Prepare registration data - use verified email, not formData.email
       const registrationData = {
         ...formData,
+        email: verifiedEmail, // Use verified email address
         county_id: formData.countyId,
         constituency_id: formData.constituencyId,
         ward_id: formData.wardId,
       };
       
       await register(registrationData);
+      
+      // Clear OTP state from localStorage after successful registration
+      localStorage.removeItem('register_otp_state');
+      
       toast.success(
         formData.role === 'vendor' 
           ? 'Registration successful! Your account is pending approval.' 
@@ -808,18 +924,45 @@ const Register = () => {
 
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-          Email Address *
+          Email Address * {otpVerified && verifiedEmail === formData.email.trim() && (
+            <span className="text-green-600 text-xs ml-2">✓ Verified</span>
+          )}
         </label>
         <Input
           id="email"
           type="email"
           value={formData.email}
           onChange={(e) => handleChange('email', e.target.value)}
-          onBlur={handleEmailBlur}
           placeholder="Enter your email"
-          className={currentStep === 1 && attemptedSteps.has(1) && errors.email ? 'border-red-500' : ''}
+          className={
+            currentStep === 1 && attemptedSteps.has(1) && errors.email 
+              ? 'border-red-500' 
+              : otpVerified && verifiedEmail === formData.email.trim()
+              ? 'border-green-500'
+              : ''
+          }
+          disabled={otpVerified && verifiedEmail === formData.email.trim()}
         />
         {currentStep === 1 && attemptedSteps.has(1) && errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+        
+        {/* Email verification status message */}
+        {otpVerified && verifiedEmail === formData.email.trim() && (
+          <p className="mt-1 text-sm text-green-600">✓ Email verified successfully</p>
+        )}
+        
+        {/* Send Verification Code Button - Show if email is valid and not verified yet */}
+        {canSendOTP() && (!otpVerified || verifiedEmail !== formData.email.trim()) && (
+          <div className="mt-2">
+            <Button
+              type="button"
+              onClick={handleSendOTP}
+              disabled={isLoading || !canSendOTP()}
+              className="w-full btn-primary text-sm"
+            >
+              {isLoading ? 'Sending...' : otpSent ? 'Resend Verification Code' : 'Send Verification Code'}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div>
@@ -846,7 +989,7 @@ const Register = () => {
               Email Verification
             </p>
             <p className="text-xs text-gray-600">
-              We sent a verification code to <strong>{formData.email}</strong>
+              We sent a verification code to <strong>{verifiedEmail || formData.email}</strong>
             </p>
           </div>
 
@@ -873,6 +1016,8 @@ const Register = () => {
               inputMode="numeric"
               pattern="[0-9]*"
               autoComplete="one-time-code"
+              name="otp"
+              id="otp-input"
               className="text-center text-lg tracking-widest font-mono"
             />
 
@@ -886,10 +1031,10 @@ const Register = () => {
               <Button
                 type="button"
                 onClick={handleVerifyOTP}
-                disabled={otp.length !== 6 || isLoading || otpVerified}
+                disabled={otp.length !== 6 || isVerifyingOTP || otpVerified}
                 className="w-full btn-primary text-sm"
               >
-                {isLoading ? 'Verifying...' : 'Verify Code'}
+                {isVerifyingOTP ? 'Verifying...' : 'Verify Code'}
               </Button>
             )}
 
@@ -900,10 +1045,10 @@ const Register = () => {
                 <button
                   type="button"
                   onClick={handleResendOTP}
-                  disabled={isLoading}
+                  disabled={isResendingOTP}
                   className="text-primary hover:underline font-medium disabled:text-gray-400 text-xs"
                 >
-                  Didn't receive the code? Resend
+                  {isResendingOTP ? 'Sending...' : "Didn't receive the code? Resend"}
                 </button>
               )}
             </div>

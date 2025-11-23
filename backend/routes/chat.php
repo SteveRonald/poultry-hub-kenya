@@ -30,7 +30,7 @@ function getOrCreateSessionId() {
     // Try to get session ID from cookie or generate new one
     // SECURITY: Sanitize and validate cookie value
     if (isset($_COOKIE['chat_session_id'])) {
-        $sessionId = filter_var($_COOKIE['chat_session_id'], FILTER_SANITIZE_STRING);
+        $sessionId = filter_var($_COOKIE['chat_session_id'], FILTER_SANITIZE_FULL_SPECIAL_CHARS);
         // Validate session ID format (UUID or alphanumeric)
         if (preg_match('/^[a-zA-Z0-9_-]+$/', $sessionId) && strlen($sessionId) <= 100) {
             return $sessionId;

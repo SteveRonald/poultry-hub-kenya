@@ -638,6 +638,8 @@ function getLoginOTPEmailTemplate($data, $baseUrl) {
                     <div style='font-size: 32px; font-weight: bold; letter-spacing: 8px;'>$otp</div>
                 </div>
             </div>
+            <!-- Mobile autofill support: Gmail and iOS Mail will detect this pattern -->
+            <p style='text-align: center; margin: 10px 0 0 0; font-size: 16px; font-weight: 600; color: #1a4d2e;'>PoultryHubKE $otp</p>
         </div>
         
         <div class='warning'>
@@ -679,6 +681,8 @@ function getRegisterOTPEmailTemplate($data, $baseUrl) {
                 </div>
             </div>
             <p style='text-align: center; margin: 0; font-size: 14px; color: #666;'>Verification code is: $otp</p>
+            <!-- Mobile autofill support: Gmail and iOS Mail will detect this pattern -->
+            <p style='text-align: center; margin: 10px 0 0 0; font-size: 16px; font-weight: 600; color: #1a4d2e;'>PoultryHubKE $otp</p>
         </div>
         
         <div class='warning'>

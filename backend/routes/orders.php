@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/email.php';
 require_once __DIR__ . '/../utils/auth.php';
+require_once __DIR__ . '/../utils/system_logs.php';
 
 function handleCreateOrder() {
     global $pdo;
@@ -161,13 +162,13 @@ function handleCreateOrder() {
             // SECURITY: Sanitize and validate cookie value to prevent injection
             $advertisementId = null;
             if (isset($input['advertisement_id'])) {
-                $advertisementId = filter_var($input['advertisement_id'], FILTER_SANITIZE_STRING);
+                $advertisementId = filter_var($input['advertisement_id'], FILTER_SANITIZE_FULL_SPECIAL_CHARS);
                 // Validate it's alphanumeric or UUID format
                 if (!preg_match('/^[a-zA-Z0-9_-]+$/', $advertisementId)) {
                     $advertisementId = null;
                 }
             } elseif (isset($_COOKIE['ad_click'])) {
-                $cookieValue = filter_var($_COOKIE['ad_click'], FILTER_SANITIZE_STRING);
+                $cookieValue = filter_var($_COOKIE['ad_click'], FILTER_SANITIZE_FULL_SPECIAL_CHARS);
                 // Validate cookie value format (alphanumeric, UUID, or similar safe format)
                 if (preg_match('/^[a-zA-Z0-9_-]+$/', $cookieValue)) {
                     $advertisementId = $cookieValue;
@@ -177,8 +178,8 @@ function handleCreateOrder() {
             $stmt = $pdo->prepare("
                 INSERT INTO orders (
                     order_number, user_id, product_id, quantity, vendor_id, total_amount, 
-                    shipping_address, contact_phone, payment_method, notes, order_type, advertisement_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    shipping_address, contact_phone, payment_method, payment_account_number, notes, order_type, advertisement_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $orderType = $isDirectOrder ? 'direct' : 'cart';
@@ -193,6 +194,7 @@ function handleCreateOrder() {
                 $input['shipping_address'],
                 $input['contact_phone'],
                 $input['payment_method'],
+                $input['payment_account_number'] ?? null,
                 $input['notes'] ?? null,
                 $orderType,
                 $advertisementId
@@ -505,6 +507,7 @@ function handleGetOrders() {
                 o.last_status_updated,
                 p.name as product_name,
                 p.price as unit_price,
+                p.image_urls,
                 u.full_name as vendor_name,
                 u.phone as vendor_phone,
                 u.email as vendor_email
@@ -539,10 +542,18 @@ function handleGetOrders() {
                 ];
             }
             
+            // Safely decode product images
+            $productImages = [];
+            if (!empty($order['image_urls'])) {
+                $decoded = json_decode($order['image_urls'], true);
+                $productImages = ($decoded !== null && is_array($decoded)) ? $decoded : [];
+            }
+            
             $groupedOrders[$orderNumber]['items'][] = [
                 'order_id' => $order['id'],
                 'product_id' => $order['product_id'],
                 'product_name' => $order['product_name'],
+                'product_images' => $productImages,
                 'quantity' => $order['quantity'],
                 'unit_price' => $order['unit_price'],
                 'total_amount' => $order['total_amount'],

@@ -42,6 +42,13 @@ function handleSendRegisterOTP() {
         return;
     }
     
+    // Validate email domain exists (check DNS MX records)
+    if (!validateEmailDomain($email)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'The email address you provided does not exist. Please check your email address and try again.']);
+        return;
+    }
+    
     try {
         // Check if email is already registered
         $stmt = $pdo->prepare("SELECT id FROM user_profiles WHERE email = ?");
@@ -61,17 +68,7 @@ function handleSendRegisterOTP() {
         $stmt = $pdo->prepare("DELETE FROM email_otps WHERE email = ? AND purpose = 'registration' AND expires_at > NOW()");
         $stmt->execute([$email]);
         
-        // Store OTP in database with 10-minute expiry
-        $expiresAt = date('Y-m-d H:i:s', time() + 600); // 10 minutes
-        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        
-        $stmt = $pdo->prepare("
-            INSERT INTO email_otps (email, otp, purpose, expires_at, ip, user_agent)
-            VALUES (?, ?, 'registration', ?, ?, ?)
-        ");
-        $stmt->execute([$email, $otp, $expiresAt, $clientIP, $userAgent]);
-        
-        // Send OTP via email
+        // Send OTP via email FIRST - only store if email is successfully sent
         $data = [
             'otp' => $otp,
             'email' => $email
@@ -82,12 +79,27 @@ function handleSendRegisterOTP() {
         
         $emailSent = sendEmail($email, $subject, $emailHtml);
         
+        // Only store OTP in database if email was successfully sent
+        // Note: Some providers (like Gmail) accept emails but bounce them later.
+        // We can only catch immediate rejections here.
         if (!$emailSent) {
             error_log('Failed to send registration OTP email to: ' . $email);
-            http_response_code(500);
-            echo json_encode(['error' => 'Failed to send verification code. Please try again.']);
+            http_response_code(503);
+            echo json_encode([
+                'error' => 'Unable to send verification code. The email service is temporarily unavailable. Please try again later or contact support if this issue persists.'
+            ]);
             return;
         }
+        
+        // Email sent successfully - now store OTP in database with 10-minute expiry
+        $expiresAt = date('Y-m-d H:i:s', time() + 600); // 10 minutes
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO email_otps (email, otp, purpose, expires_at, ip, user_agent)
+            VALUES (?, ?, 'registration', ?, ?, ?)
+        ");
+        $stmt->execute([$email, $otp, $expiresAt, $clientIP, $userAgent]);
         
         // Return success
         http_response_code(200);
@@ -243,17 +255,7 @@ function handleResendRegisterOTP() {
         // Generate new 6-digit OTP
         $otp = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         
-        // Store new OTP with 10-minute expiry
-        $expiresAt = date('Y-m-d H:i:s', time() + 600);
-        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        
-        $stmt = $pdo->prepare("
-            INSERT INTO email_otps (email, otp, purpose, expires_at, ip, user_agent)
-            VALUES (?, ?, 'registration', ?, ?, ?)
-        ");
-        $stmt->execute([$email, $otp, $expiresAt, $clientIP, $userAgent]);
-        
-        // Send OTP via email
+        // Send OTP via email FIRST - only store if email is successfully sent
         $data = [
             'otp' => $otp,
             'email' => $email
@@ -264,12 +266,23 @@ function handleResendRegisterOTP() {
         
         $emailSent = sendEmail($email, $subject, $emailHtml);
         
+        // Only store OTP in database if email was successfully sent
         if (!$emailSent) {
             error_log('Failed to resend registration OTP email to: ' . $email);
-            http_response_code(500);
-            echo json_encode(['error' => 'Failed to resend verification code. Please try again.']);
+            http_response_code(503);
+            echo json_encode(['error' => 'Unable to send verification code. The email service is temporarily unavailable. Please try again later or contact support if this issue persists.']);
             return;
         }
+        
+        // Email sent successfully - now store new OTP with 10-minute expiry
+        $expiresAt = date('Y-m-d H:i:s', time() + 600);
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO email_otps (email, otp, purpose, expires_at, ip, user_agent)
+            VALUES (?, ?, 'registration', ?, ?, ?)
+        ");
+        $stmt->execute([$email, $otp, $expiresAt, $clientIP, $userAgent]);
         
         http_response_code(200);
         echo json_encode([

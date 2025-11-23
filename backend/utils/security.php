@@ -35,6 +35,65 @@ function validateEmail($email) {
 }
 
 /**
+ * Validate email domain by checking DNS MX records
+ * This helps catch invalid email addresses before attempting to send
+ * Returns true if domain has valid MX records, false otherwise
+ * Note: On Windows, getmxrr() may not be available, so we fall back to gethostbyname()
+ * IMPORTANT: DNS validation failures (network issues, timeouts) are non-blocking
+ * to prevent blocking valid users on mobile networks or unreliable connections
+ */
+function validateEmailDomain($email) {
+    // First check basic email format
+    if (!validateEmail($email)) {
+        return false;
+    }
+    
+    // Extract domain from email
+    $parts = explode('@', $email);
+    if (count($parts) !== 2) {
+        return false;
+    }
+    
+    $domain = trim($parts[1]);
+    
+    // Check if getmxrr() function is available (not available on Windows)
+    if (function_exists('getmxrr')) {
+        // Check if domain has valid MX records
+        $mxRecords = [];
+        $mxResult = @getmxrr($domain, $mxRecords);
+        
+        // If MX records exist, domain can receive emails
+        if ($mxResult && count($mxRecords) > 0) {
+            return true;
+        }
+    }
+    
+    // Fallback: Check if domain has A record (some servers use A record for mail)
+    // This also works on Windows where getmxrr() is not available
+    if (function_exists('gethostbyname')) {
+        $aRecord = @gethostbyname($domain);
+        
+        // If A record exists and is not the same as domain (meaning it resolved), consider it valid
+        if ($aRecord !== $domain && filter_var($aRecord, FILTER_VALIDATE_IP)) {
+            return true;
+        }
+    }
+    
+    // If DNS functions are not available, fall back to basic validation
+    // We've already validated email format, so return true to allow the email
+    // This prevents blocking valid emails on systems without DNS support
+    if (!function_exists('getmxrr') && !function_exists('gethostbyname')) {
+        return true; // Can't validate DNS, so trust the email format validation
+    }
+    
+    // DNS validation failed (could be network issues, timeouts, or invalid domain)
+    // On mobile networks or unreliable connections, DNS lookups may fail even for valid domains
+    // To prevent blocking valid users, we allow the email through if format validation passed
+    // The email service will catch truly invalid domains when attempting to send
+    return true; // Non-blocking: trust email format validation, let email service handle invalid domains
+}
+
+/**
  * Validate phone number format
  */
 function validatePhone($phone) {

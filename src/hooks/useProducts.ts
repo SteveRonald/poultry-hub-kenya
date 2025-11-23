@@ -13,6 +13,8 @@ export interface Product {
   unit: string;
   image_url: string;
   is_available: boolean;
+  average_rating?: number;
+  total_ratings?: number;
   vendor_profiles: {
     farm_name: string;
     location: string;

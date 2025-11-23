@@ -13,6 +13,8 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
+import ProductDetails from "./pages/ProductDetails";
+import Checkout from "./pages/Checkout";
 import VendorDashboard from "./pages/VendorDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Training from "./pages/Training";
@@ -42,6 +44,8 @@ const App = () => (
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/products" element={<Products />} />
+                <Route path="/product/:id" element={<ProductDetails />} />
+                <Route path="/checkout" element={<Checkout />} />
                 <Route path="/market-insights" element={<MarketInsights />} />
                 <Route path="/training" element={<Training />} />
                 <Route path="/blog" element={<Blog />} />

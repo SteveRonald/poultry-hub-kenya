@@ -10,6 +10,9 @@ import DashboardSidebar from '../components/DashboardSidebar';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Label } from '../components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
@@ -45,6 +48,16 @@ const AdminDashboard = () => {
   const [smsLogs, setSmsLogs] = useState<any[]>([]);
   const [smsStats, setSmsStats] = useState<any>(null);
   const [smsLoading, setSmsLoading] = useState(false);
+  const [systemLogs, setSystemLogs] = useState<any[]>([]);
+  const [systemLogsLoading, setSystemLogsLoading] = useState(false);
+  const [systemLogsFilter, setSystemLogsFilter] = useState({
+    userType: 'all' as 'all' | 'vendor' | 'customer' | 'admin' | 'system',
+    search: '',
+    action: 'all'
+  });
+  const [systemLogsTotal, setSystemLogsTotal] = useState(0);
+  const [systemLogsPage, setSystemLogsPage] = useState(0);
+  const [availableActions, setAvailableActions] = useState<string[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{
     show: boolean;
     title: string;
@@ -551,26 +564,31 @@ const AdminDashboard = () => {
   };
 
   const viewVendor = (vendor: any) => {
-    try {
-      console.log('viewVendor clicked', vendor);
-    } catch (e) {
-      // ignore
+    if (!vendor) {
+      console.error('viewVendor: No vendor provided');
+      toast.error('No vendor data available');
+      return;
     }
-    try {
-      toast.success(`Opening vendor: ${vendor?.name || vendor?.email || vendor?.id}`);
-    } catch (e) {}
+    
+    // Close any other open modals first
+    setShowViewProductModal(false);
+    setSelectedProduct(null);
+    setShowViewOrderModal(false);
+    setSelectedOrder(null);
+    
+    // Set vendor and open modal immediately - React will batch these updates
     setSelectedVendor(vendor);
     setShowVendorModal(true);
   };
 
-  // Debug: log modal state changes to help diagnose why modal might not appear
-  useEffect(() => {
-    try {
-      console.log('Vendor modal state changed:', { selectedVendor, showVendorModal });
-    } catch (e) {}
-  }, [selectedVendor, showVendorModal]);
-
   const viewProduct = (product: any) => {
+    // Close any other open modals first
+    setShowVendorModal(false);
+    setSelectedVendor(null);
+    setShowViewOrderModal(false);
+    setSelectedOrder(null);
+    
+    // Set product data and show modal
     setSelectedProduct(product);
     setShowViewProductModal(true);
   };
@@ -1090,7 +1108,19 @@ const AdminDashboard = () => {
     if (activeTab === 'sms') {
       fetchSMSLogs();
     }
+    
+    if (activeTab === 'system-logs') {
+      fetchSystemLogs();
+      fetchAvailableActions();
+    }
   }, [activeTab]);
+  
+  // Refetch logs when filters or page change
+  useEffect(() => {
+    if (activeTab === 'system-logs') {
+      fetchSystemLogs();
+    }
+  }, [systemLogsPage, systemLogsFilter]);
   
   const fetchSMSLogs = async () => {
     const token = localStorage.getItem('admin_session_token');
@@ -1232,37 +1262,129 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchSystemLogs = async () => {
+    setSystemLogsLoading(true);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const params = new URLSearchParams({
+        limit: '100',
+        offset: (systemLogsPage * 100).toString()
+      });
+      
+      if (systemLogsFilter.userType !== 'all') {
+        params.append('user_type', systemLogsFilter.userType);
+      }
+      if (systemLogsFilter.search) {
+        params.append('search', systemLogsFilter.search);
+      }
+      if (systemLogsFilter.action !== 'all') {
+        params.append('action', systemLogsFilter.action);
+      }
+      
+      const response = await fetch(getApiUrl(`/api/admin/system-logs?${params}`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSystemLogs(data.logs || []);
+          setSystemLogsTotal(data.total || 0);
+        } else {
+          console.error('System logs API error:', data);
+          toast.error(data.error || 'Failed to fetch system logs');
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch system logs' }));
+        console.error('System logs API failed:', response.status, errorData);
+        toast.error(errorData.error || 'Failed to fetch system logs');
+      }
+    } catch (error) {
+      console.error('Failed to fetch system logs:', error);
+      toast.error('Failed to fetch system logs');
+    } finally {
+      setSystemLogsLoading(false);
+    }
+  };
+
+  const fetchAvailableActions = async () => {
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/admin/system-logs/actions'), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setAvailableActions(data.actions || []);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch available actions:', error);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      <div className="fixed top-0 left-0 right-0 z-50">
+        <Navbar />
+      </div>
       {import.meta.env.DEV && selectedVendor && showVendorModal && (
         <div className="fixed top-4 right-4 z-60 bg-yellow-100 border border-yellow-300 text-sm text-yellow-800 px-3 py-2 rounded">Vendor modal state: open</div>
       )}
       
-      <div className="flex">
-        {/* Sidebar */}
-        <DashboardSidebar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          type="admin"
-          stats={{
-            pendingVendors: stats?.pendingVendors || 0,
-            pendingProducts: stats?.pendingProducts || 0,
-            newMessages: contactMessages.filter(msg => msg.status === 'new').length || 0
-          }}
-          isMobileOpen={sidebarOpen}
-          onMobileClose={() => setSidebarOpen(false)}
-        />
+      <div className="flex pt-16">
+        {/* Sidebar - Fixed on desktop */}
+        <div className="hidden lg:block lg:fixed lg:left-0 lg:top-16 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:z-30 lg:w-64">
+          <DashboardSidebar
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            type="admin"
+            stats={{
+              pendingVendors: stats?.pendingVendors || 0,
+              pendingProducts: stats?.pendingProducts || 0,
+              newMessages: contactMessages.filter(msg => msg.status === 'new').length || 0
+            }}
+            isMobileOpen={false}
+            onMobileClose={() => {}}
+          />
+        </div>
+
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setSidebarOpen(false)} />
+        )}
+        {/* Mobile Sidebar */}
+        <div className={`lg:hidden fixed left-0 top-16 h-[calc(100vh-4rem)] z-50 transform transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <DashboardSidebar
+            activeTab={activeTab}
+            onTabChange={(tab) => {
+              setActiveTab(tab);
+              setSidebarOpen(false);
+            }}
+            type="admin"
+            stats={{
+              pendingVendors: stats?.pendingVendors || 0,
+              pendingProducts: stats?.pendingProducts || 0,
+              newMessages: contactMessages.filter(msg => msg.status === 'new').length || 0
+            }}
+            isMobileOpen={sidebarOpen}
+            onMobileClose={() => setSidebarOpen(false)}
+          />
+        </div>
 
         {/* Main Content */}
         <div className="flex-1 w-full lg:ml-64">
-          <div ref={mainContentRef} className="py-4 sm:py-6 lg:py-8 px-4 sm:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-4rem)] sm:min-h-[calc(100vh-5rem)] md:min-h-[calc(100vh-6rem)] pb-8 sm:pb-12 overflow-y-auto">
+          <div ref={mainContentRef} className="py-4 sm:py-6 lg:py-8 px-3 sm:px-4 md:px-6 lg:px-8 w-full max-w-full min-h-[calc(100vh-4rem)] sm:min-h-[calc(100vh-5rem)] md:min-h-[calc(100vh-6rem)] pb-8 sm:pb-12 overflow-y-auto">
             {/* Mobile Header with Menu Button */}
             <div className="lg:hidden mb-6 flex items-center justify-between">
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+                aria-label="Open sidebar menu"
+                title="Open sidebar menu"
               >
                 <Menu className="h-6 w-6" />
               </button>
@@ -1539,7 +1661,17 @@ const AdminDashboard = () => {
                               </div>
                             </div>
                             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 lg:ml-4">
-                              <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => viewVendor(vendor)}>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="w-full sm:w-auto" 
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  viewVendor(vendor);
+                                }}
+                                type="button"
+                              >
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Details
                               </Button>
@@ -1624,6 +1756,7 @@ const AdminDashboard = () => {
                                       variant="outline"
                                       onClick={() => viewProduct(product)}
                                       title="View product details"
+                                      aria-label="View product details"
                                       className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
                                     >
                                       <Eye className="h-4 w-4" />
@@ -1636,6 +1769,8 @@ const AdminDashboard = () => {
                                         onClick={() => handleDisapproveProduct(product.id)}
                                         disabled={actionLoading === `disapprove-product-${product.id}`}
                                         className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                        aria-label="Disapprove product"
+                                        title="Disapprove product"
                                       >
                                         {actionLoading === `disapprove-product-${product.id}` ? (
                                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -1652,6 +1787,8 @@ const AdminDashboard = () => {
                                         className="bg-green-600 hover:bg-green-700 text-white h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
                                         onClick={() => handleApproveProduct(product.id)}
                                         disabled={actionLoading === `approve-product-${product.id}`}
+                                        aria-label="Approve product"
+                                        title="Approve product"
                                       >
                                         {actionLoading === `approve-product-${product.id}` ? (
                                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -1686,80 +1823,155 @@ const AdminDashboard = () => {
                 <div id="tab-section-orders" className="space-y-6 scroll-mt-24">
                   <h2 className="text-xl font-semibold text-primary">All Orders</h2>
 
-                  <div className="overflow-x-auto -mx-4 sm:mx-0">
-                    <div className="inline-block min-w-full align-middle">
-                      <div className="overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
+                  {/* Mobile/Tablet Card View */}
+                  <div className="lg:hidden space-y-4">
+                    {Array.isArray(orders) && orders.length > 0 ? (
+                      orders.map(order => (
+                        <Card key={order.id} className="p-4">
+                          <div className="space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">Order #{order.id}</p>
+                                <p className="text-xs text-gray-500 mt-1">{order.date}</p>
+                              </div>
+                              <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                                {order.status}
+                              </Badge>
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Customer:</span>
+                                <span className="text-gray-900 font-medium">{order.customer}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Vendor:</span>
+                                <span className="text-gray-900 font-medium truncate max-w-[200px]" title={order.vendor}>{order.vendor}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Product:</span>
+                                <span className="text-gray-900 font-medium truncate max-w-[200px]" title={order.product}>{order.product}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Amount:</span>
+                                <span className="text-gray-900 font-bold text-primary">KSH {order.amount}</span>
+                              </div>
+                              {order.last_status_updated && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Last Updated:</span>
+                                  <span className="text-gray-500 text-xs">{new Date(order.last_status_updated).toLocaleString()}</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex gap-2 pt-2 border-t">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => viewOrder(order)}
+                                className="flex-1 text-xs"
+                              >
+                                View Details
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => {
+                                  setOrderToDelete(order);
+                                  setShowDeleteOrderModal(true);
+                                }}
+                                className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))
+                    ) : (
+                      <div className="text-center py-12">
+                        <p className="text-gray-500">No orders found</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden lg:block w-full">
+                    <div className="overflow-x-auto pb-4 -mx-3 sm:-mx-4 md:-mx-6 lg:-mx-8 px-3 sm:px-4 md:px-6 lg:px-8">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+                          <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: '1200px' }}>
                           <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order ID</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Customer</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">Vendor</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Product</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Amount</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Order Date</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">Last Updated</th>
-                              <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order ID</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Customer</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Vendor</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Product</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order Date</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Last Updated</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {Array.isArray(orders) && orders.map(order => (
-                              <tr key={order.id} className="hover:bg-gray-50">
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900 max-w-[120px] sm:max-w-none truncate" title={order.customer}>
-                                    {order.customer}
-                                  </div>
+                            {Array.isArray(orders) && orders.length > 0 ? (
+                              orders.map(order => (
+                                <tr key={order.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{order.customer}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 max-w-[200px] truncate" title={order.vendor}>{order.vendor}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 max-w-[250px] truncate" title={order.product}>{order.product}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">KSH {order.amount}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                                      {order.status}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{order.date}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    {order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                    <div className="flex gap-2">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        onClick={() => viewOrder(order)}
+                                        className="text-xs"
+                                      >
+                                        View
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        onClick={() => {
+                                          setOrderToDelete(order);
+                                          setShowDeleteOrderModal(true);
+                                        }}
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs"
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                                  No orders found
                                 </td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
-                                  <div className="max-w-[120px] truncate" title={order.vendor}>
-                                    {order.vendor}
-                                  </div>
-                                </td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900 max-w-[150px] sm:max-w-none truncate" title={order.product}>
-                                    {order.product}
-                                  </div>
-                                </td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">KSH {order.amount}</td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                                  <Badge className={`text-xs ${getStatusColor(order.status)}`}>
-                                    {order.status}
-                                  </Badge>
-                                </td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{order.date}</td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
-                                  {order.last_status_updated ? new Date(order.last_status_updated).toLocaleString() : order.date}
-                                </td>
-                                <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium">
-                                  <div className="flex flex-wrap sm:flex-nowrap gap-1 sm:gap-2">
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline"
-                                      onClick={() => viewOrder(order)}
-                                      className="text-xs sm:text-sm"
-                                    >
-                                      View Details
-                                    </Button>
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline"
-                                      onClick={() => {
-                                        setOrderToDelete(order);
-                                        setShowDeleteOrderModal(true);
-                                      }}
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    >
-                                      Delete
-                                    </Button>
-                                  </div>
-                                </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      </table>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                        </div>
                       </div>
+                    </div>
+                    {/* Scroll indicator */}
+                    <div className="mt-2 text-xs text-gray-500 text-center">
+                      ← Scroll horizontally to see all columns →
                     </div>
                   </div>
                 </div>
@@ -1818,6 +2030,7 @@ const AdminDashboard = () => {
                                       onClick={() => handleEditUser(user)}
                                       className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
                                       title="Edit user"
+                                      aria-label="Edit user"
                                     >
                                       <Edit className="h-4 w-4" />
                                       <span className="hidden sm:inline ml-1">Edit</span>
@@ -1829,6 +2042,7 @@ const AdminDashboard = () => {
                                       disabled={togglingStatus === user.id || user.id === admin?.id}
                                       className={`h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3 ${(user.account_status || 'active') === 'disabled' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
                                       title={user.account_status === 'active' ? 'Disable user' : 'Enable user'}
+                                      aria-label={user.account_status === 'active' ? 'Disable user' : 'Enable user'}
                                     >
                                       {togglingStatus === user.id ? (
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -1851,6 +2065,7 @@ const AdminDashboard = () => {
                                       disabled={actionLoading === `delete-user-${user.id}`}
                                       className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
                                       title="Delete user"
+                                      aria-label="Delete user"
                                     >
                                       {actionLoading === `delete-user-${user.id}` ? (
                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -2025,6 +2240,8 @@ const AdminDashboard = () => {
                                   }}
                                   disabled={message.status === 'replied'}
                                   className="w-full sm:w-auto"
+                                  aria-label={message.status === 'replied' ? 'Message already replied' : 'Reply to message'}
+                                  title={message.status === 'replied' ? 'Message already replied' : 'Reply to message'}
                                 >
                                   {message.status === 'replied' ? 'Replied' : 'Reply'}
                                 </Button>
@@ -2036,6 +2253,8 @@ const AdminDashboard = () => {
                                     setShowDeleteContactModal(true);
                                   }}
                                   className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
+                                  aria-label="Delete contact message"
+                                  title="Delete contact message"
                                 >
                                   Delete
                                 </Button>
@@ -2399,6 +2618,8 @@ const AdminDashboard = () => {
                                           variant="outline"
                                           onClick={() => handleRetrySMS(log.id)}
                                           className="text-blue-600 hover:text-blue-800"
+                                          aria-label="Retry sending SMS"
+                                          title="Retry sending SMS"
                                         >
                                           Retry
                                         </Button>
@@ -2408,6 +2629,8 @@ const AdminDashboard = () => {
                                         variant="outline"
                                         onClick={() => handleDeleteSMS(log.id, log)}
                                         className="text-red-600 hover:text-red-800"
+                                        aria-label="Delete SMS log"
+                                        title="Delete SMS log"
                                       >
                                         Delete
                                       </Button>
@@ -2418,6 +2641,214 @@ const AdminDashboard = () => {
                             </tbody>
                           </table>
                         </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* System Logs Tab */}
+              {activeTab === 'system-logs' && (
+                <div id="tab-section-system-logs" className="space-y-6 scroll-mt-24">
+                  <div className="flex justify-between items-center flex-wrap gap-4">
+                    <h2 className="text-xl font-semibold text-primary">System Logs</h2>
+                    <Button
+                      onClick={() => {
+                        setSystemLogsPage(0);
+                        fetchSystemLogs();
+                      }}
+                      disabled={systemLogsLoading}
+                    >
+                      {systemLogsLoading ? 'Loading...' : 'Refresh'}
+                    </Button>
+                  </div>
+
+                  {/* Filters */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Filters</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor="log-user-type">User Type</Label>
+                          <Select
+                            value={systemLogsFilter.userType}
+                            onValueChange={(value) => {
+                              setSystemLogsFilter({ ...systemLogsFilter, userType: value as any });
+                              setSystemLogsPage(0);
+                            }}
+                          >
+                            <SelectTrigger id="log-user-type">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Types</SelectItem>
+                              <SelectItem value="vendor">Vendors</SelectItem>
+                              <SelectItem value="customer">Customers</SelectItem>
+                              <SelectItem value="admin">Admins</SelectItem>
+                              <SelectItem value="system">System</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="log-action">Action</Label>
+                          <Select
+                            value={systemLogsFilter.action}
+                            onValueChange={(value) => {
+                              setSystemLogsFilter({ ...systemLogsFilter, action: value });
+                              setSystemLogsPage(0);
+                            }}
+                          >
+                            <SelectTrigger id="log-action">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Actions</SelectItem>
+                              {availableActions.map((action) => (
+                                <SelectItem key={action} value={action}>
+                                  {action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="log-search">Search (Name, Email, Phone)</Label>
+                          <Input
+                            id="log-search"
+                            type="text"
+                            placeholder="Search by name, email, or phone..."
+                            value={systemLogsFilter.search}
+                            onChange={(e) => {
+                              setSystemLogsFilter({ ...systemLogsFilter, search: e.target.value });
+                              setSystemLogsPage(0);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                fetchSystemLogs();
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* System Logs Table */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>
+                        Activity Logs ({systemLogsTotal} total)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {systemLogsLoading ? (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500">Loading system logs...</p>
+                        </div>
+                      ) : systemLogs.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-gray-500">No system logs found</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left py-2 px-4">Date & Time</th>
+                                  <th className="text-left py-2 px-4">User Type</th>
+                                  <th className="text-left py-2 px-4">User</th>
+                                  <th className="text-left py-2 px-4">Action</th>
+                                  <th className="text-left py-2 px-4">Description</th>
+                                  <th className="text-left py-2 px-4">IP Address</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {systemLogs.map((log: any) => (
+                                  <tr key={log.id} className="border-b hover:bg-gray-50">
+                                    <td className="py-2 px-4 text-sm">
+                                      {new Date(log.created_at).toLocaleString()}
+                                    </td>
+                                    <td className="py-2 px-4">
+                                      <Badge className={
+                                        log.user_type === 'admin' ? 'bg-purple-100 text-purple-800' :
+                                        log.user_type === 'vendor' ? 'bg-green-100 text-green-800' :
+                                        'bg-blue-100 text-blue-800'
+                                      }>
+                                        {log.user_type}
+                                      </Badge>
+                                    </td>
+                                    <td className="py-2 px-4">
+                                      <div className="text-sm">
+                                        <div className="font-medium">{log.display_name || log.full_name || 'N/A'}</div>
+                                        {log.email && (
+                                          <div className="text-xs text-gray-500">{log.email}</div>
+                                        )}
+                                        {log.phone && (
+                                          <div className="text-xs text-gray-500">{log.phone}</div>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-4">
+                                      <Badge variant="outline" className="text-xs">
+                                        {log.action.replace(/_/g, ' ')}
+                                      </Badge>
+                                    </td>
+                                    <td className="py-2 px-4 text-sm max-w-md">
+                                      <div className="truncate" title={log.description}>
+                                        {log.description}
+                                      </div>
+                                      {log.metadata && typeof log.metadata === 'object' && Object.keys(log.metadata).length > 0 && (
+                                        <details className="mt-1">
+                                          <summary className="text-xs text-blue-600 cursor-pointer hover:underline">
+                                            View Details
+                                          </summary>
+                                          <pre className="text-xs bg-gray-100 p-2 mt-1 rounded overflow-auto max-h-32">
+                                            {JSON.stringify(log.metadata, null, 2)}
+                                          </pre>
+                                        </details>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-4 text-xs text-gray-500">
+                                      {log.ip_address || 'N/A'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          
+                          {/* Pagination */}
+                          <div className="flex justify-between items-center mt-4 pt-4 border-t">
+                            <div className="text-sm text-gray-600">
+                              Showing {systemLogsPage * 100 + 1} to {Math.min((systemLogsPage + 1) * 100, systemLogsTotal)} of {systemLogsTotal} logs
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSystemLogsPage(Math.max(0, systemLogsPage - 1));
+                                }}
+                                disabled={systemLogsPage === 0 || systemLogsLoading}
+                              >
+                                Previous
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSystemLogsPage(systemLogsPage + 1);
+                                }}
+                                disabled={(systemLogsPage + 1) * 100 >= systemLogsTotal || systemLogsLoading}
+                              >
+                                Next
+                              </Button>
+                            </div>
+                          </div>
+                        </>
                       )}
                     </CardContent>
                   </Card>
@@ -2575,78 +3006,6 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                 )}
-
-                  {/* Vendor Details Modal (moved here so it renders with same stacking as other modals) */}
-                  {showVendorModal && selectedVendor && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
-                          <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-primary">Vendor Details</h2>
-                            <button
-                              onClick={() => { setShowVendorModal(false); setSelectedVendor(null); }}
-                              className="text-gray-400 hover:text-gray-600"
-                              title="Close modal"
-                              aria-label="Close modal"
-                            >
-                              <X className="h-6 w-6" />
-                            </button>
-                          </div>
-
-                          <div className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
-                                <p className="text-lg font-semibold text-gray-900">{selectedVendor.name}</p>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                <p className="text-lg text-gray-900">{selectedVendor.email}</p>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Farm Name</label>
-                                <p className="text-lg text-gray-900">{selectedVendor.farmName || selectedVendor.farm_name || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                <p className="text-lg text-gray-900">{selectedVendor.location || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                                <p className="text-lg text-gray-900">{selectedVendor.phone || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Applied</label>
-                                <p className="text-lg text-gray-900">{selectedVendor.registrationDate || selectedVendor.applied_at || 'N/A'}</p>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                <Badge className={selectedVendor.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
-                                  {selectedVendor.status || 'N/A'}
-                                </Badge>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Products</label>
-                                <p className="text-lg text-gray-900">{selectedVendor.productCount || selectedVendor.product_count || 'N/A'}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
-                              <Button variant="outline" onClick={() => { setShowVendorModal(false); setSelectedVendor(null); }}>Close</Button>
-                              {selectedVendor.status !== 'approved' ? (
-                                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => { handleApproveVendor(selectedVendor.id); setShowVendorModal(false); setSelectedVendor(null); }}>Approve</Button>
-                              ) : (
-                                <Button variant="destructive" onClick={() => { handleDisapproveVendor(selectedVendor.id); setShowVendorModal(false); setSelectedVendor(null); }}>Disapprove</Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                 {/* Product Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3293,7 +3652,142 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
-      
+
+      {/* Vendor Details Modal - Using Portal to ensure it renders above everything - Outside all tabs so it can render from any tab */}
+      {showVendorModal && selectedVendor && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowVendorModal(false);
+              setSelectedVendor(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-primary">Vendor Details</h2>
+                <button
+                  onClick={() => { setShowVendorModal(false); setSelectedVendor(null); }}
+                  className="text-gray-400 hover:text-gray-600"
+                  title="Close modal"
+                  aria-label="Close modal"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Personal Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-primary mb-4">Personal Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                      <p className="text-lg font-semibold text-gray-900">{selectedVendor.name || selectedVendor.full_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.email || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.phone || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ID Number</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.id_number || 'Not provided'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Farm Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-primary mb-4">Farm Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Farm Name</label>
+                      <p className="text-lg font-semibold text-gray-900">{selectedVendor.farmName || selectedVendor.farm_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <Badge className={selectedVendor.status === 'approved' ? 'bg-green-100 text-green-800' : selectedVendor.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}>
+                        {selectedVendor.status || 'N/A'}
+                      </Badge>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Farm Description</label>
+                      <p className="text-lg text-gray-900 whitespace-pre-wrap">{selectedVendor.farm_description || selectedVendor.farmDescription || 'No description provided'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-primary mb-4">Location Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">County</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.county_name || selectedVendor.county || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Subcounty/Constituency</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.constituency_name || selectedVendor.constituency || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Ward/Sublocation</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.ward_name || selectedVendor.ward || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location (Text)</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.location || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Registration Details */}
+                <div>
+                  <h3 className="text-lg font-semibold text-primary mb-4">Registration Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Registration Date</label>
+                      <p className="text-lg text-gray-900">
+                        {selectedVendor.registrationDate || selectedVendor.created_at 
+                          ? new Date(selectedVendor.registrationDate || selectedVendor.created_at).toLocaleString('en-KE', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Products</label>
+                      <p className="text-lg text-gray-900">{selectedVendor.productCount || selectedVendor.product_count || 0}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
+                  <Button variant="outline" onClick={() => { setShowVendorModal(false); setSelectedVendor(null); }}>Close</Button>
+                  {selectedVendor.status !== 'approved' ? (
+                    <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => { handleApproveVendor(selectedVendor.id); setShowVendorModal(false); setSelectedVendor(null); }}>Approve</Button>
+                  ) : (
+                    <Button variant="destructive" onClick={() => { handleDisapproveVendor(selectedVendor.id); setShowVendorModal(false); setSelectedVendor(null); }}>Disapprove</Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       </div>
 

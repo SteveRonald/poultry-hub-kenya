@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Shield, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -20,6 +21,7 @@ const Login = () => {
   const [userEmail, setUserEmail] = useState('');
   const [countdown, setCountdown] = useState(0);
   const { login, user, fetchUser } = useAuth();
+  const { mergeLocalCart } = useCart();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -32,17 +34,51 @@ const Login = () => {
   }, [countdown]);
 
   useEffect(() => {
-    // Check if there's a pending order in sessionStorage
-    const pendingOrder = sessionStorage.getItem('pending_order');
-    if (pendingOrder) {
+    // Only show notification if there's a redirect param indicating user came from checkout/cart
+    const redirectParam = searchParams.get('redirect');
+    const adParam = searchParams.get('ad');
+    
+    // Check if there's a pending order in sessionStorage AND user came from checkout flow
+    if (redirectParam && (redirectParam.includes('checkout') || redirectParam.includes('cart'))) {
+      const pendingOrder = sessionStorage.getItem('pending_order');
+      if (pendingOrder) {
+        try {
+          const orderContext = JSON.parse(pendingOrder);
+          // Only show message if coming from advertisement click
+          if (adParam && orderContext.source === 'advertisement') {
+            toast.info('Please login to complete your order from the advertisement');
+          } else if (redirectParam.includes('checkout') || redirectParam.includes('cart')) {
+            toast.info('Please login to continue with your order');
+          }
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      } else if (redirectParam.includes('checkout') || redirectParam.includes('cart')) {
+        // User came to checkout but no pending order - might have items in cart
+        toast.info('Please login to continue with checkout');
+      }
+    }
+
+    // Restore login OTP state from localStorage to prevent loss on page refresh
+    const savedLoginState = localStorage.getItem('login_otp_state');
+    if (savedLoginState) {
       try {
-        const orderContext = JSON.parse(pendingOrder);
-        // Show a message that they can complete their order after login
-        if (orderContext.source === 'advertisement') {
-          toast.info('Please login to complete your order from the advertisement');
+        const state = JSON.parse(savedLoginState);
+        const now = Date.now();
+        // Only restore if OTP was sent less than 10 minutes ago
+        if (state.timestamp && (now - state.timestamp) < 600000) {
+          setStep(2);
+          setUserEmail(state.userEmail || '');
+          setEmail(state.email || '');
+          const remainingTime = Math.max(0, Math.floor((600000 - (now - state.timestamp)) / 1000));
+          setCountdown(Math.min(remainingTime, state.countdown || 0));
+        } else {
+          // State is expired, clear it
+          localStorage.removeItem('login_otp_state');
         }
       } catch (e) {
         // Ignore parsing errors
+        localStorage.removeItem('login_otp_state');
       }
     }
   }, []);
@@ -72,6 +108,16 @@ const Login = () => {
       setUserEmail(data.user_email);
       setStep(2);
       setCountdown(30); // Start 30-second countdown before resend
+
+      // Save login OTP state to localStorage to persist across page refreshes
+      const loginState = {
+        email: email.trim(),
+        userEmail: data.user_email,
+        countdown: 30,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('login_otp_state', JSON.stringify(loginState));
+
       toast.success('OTP sent to your email. Please check your inbox.');
     } catch (error) {
       toast.error('Failed to send OTP. Please try again.');
@@ -109,6 +155,9 @@ const Login = () => {
 
       const data = await response.json();
       
+      // Clear login OTP state from localStorage after successful login
+      localStorage.removeItem('login_otp_state');
+
       // Store token and user data
       localStorage.setItem('session_token', data.token);
       localStorage.setItem('token', data.token); // keep backward compatibility
@@ -122,15 +171,30 @@ const Login = () => {
         if (import.meta.env.DEV) console.error('fetchUser failed after OTP verify', e);
       }
 
+      // Merge local storage cart with database cart after login
+      try {
+        await mergeLocalCart();
+      } catch (e) {
+        if (import.meta.env.DEV) console.error('Failed to merge local cart:', e);
+      }
+
       toast.success('Login successful!');
 
-      // Check for pending order or redirect parameter
-      const pendingOrder = sessionStorage.getItem('pending_order');
+      // Check for redirect parameter (checkout flow)
       const redirectParam = searchParams.get('redirect');
+      
+      if (redirectParam) {
+        // Redirect to the specified page (e.g., checkout)
+        navigate(decodeURIComponent(redirectParam));
+        return;
+      }
+
+      // Check for pending order or product parameter (legacy support)
+      const pendingOrder = sessionStorage.getItem('pending_order');
       const productParam = searchParams.get('product');
       const adParam = searchParams.get('ad');
       
-      if (pendingOrder || (redirectParam && productParam)) {
+      if (pendingOrder || productParam) {
         // Restore order context and redirect to products page
         if (productParam) {
           const redirectUrl = adParam 
@@ -177,6 +241,16 @@ const Login = () => {
 
       setCountdown(30);
       setOtp('');
+
+      // Update localStorage with new OTP state
+      const loginState = {
+        email: email.trim(),
+        userEmail: userEmail,
+        countdown: 30,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('login_otp_state', JSON.stringify(loginState));
+
       toast.success('OTP resent to your email');
     } catch (error) {
       toast.error('Failed to resend OTP. Please try again.');
@@ -191,6 +265,8 @@ const Login = () => {
     setOtp('');
     setUserEmail('');
     setCountdown(0);
+    // Clear login OTP state when going back
+    localStorage.removeItem('login_otp_state');
   };
 
   return (
@@ -281,13 +357,17 @@ const Login = () => {
                     </label>
                     <Input
                       id="otp"
+                      name="otp"
                       type="text"
                       value={otp}
                       onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="Enter 6-digit code"
                       maxLength={6}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="one-time-code"
                       required
-                      className="text-center text-lg tracking-widest"
+                      className="text-center text-lg tracking-widest font-mono"
                     />
                   </div>
 

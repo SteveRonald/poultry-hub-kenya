@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
+require_once __DIR__ . '/../utils/system_logs.php';
 
 function handleAdminLogin() {
     global $pdo;
@@ -235,24 +236,48 @@ function handleAdminVendors() {
     
     try {
         $stmt = $pdo->query("
-            SELECT v.*, u.email, u.full_name, u.phone 
+            SELECT 
+                v.*, 
+                u.email, 
+                u.full_name, 
+                u.phone,
+                c.county_name,
+                con.constituency_name,
+                w.ward_name,
+                (SELECT COUNT(*) FROM products WHERE vendor_id = v.id) as product_count
             FROM vendors v 
             JOIN user_profiles u ON v.user_id = u.id 
+            LEFT JOIN counties c ON v.county_id = c.county_id
+            LEFT JOIN constituencies con ON v.constituency_id = con.constituency_id
+            LEFT JOIN wards w ON v.ward_id = w.ward_id
             ORDER BY v.created_at DESC
         ");
         $vendors = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Format the response
+        // Format the response with all registration fields
         $formattedVendors = array_map(function($vendor) {
             return [
                 'id' => $vendor['id'],
+                'user_id' => $vendor['user_id'],
                 'name' => $vendor['full_name'],
                 'email' => $vendor['email'],
                 'phone' => $vendor['phone'],
                 'farmName' => $vendor['farm_name'],
+                'farm_name' => $vendor['farm_name'],
+                'farm_description' => $vendor['farm_description'] ?? '',
                 'location' => $vendor['location'],
+                'id_number' => $vendor['id_number'] ?? null,
+                'county_id' => $vendor['county_id'] ?? null,
+                'county_name' => $vendor['county_name'] ?? null,
+                'constituency_id' => $vendor['constituency_id'] ?? null,
+                'constituency_name' => $vendor['constituency_name'] ?? null,
+                'ward_id' => $vendor['ward_id'] ?? null,
+                'ward_name' => $vendor['ward_name'] ?? null,
                 'status' => $vendor['status'],
-                'registrationDate' => $vendor['created_at']
+                'registrationDate' => $vendor['created_at'],
+                'created_at' => $vendor['created_at'],
+                'product_count' => intval($vendor['product_count'] ?? 0),
+                'productCount' => intval($vendor['product_count'] ?? 0)
             ];
         }, $vendors);
         
@@ -365,6 +390,7 @@ function handleAdminOrders() {
                 'status' => $order['status'],
                 'status_notes' => $order['status_notes'],
                 'payment_method' => $order['payment_method'],
+                'payment_account_number' => $order['payment_account_number'] ?? null,
                 'payment_status' => $order['payment_status'],
                 'shipping_address' => $order['shipping_address'],
                 'contact_phone' => $order['contact_phone'],
@@ -1006,6 +1032,31 @@ function handleVendorApproval() {
         require_once __DIR__ . '/../utils/notifications.php';
         notifyAllAdmins("Vendor '{$vendorName}' has been approved and can now sell products", 'success');
         
+        // Get vendor user_id for logging
+        $stmt = $pdo->prepare("SELECT user_id FROM vendors WHERE id = ?");
+        $stmt->execute([$vendorId]);
+        $vendorUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Log admin action
+        logActivity(
+            $adminId,
+            'admin',
+            'approve_vendor',
+            "Approved vendor: {$vendorName}",
+            ['vendor_id' => $vendorId, 'vendor_user_id' => ($vendorUser && isset($vendorUser['user_id'])) ? $vendorUser['user_id'] : null]
+        );
+        
+        // Log vendor event
+        if ($vendorUser && isset($vendorUser['user_id'])) {
+            logActivity(
+                $vendorUser['user_id'],
+                'vendor',
+                'vendor_approved',
+                "Vendor account approved by admin",
+                ['vendor_id' => $vendorId, 'approved_by' => $adminId]
+            );
+        }
+        
         echo json_encode(['message' => 'Vendor approved successfully']);
         
     } catch (PDOException $e) {
@@ -1046,13 +1097,46 @@ function handleVendorRejection() {
             return;
         }
         
+        // Get admin ID from session
+        $stmt = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ? AND expires_at > NOW()");
+        $stmt->execute([$token]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
+        $adminId = ($session && isset($session['admin_id'])) ? $session['admin_id'] : null;
+        
         // Update vendor status
-        $stmt = $pdo->prepare("UPDATE vendors SET status = 'rejected' WHERE id = ?");
-        $stmt->execute([$vendorId]);
+        $stmt = $pdo->prepare("UPDATE vendors SET status = 'rejected', rejected_at = NOW(), rejected_by = ? WHERE id = ?");
+        $stmt->execute([$adminId, $vendorId]);
         
         // Notify vendor about rejection
         $vendorName = $vendor['farm_name'] ?: $vendor['full_name'];
         notifyVendor($vendorId, "Your vendor account '{$vendorName}' has been rejected. Reason: {$reason}", 'warning');
+        
+        // Get vendor user_id for logging
+        $stmt = $pdo->prepare("SELECT user_id FROM vendors WHERE id = ?");
+        $stmt->execute([$vendorId]);
+        $vendorUser = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Log admin action
+        if ($adminId) {
+            logActivity(
+                $adminId,
+                'admin',
+                'reject_vendor',
+                "Rejected vendor: {$vendorName}",
+                ['vendor_id' => $vendorId, 'reason' => $reason, 'vendor_user_id' => ($vendorUser && isset($vendorUser['user_id'])) ? $vendorUser['user_id'] : null]
+            );
+        }
+        
+        // Log vendor event
+        if ($vendorUser && isset($vendorUser['user_id'])) {
+            logActivity(
+                $vendorUser['user_id'],
+                'vendor',
+                'vendor_rejected',
+                "Vendor account rejected by admin",
+                ['vendor_id' => $vendorId, 'reason' => $reason, 'rejected_by' => $adminId]
+            );
+        }
         
         echo json_encode(['message' => 'Vendor rejected successfully']);
         

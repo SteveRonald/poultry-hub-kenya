@@ -51,27 +51,32 @@ function handleForgotPassword() {
         $stmt = $pdo->prepare("DELETE FROM otp_verification WHERE email = ?");
         $stmt->execute([$email]);
         
-        // Insert new OTP
+        // Send email FIRST - only store OTP if email is successfully sent
+        $emailSent = sendStyledOTPEmail($email, $otp, $user['full_name']);
+        
+        if (!$emailSent) {
+            error_log("Error: Email sending failed for forgot password OTP. Email: $email");
+            http_response_code(503);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Failed to send email. Please try again later.'
+            ]);
+            return;
+        }
+        
+        // Email sent successfully - now store OTP in database
         $stmt = $pdo->prepare("
             INSERT INTO otp_verification (email, otp, expires_at) 
             VALUES (?, ?, ?)
         ");
         $stmt->execute([$email, $otp, $expiresAt]);
         
-        // Send OTP email
-        $emailSent = sendStyledOTPEmail($email, $otp, $user['full_name']);
-        
-        if ($emailSent) {
-            echo json_encode([
-                'success' => true,
-                'message' => 'Password reset code has been sent to your email.'
-            ]);
-        } else {
-            echo json_encode([
-                'success' => false,
-                'error' => 'Failed to send email. Please try again.'
-            ]);
-        }
+        // Return success after email is confirmed sent
+        http_response_code(200);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Password reset code has been sent to your email. Please check your inbox.'
+        ]);
         
     } catch (PDOException $e) {
         error_log('Forgot password error: ' . $e->getMessage());
@@ -267,27 +272,32 @@ function handleResendOTP() {
         $stmt = $pdo->prepare("DELETE FROM otp_verification WHERE email = ?");
         $stmt->execute([$email]);
         
-        // Insert new OTP
+        // Send email FIRST - only store OTP if email is successfully sent
+        $emailSent = sendStyledOTPEmail($email, $otp, $user['full_name']);
+        
+        if (!$emailSent) {
+            error_log("Error: Email sending failed for resend OTP. Email: $email");
+            http_response_code(503);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Failed to send email. Please try again later.'
+            ]);
+            return;
+        }
+        
+        // Email sent successfully - now store OTP in database
         $stmt = $pdo->prepare("
             INSERT INTO otp_verification (email, otp, expires_at) 
             VALUES (?, ?, ?)
         ");
         $stmt->execute([$email, $otp, $expiresAt]);
         
-        // Send OTP email
-        $emailSent = sendStyledOTPEmail($email, $otp, $user['full_name']);
-        
-        if ($emailSent) {
-            echo json_encode([
-                'success' => true,
-                'message' => 'New password reset code has been sent to your email.'
-            ]);
-        } else {
-            echo json_encode([
-                'success' => false,
-                'error' => 'Failed to send email. Please try again.'
-            ]);
-        }
+        // Return success after email is confirmed sent
+        http_response_code(200);
+        echo json_encode([
+            'success' => true,
+            'message' => 'New password reset code has been sent to your email. Please check your inbox.'
+        ]);
         
     } catch (PDOException $e) {
         error_log('Resend OTP error: ' . $e->getMessage());

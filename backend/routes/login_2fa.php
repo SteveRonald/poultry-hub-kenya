@@ -43,6 +43,14 @@ function handleSendLoginOTP() {
         return;
     }
     
+    // Validate email domain exists (check DNS MX records) before attempting login
+    // This helps prevent unnecessary database queries for invalid emails
+    if (!validateEmailDomain($email)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'The email address you provided does not exist. Please check your email address and try again.']);
+        return;
+    }
+    
     try {
         // Fetch user by email
         $stmt = $pdo->prepare("SELECT id, email, password, full_name, role, account_status FROM user_profiles WHERE email = ?");
@@ -86,12 +94,7 @@ function handleSendLoginOTP() {
         $stmt = $pdo->prepare("DELETE FROM login_otps WHERE user_email = ? AND expires_at > NOW()");
         $stmt->execute([$user['email']]);
         
-        // Store OTP in database with 10-minute expiry
-        $expiresAt = date('Y-m-d H:i:s', time() + 600); // 10 minutes
-        $stmt = $pdo->prepare("INSERT INTO login_otps (user_email, otp, expires_at) VALUES (?, ?, ?)");
-        $stmt->execute([$user['email'], $otp, $expiresAt]);
-        
-        // Send OTP via email
+        // Send OTP via email FIRST - only store if email is successfully sent
         $data = [
             'otp' => $otp,
             'user_name' => $user['full_name']
@@ -102,12 +105,18 @@ function handleSendLoginOTP() {
         
         $emailSent = sendEmail($user['email'], $subject, $emailHtml);
         
+        // Only store OTP in database if email was successfully sent
         if (!$emailSent) {
             error_log('Failed to send OTP email to: ' . $user['email']);
-            http_response_code(500);
-            echo json_encode(['error' => 'Failed to send OTP. Please try again.']);
+            http_response_code(503);
+            echo json_encode(['error' => 'Unable to send OTP to your email address. The email service is temporarily unavailable. Please try again later or contact support if this issue persists.']);
             return;
         }
+        
+        // Email sent successfully - now store OTP in database with 10-minute expiry
+        $expiresAt = date('Y-m-d H:i:s', time() + 600); // 10 minutes
+        $stmt = $pdo->prepare("INSERT INTO login_otps (user_email, otp, expires_at) VALUES (?, ?, ?)");
+        $stmt->execute([$user['email'], $otp, $expiresAt]);
         
         // Return success with user info (but NOT the OTP)
         http_response_code(200);

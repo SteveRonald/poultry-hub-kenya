@@ -15,7 +15,41 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { cartSummary } = useCart();
+  const { cartSummary, getLocalCart } = useCart();
+  const [localCartCount, setLocalCartCount] = useState(0);
+
+  // Update local cart count for non-logged-in users
+  useEffect(() => {
+    if (!user) {
+      const updateCount = () => {
+        // Call getLocalCart directly - it's a simple function that reads localStorage
+        // No need to include it in dependencies as it doesn't change
+        const localCart = getLocalCart();
+        // Count unique products, not total quantity
+        const uniqueProducts = localCart.length;
+        setLocalCartCount(uniqueProducts);
+      };
+      
+      updateCount();
+      
+      // Listen for storage changes to update count
+      const handleStorageChange = () => {
+        updateCount();
+      };
+      
+      window.addEventListener('storage', handleStorageChange);
+      // Also check periodically for same-tab updates
+      const interval = setInterval(updateCount, 1000);
+      
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        clearInterval(interval);
+      };
+    } else {
+      setLocalCartCount(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // Removed getLocalCart from dependencies to prevent constant re-renders
 
   // Debug logging for mobile (disabled for security)
   // useEffect(() => {
@@ -131,9 +165,9 @@ const Navbar = () => {
                 >
                   <ShoppingCart className="h-4 w-4" />
                   <span>Cart</span>
-                  {cartSummary.total_items > 0 && (
+                  {cartSummary.items_count > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {cartSummary.total_items}
+                      {cartSummary.items_count}
                     </span>
                   )}
                 </Button>
@@ -151,6 +185,21 @@ const Navbar = () => {
               </div>
             ) : (
               <div className="flex items-center space-x-4">
+                {/* Cart Icon for non-logged-in users */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCart(true)}
+                  className="relative flex items-center space-x-2"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Cart</span>
+                  {localCartCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {localCartCount}
+                    </span>
+                  )}
+                </Button>
                 <Link to="/login">
                   <Button variant="outline" size="sm">Login</Button>
                 </Link>
@@ -162,21 +211,19 @@ const Navbar = () => {
           </div>
 
           {/* Mobile menu button and cart */}
-          <div className="md:hidden flex items-center space-x-2">
-            {/* Cart button for mobile header */}
-            {user && (
-              <button
-                onClick={() => setShowCart(true)}
-                className="relative text-gray-700 hover:text-primary"
-              >
-                <ShoppingCart className="h-6 w-6" />
-                {cartSummary.total_items > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {cartSummary.total_items}
-                  </span>
-                )}
-              </button>
-            )}
+          <div className="md:hidden flex items-center space-x-4">
+            {/* Cart button for mobile header - show for all users */}
+            <button
+              onClick={() => setShowCart(true)}
+              className="relative text-gray-700 hover:text-primary"
+            >
+              <ShoppingCart className="h-6 w-6" />
+              {(user ? cartSummary.items_count : localCartCount) > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {user ? cartSummary.items_count : localCartCount}
+                </span>
+              )}
+            </button>
             
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -239,9 +286,9 @@ const Navbar = () => {
                 >
                   <ShoppingCart className="h-4 w-4" />
                   <span>Cart</span>
-                  {cartSummary.total_items > 0 && (
+                  {cartSummary.items_count > 0 && (
                     <span className="ml-auto bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {cartSummary.total_items}
+                      {cartSummary.items_count}
                     </span>
                   )}
                 </button>
@@ -263,6 +310,22 @@ const Navbar = () => {
               </>
             ) : (
               <>
+                {/* Cart Button for Mobile - non-logged-in */}
+                <button
+                  onClick={() => {
+                    setShowCart(true);
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 flex items-center space-x-2"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Cart</span>
+                  {localCartCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {localCartCount}
+                    </span>
+                  )}
+                </button>
                 <Link
                   to="/login"
                   className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50"

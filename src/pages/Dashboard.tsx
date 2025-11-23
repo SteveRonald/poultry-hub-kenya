@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Eye, Package, ShoppingCart, TrendingUp, X, Menu } from 'lucide-react';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getImageUrl } from '../config/api';
 import MarketInsightsWidget from '../components/MarketInsightsWidget';
 
 const Dashboard = () => {
@@ -367,20 +367,36 @@ const Dashboard = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {orders.slice(0, 5).map(order => (
-                            <div key={order.order_number} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                              <div>
-                                <p className="font-medium text-sm">#{order.order_number}</p>
-                                <p className="text-xs text-gray-500">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0} qty</p>
+                          {orders.slice(0, 5).map(order => {
+                            const firstItem = order.items?.[0];
+                            const productImage = firstItem?.product_images?.[0] || firstItem?.product_images || null;
+                            return (
+                              <div key={order.order_number} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0 gap-3">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  {productImage && (
+                                    <img
+                                      src={getImageUrl(productImage)}
+                                      alt={firstItem?.product_name || 'Product'}
+                                      className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-md flex-shrink-0"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                      }}
+                                    />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium text-sm truncate">#{order.order_number}</p>
+                                    <p className="text-xs text-gray-500">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0} qty</p>
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <p className="font-medium text-sm">KSH {order.total_amount}</p>
+                                  <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                                    {order.status}
+                                  </Badge>
+                                </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-medium text-sm">KSH {order.total_amount}</p>
-                                <Badge className={`text-xs ${getStatusColor(order.status)}`}>
-                                  {order.status}
-                                </Badge>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           {orders.length === 0 && (
                             <p className="text-gray-500 text-center py-4">No orders yet</p>
                           )}
@@ -434,29 +450,44 @@ const Dashboard = () => {
                     <>
                       {/* Mobile-friendly orders display */}
                       <div className="block sm:hidden space-y-4">
-                        {orders.map(order => (
-                          <Card key={order.order_number} className="p-4">
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="font-medium text-sm">#{order.order_number}</p>
-                                  <p className="text-xs text-gray-500">Ordered: {new Date(order.created_at).toLocaleDateString()}</p>
-                                  <p className="text-xs text-gray-500">Updated: {new Date(order.last_status_updated || order.created_at).toLocaleString()}</p>
+                        {orders.map(order => {
+                          const firstItem = order.items?.[0];
+                          const productImage = firstItem?.product_images?.[0] || firstItem?.product_images || null;
+                          return (
+                            <Card key={order.order_number} className="p-4">
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-start gap-3">
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    {productImage && (
+                                      <img
+                                        src={getImageUrl(productImage)}
+                                        alt={firstItem?.product_name || 'Product'}
+                                        className="w-16 h-16 object-cover rounded-md flex-shrink-0"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium text-sm">#{order.order_number}</p>
+                                      <p className="text-xs text-gray-500">Ordered: {new Date(order.created_at).toLocaleDateString()}</p>
+                                      <p className="text-xs text-gray-500">Updated: {new Date(order.last_status_updated || order.created_at).toLocaleString()}</p>
+                                    </div>
+                                  </div>
+                                  <Badge className={getStatusColor(order.status)}>
+                                    {order.status}
+                                  </Badge>
                                 </div>
-                                <Badge className={getStatusColor(order.status)}>
-                                  {order.status}
-                                </Badge>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <p className="text-sm text-gray-600">Quantity</p>
-                                  <p className="font-medium">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</p>
+                                <div className="flex justify-between items-center">
+                                  <div>
+                                    <p className="text-sm text-gray-600">Quantity</p>
+                                    <p className="font-medium">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm text-gray-600">Total</p>
+                                    <p className="font-medium">KSH {order.total_amount}</p>
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-sm text-gray-600">Total</p>
-                                  <p className="font-medium">KSH {order.total_amount}</p>
-                                </div>
-                              </div>
                               <Button 
                                 size="sm" 
                                 variant="outline"
@@ -468,7 +499,8 @@ const Dashboard = () => {
                               </Button>
                             </div>
                           </Card>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {/* Desktop table */}
@@ -643,32 +675,47 @@ const Dashboard = () => {
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-primary">Order Items</h3>
                     <div className="space-y-4">
-                      {selectedOrder.items?.map((item: any, index: number) => (
-                        <div key={index} className="border rounded-lg p-4">
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
-                              <p className="text-gray-900">{item.product_name}</p>
+                      {selectedOrder.items?.map((item: any, index: number) => {
+                        const productImage = item.product_images?.[0] || item.product_images || null;
+                        return (
+                          <div key={index} className="border rounded-lg p-4">
+                            <div className="flex items-start gap-4 mb-4">
+                              {productImage && (
+                                <img
+                                  src={getImageUrl(productImage)}
+                                  alt={item.product_name || 'Product'}
+                                  className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-md flex-shrink-0"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              )}
+                              <div className="flex-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
+                                <p className="text-gray-900 font-medium">{item.product_name}</p>
+                              </div>
                             </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                              <p className="text-gray-900">{item.quantity}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                                <p className="text-gray-900">{item.quantity}</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                                <p className="text-gray-900">KSH {item.unit_price}</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
+                                <p className="text-lg font-semibold text-green-600">KSH {item.total_amount}</p>
+                              </div>
                             </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
-                              <p className="text-gray-900">KSH {item.unit_price}</p>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
-                              <p className="text-lg font-semibold text-green-600">KSH {item.total_amount}</p>
+                            <div className="mt-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+                              <p className="text-gray-900">{item.vendor_name}</p>
                             </div>
                           </div>
-                          <div className="mt-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
-                            <p className="text-gray-900">{item.vendor_name}</p>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 

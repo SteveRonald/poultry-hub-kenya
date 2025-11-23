@@ -258,17 +258,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
               
               {/* Mobile Content */}
               <div className="flex-1 overflow-y-auto">
-                {isAdmin ? (
-                  <div className="p-6 text-center text-gray-500">
-                    <div className="mb-4">
-                      <Bell className="h-12 w-12 text-gray-400 mx-auto" />
-                    </div>
-                    <p className="text-base font-medium">Admin notifications</p>
-                    <p className="text-sm text-gray-400 mt-2">
-                      System notifications will appear here
-                    </p>
-                  </div>
-                ) : loading ? (
+                {loading ? (
                   <div className="p-6 text-center text-gray-500">Loading...</div>
                 ) : notifications.length === 0 ? (
                   <div className="p-6 text-center text-gray-500">
@@ -331,17 +321,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
                 </button>
               </div>
               <div className="max-h-80 overflow-y-auto">
-                {isAdmin ? (
-                  <div className="p-4 text-center text-gray-500">
-                    <div className="mb-2">
-                      <Bell className="h-8 w-8 text-gray-400 mx-auto" />
-                    </div>
-                    <p className="text-sm">Admin notifications</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      System notifications will appear here
-                    </p>
-                  </div>
-                ) : loading ? (
+                {loading ? (
                   <div className="p-4 text-center text-gray-500">Loading...</div>
                 ) : notifications.length === 0 ? (
                   <div className="p-4 text-center text-gray-500">No notifications</div>

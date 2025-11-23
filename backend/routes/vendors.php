@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
+require_once __DIR__ . '/../utils/system_logs.php';
 require_once __DIR__ . '/../utils/commission.php';
 
 function handleGetVendors() {
@@ -217,6 +218,15 @@ function handleCreateProduct() {
         // Notify admins about new product
         $vendorName = $vendorInfo['farm_name'] ?: $vendorInfo['full_name'];
         notifyAllAdmins("New product submitted: '{$input['name']}' by {$vendorName}", 'info');
+        
+        // Log product creation
+        logActivity(
+            $payload['user_id'],
+            'vendor',
+            'create_product',
+            "Created new product: {$input['name']}",
+            ['product_id' => $productId, 'category' => $normalizedCategory, 'price' => $input['price']]
+        );
         
         echo json_encode([
             'message' => 'Product created successfully',

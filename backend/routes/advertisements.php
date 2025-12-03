@@ -1398,19 +1398,30 @@ function handleReactivateAdvertisement() {
         return;
     }
     
+    // Try to validate as JWT first (vendor)
     $payload = validateJWT($token);
-    if (!$payload) {
-        http_response_code(401);
-        echo json_encode(['error' => 'Invalid token']);
-        return;
+    $isAdmin = false;
+    $isVendor = false;
+    $adminSession = null;
+    
+    if ($payload) {
+        // JWT token - check if vendor or admin
+        $isAdmin = $payload['role'] === 'admin';
+        $isVendor = $payload['role'] === 'vendor';
+    } else {
+        // If JWT validation failed, try admin session token
+        if (!function_exists('validateAdminSession')) {
+            require_once __DIR__ . '/../routes/admin.php';
+        }
+        $adminSession = validateAdminSession($token);
+        if ($adminSession) {
+            $isAdmin = true;
+        }
     }
     
-    $isAdmin = $payload['role'] === 'admin';
-    $isVendor = $payload['role'] === 'vendor';
-    
     if (!$isAdmin && !$isVendor) {
-        http_response_code(403);
-        echo json_encode(['error' => 'Only vendors and admins can reactivate advertisements']);
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid token']);
         return;
     }
     
@@ -1573,7 +1584,22 @@ function handleReactivateAdvertisement() {
                     activated_by = ?
                 WHERE id = ?
             ");
-            $adminUserId = $payload['user_id'];
+            
+            // Get admin user_id from JWT token or admin session
+            $adminUserId = null;
+            if ($payload && isset($payload['user_id'])) {
+                $adminUserId = $payload['user_id'];
+            } elseif ($adminSession) {
+                // If using admin session token, we need to get admin_id from session
+                // Query the admin_sessions table to get admin details
+                $stmt_admin = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ?");
+                $stmt_admin->execute([$token]);
+                $sessionData = $stmt_admin->fetch(PDO::FETCH_ASSOC);
+                if ($sessionData) {
+                    $adminUserId = $sessionData['admin_id'];
+                }
+            }
+            
             $stmt->execute([
                 $tier, $totalPrice, $durationDays, $adTitle, $adDescription, $adImage,
                 $contentDuration, $previousPrice, $currentPrice, $pageLocationsJson,
@@ -1630,21 +1656,36 @@ function handleReactivateAdvertisement() {
             $adminMessage = "Vendor has reactivated an expired advertisement. Tier: {$tier}, Duration: {$durationDays} days, New Price: KSh " . number_format($totalPrice, 2);
             notifyAllAdmins($adminMessage, 'advertisement');
         } else {
-            // Admin reactivation
-            logActivity(
-                $payload['user_id'],
-                'admin',
-                'reactivate_advertisement',
-                "Reactivated advertisement: {$adTitle}",
-                [
-                    'advertisement_id' => $input['advertisement_id'],
-                    'tier' => $tier,
-                    'duration_days' => $durationDays,
-                    'new_price' => $totalPrice,
-                    'vendor_id' => $ad['vendor_id'],
-                    'activated_immediately' => $newStatus === 'active'
-                ]
-            );
+            // Admin reactivation - get admin user_id
+            $adminUserIdForLog = null;
+            if ($payload && isset($payload['user_id'])) {
+                $adminUserIdForLog = $payload['user_id'];
+            } elseif ($adminSession) {
+                // If using admin session token, get admin_id from session
+                $stmt_admin = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ?");
+                $stmt_admin->execute([$token]);
+                $sessionData = $stmt_admin->fetch(PDO::FETCH_ASSOC);
+                if ($sessionData) {
+                    $adminUserIdForLog = $sessionData['admin_id'];
+                }
+            }
+            
+            if ($adminUserIdForLog) {
+                logActivity(
+                    $adminUserIdForLog,
+                    'admin',
+                    'reactivate_advertisement',
+                    "Reactivated advertisement: {$adTitle}",
+                    [
+                        'advertisement_id' => $input['advertisement_id'],
+                        'tier' => $tier,
+                        'duration_days' => $durationDays,
+                        'new_price' => $totalPrice,
+                        'vendor_id' => $ad['vendor_id'],
+                        'activated_immediately' => $newStatus === 'active'
+                    ]
+                );
+            }
         }
         
         echo json_encode([

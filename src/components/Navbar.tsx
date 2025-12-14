@@ -98,7 +98,7 @@ const Navbar = () => {
     localStorage.removeItem('admin_session_token');
     localStorage.removeItem('admin_info');
     setAdminInfo(null);
-    navigate('/admin-login');
+    navigate('/control_90E-panel');
   };
 
   const isActive = (path: string) => location.pathname === path;

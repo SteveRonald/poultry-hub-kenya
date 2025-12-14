@@ -9,7 +9,7 @@ const AdminProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!sessionToken || !isAdmin) {
     toast.error("Access denied. Admin privileges required.");
-    return <Navigate to="/admin-login" replace />;
+    return <Navigate to="/control_90E-panel" replace />;
   }
   return <>{children}</>;
 };

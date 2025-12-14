@@ -209,7 +209,7 @@ const Login = () => {
         if (data.user?.role === 'vendor') {
           navigate('/vendor-dashboard');
         } else if (data.user?.role === 'admin') {
-          navigate('/admin-login');
+          navigate('/control_90E-panel');
         } else {
           navigate('/dashboard');
         }

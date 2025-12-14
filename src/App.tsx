@@ -89,7 +89,7 @@ const App = () => (
                           <AdminDashboard />
                         </AdminProtectedRoute>
                       } />
-                      <Route path="/admin-login" element={<AdminLogin />} />
+                      <Route path="/control_90E-panel" element={<AdminLogin />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <Chatbot />

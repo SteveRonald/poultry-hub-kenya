@@ -94,10 +94,26 @@ if (preg_match('#^api/products/([^/]+)$#', $path, $matches)) {
     }
 }
 
+// Handle dynamic route for single conversation (before switch)
+if (preg_match('#^api/conversations/([^/]+)$#', $path, $matches)) {
+    $conversationId = $matches[1] ?? null;
+    if ($method === 'DELETE' && $conversationId) {
+        include 'routes/messages_new.php';
+        $_GET['conversation_id'] = $conversationId;
+        handleDeleteConversation();
+        exit;
+    }
+    if ($method === 'GET' && $conversationId) {
+        include 'routes/conversations.php';
+        handleGetConversation($conversationId);
+        exit;
+    }
+}
+
 // Route the request
 switch ($path) {
     case '':
-        echo json_encode(['message' => 'Poultry Hub Kenya API is running', 'status' => 'success']);
+        echo json_encode(['message' => 'KukuSoko API is running', 'status' => 'success']);
         break;
         
     case 'api/users/login':
@@ -195,6 +211,66 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/products.php';
             handleGetProducts();
+        }
+        break;
+
+    case 'api/messages':
+        if ($method === 'GET') {
+            include 'routes/messages_new.php';
+            handleGetMessages();
+        } elseif ($method === 'POST') {
+            include 'routes/messages.php';
+            handleSendMessage();
+        }
+        break;
+        
+    case 'api/messages/send':
+        if ($method === 'POST') {
+            include 'routes/messages_new.php';
+            handleSendMessage();
+        }
+        break;
+        
+    case 'api/messages/read':
+        if ($method === 'POST') {
+            include 'routes/messages_new.php';
+            handleMarkMessagesAsRead();
+        }
+        break;
+        
+    case 'api/messages/delete':
+        if ($method === 'DELETE') {
+            include 'routes/messages_new.php';
+            handleDeleteMessage();
+        }
+        break;
+        
+    case 'api/conversations/create':
+        if ($method === 'POST') {
+            include 'routes/conversations.php';
+            handleCreateConversation();
+        }
+        break;
+        
+    case 'api/conversations':
+        if ($method === 'GET') {
+            include 'routes/conversations.php';
+            handleGetConversations();
+        }
+        break;
+        
+    case 'api/vendor/conversations':
+        // Redirect to new conversations endpoint
+        if ($method === 'GET') {
+            include 'routes/conversations.php';
+            handleGetConversations();
+        }
+        break;
+        
+    case 'api/user/conversations':
+        if ($method === 'GET') {
+            include 'routes/messages.php';
+            handleGetUserConversations();
         }
         break;
         
@@ -357,16 +433,6 @@ switch ($path) {
         }
         break;
         
-    case 'api/chat/conversations':
-        if ($method === 'GET') {
-            include 'routes/chat.php';
-            handleGetConversations();
-        } elseif ($method === 'POST') {
-            include 'routes/chat.php';
-            handleCreateConversation();
-        }
-        break;
-        
     case 'api/chat/feedback':
         if ($method === 'POST' || $method === 'GET') {
             include 'routes/chat_feedback.php';
@@ -395,6 +461,13 @@ switch ($path) {
         if ($method === 'POST') {
             include 'routes/admin.php';
             handleAdminLogout();
+        }
+        break;
+        
+    case 'api/admin/session/validate':
+        if ($method === 'POST') {
+            include 'routes/admin.php';
+            handleValidateAdminSession();
         }
         break;
         

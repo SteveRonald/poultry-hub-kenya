@@ -5,7 +5,7 @@
  */
 
 class WindowsTaskManager {
-    private $taskName = 'PoultryHubKenya_Backup';
+    private $taskName = 'KukuSoko_Backup';
     private $phpPath;
     private $scriptPath;
     

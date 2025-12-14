@@ -17,7 +17,7 @@ define('SMS_PROVIDER', getenv('SMS_PROVIDER') ?: 'africas_talking');
 // Africa's Talking Configuration
 define('AFRICASTALKING_USERNAME', getenv('AFRICASTALKING_USERNAME') ?: '');
 define('AFRICASTALKING_API_KEY', getenv('AFRICASTALKING_API_KEY') ?: '');
-define('AFRICASTALKING_SENDER_ID', getenv('AFRICASTALKING_SENDER_ID') ?: 'POULTRYHUB');
+define('AFRICASTALKING_SENDER_ID', getenv('AFRICASTALKING_SENDER_ID') ?: 'KUKUSOKO');
 
 // SMS Settings
 define('SMS_SEND_IMMEDIATELY', true); // Send SMS immediately (not queued)

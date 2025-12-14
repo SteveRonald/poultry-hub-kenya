@@ -699,7 +699,7 @@ class GoogleDriveBackup {
     
     private function findBackupFolder($accessToken) {
         try {
-            $url = 'https://www.googleapis.com/drive/v3/files?q=name%3D%22Poultry%20Hub%20Backups%22%20and%20mimeType%3D%22application%2Fvnd.google-apps.folder%22&fields=files(id,name)';
+            $url = 'https://www.googleapis.com/drive/v3/files?q=name%3D%22KukuSoko%20Backups%22%20and%20mimeType%3D%22application%2Fvnd.google-apps.folder%22&fields=files(id,name)';
             
             $options = [
                 'http' => [
@@ -730,7 +730,7 @@ class GoogleDriveBackup {
     private function createBackupFolder($accessToken) {
         try {
             $metadata = [
-                'name' => 'Poultry Hub Backups',
+                'name' => 'KukuSoko Backups',
                 'mimeType' => 'application/vnd.google-apps.folder'
             ];
             

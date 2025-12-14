@@ -1,5 +1,5 @@
 <?php
-// AI Configuration for Poultry Hub Kenya
+// AI Configuration for KukuSoko
 // Gemini (Google) - for image verification and description generation
 
 return [

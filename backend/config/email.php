@@ -441,21 +441,21 @@ function sendStyledEmail($email, $templateType, $data) {
 function getEmailSubject($templateType, $data) {
     switch ($templateType) {
         case 'order_confirmation':
-            return "Order Confirmation #{$data['order']['order_number']} - Poultry Hub Kenya";
+            return "Order Confirmation #{$data['order']['order_number']} - KukuSoko";
         case 'order_status_update':
-            return "Order Status Update #{$data['order']['order_number']} - Poultry Hub Kenya";
+            return "Order Status Update #{$data['order']['order_number']} - KukuSoko";
         case 'vendor_notification':
-            return "New Order #{$data['order']['order_number']} - Poultry Hub Kenya";
+            return "New Order #{$data['order']['order_number']} - KukuSoko";
         case 'admin_notification':
-            return "New Order Alert #{$data['order']['order_number']} - Poultry Hub Kenya";
+            return "New Order Alert #{$data['order']['order_number']} - KukuSoko";
         case 'otp_email':
-            return "Password Reset OTP - Poultry Hub Kenya";
+            return "Password Reset OTP - KukuSoko";
         case 'contact_notification':
-            return "New Contact Message: " . ($data['contact']['subject'] ?? 'Contact Form') . " - Poultry Hub Kenya";
+            return "New Contact Message: " . ($data['contact']['subject'] ?? 'Contact Form') . " - KukuSoko";
         case 'contact_confirmation':
-            return "Thank You for Contacting Us - Poultry Hub Kenya";
+            return "Thank You for Contacting Us - KukuSoko";
         default:
-            return "Notification - Poultry Hub Kenya";
+            return "Notification - KukuSoko";
     }
 }
 

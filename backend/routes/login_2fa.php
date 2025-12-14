@@ -47,7 +47,7 @@ function handleSendLoginOTP() {
     // This helps prevent unnecessary database queries for invalid emails
     if (!validateEmailDomain($email)) {
         http_response_code(400);
-        echo json_encode(['error' => 'The email address you provided does not exist. Please check your email address and try again.']);
+        echo json_encode(['error' => 'Invalid Email. Please check your email address and try again.']);
         return;
     }
     
@@ -83,7 +83,7 @@ function handleSendLoginOTP() {
         // SECURITY CHECK: Prevent admins from logging in through regular user login
         if ($user['role'] === 'admin') {
             http_response_code(401);
-            echo json_encode(['error' => 'Admin accounts must use the admin login page. Please go to /admin-login']);
+            echo json_encode(['error' => 'Invalid details']);
             return;
         }
         
@@ -101,7 +101,7 @@ function handleSendLoginOTP() {
         ];
         
         $emailHtml = getEmailTemplate('login_otp', $data);
-        $subject = 'Your Poultry Hub Kenya Login Verification Code';
+        $subject = 'Your KukuSoko Login Verification Code';
         
         $emailSent = sendEmail($user['email'], $subject, $emailHtml);
         
@@ -109,7 +109,7 @@ function handleSendLoginOTP() {
         if (!$emailSent) {
             error_log('Failed to send OTP email to: ' . $user['email']);
             http_response_code(503);
-            echo json_encode(['error' => 'Unable to send OTP to your email address. The email service is temporarily unavailable. Please try again later or contact support if this issue persists.']);
+            echo json_encode(['error' => 'Unable to send OTP to your email address.Please try again later']);
             return;
         }
         
@@ -171,7 +171,7 @@ function handleVerifyLoginOTP() {
     // Validate OTP format (6 digits)
     if (!preg_match('/^\d{6}$/', $otp)) {
         http_response_code(400);
-        echo json_encode(['error' => 'Invalid OTP format']);
+        echo json_encode(['error' => 'Invalid OTP']);
         return;
     }
     

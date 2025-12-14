@@ -141,7 +141,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-primary flex items-center">
@@ -159,8 +159,8 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
           {(user ? cartItems : localCartItems).length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-600 mb-2">Your cart is empty</h3>
-              <p className="text-gray-500 mb-4">Add some products to get started!</p>
+              <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">Your cart is empty</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">Add some products to get started!</p>
               <Button onClick={onClose} className="btn-primary">
                 Continue Shopping
               </Button>
@@ -188,7 +188,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                                 }}
                               />
                             ) : (
-                              <div className="text-gray-400 text-xs text-center">
+                              <div className="text-gray-400 dark:text-gray-500 text-xs text-center">
                                 No Image
                               </div>
                             )}
@@ -196,9 +196,9 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
 
                           {/* Product Details */}
                           <div className="flex-1">
-                            <h3 className="font-semibold text-gray-900">{item.product_name}</h3>
-                            {item.category && <p className="text-sm text-gray-600 capitalize">{item.category}</p>}
-                            {user && item.vendor_name && <p className="text-sm text-gray-500">Vendor: {item.vendor_name}</p>}
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{item.product_name}</h3>
+                            {item.category && <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{item.category}</p>}
+                            {user && item.vendor_name && <p className="text-sm text-gray-500 dark:text-gray-400">Vendor: {item.vendor_name}</p>}
                             <p className="text-lg font-bold text-primary">KSH {Number(item.price).toFixed(2)}</p>
                           </div>
 
@@ -291,11 +291,11 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   {/* Cart Summary */}
-                  <Card className="bg-gray-50">
+                  <Card className="bg-gray-50 dark:bg-gray-700">
                     <CardContent className="p-6">
                       <div className="flex justify-between items-center mb-4">
-                        <span className="text-lg font-semibold">Total Items:</span>
-                        <span className="text-lg font-bold">
+                        <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Total Items:</span>
+                        <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
                           {user 
                             ? cartSummary.items_count 
                             : localCartItems.length
@@ -303,7 +303,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                         </span>
                       </div>
                       <div className="flex justify-between items-center mb-6">
-                        <span className="text-xl font-bold">Total Amount:</span>
+                        <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Total Amount:</span>
                         <span className="text-2xl font-bold text-primary">
                           KSH {Number(user ? cartSummary.total_amount : localCartTotal).toFixed(2)}
                         </span>
@@ -382,7 +382,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                         />
                       </div>
                       <div>
-                        <label htmlFor="contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="contact_phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Contact Phone *
                         </label>
                         <Input
@@ -402,7 +402,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                           id="payment_method"
                           value={checkoutData.payment_method}
                           onChange={(e) => setCheckoutData(prev => ({ ...prev, payment_method: e.target.value, payment_account_number: '' }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                           required
                         >
                           <option value="mpesa">M-Pesa</option>
@@ -429,7 +429,7 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                             required
                             maxLength={10}
                           />
-                          <p className="text-xs text-gray-500 mt-1">Enter your M-Pesa phone number (10 digits)</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Enter your M-Pesa phone number (10 digits)</p>
                         </div>
                       )}
 

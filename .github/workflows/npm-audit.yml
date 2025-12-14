@@ -1,0 +1,31 @@
+name: "npm Audit (production)"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 3 * * 1' # weekly on Monday at 03:00 UTC
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies (CI)
+        run: |
+          npm ci
+
+      - name: Run npm audit (fail on high/critical)
+        run: |
+          echo "Running npm audit (will fail for vulnerabilities >= high)"
+          npm audit --production --audit-level=high

@@ -284,7 +284,7 @@ const Index = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-gray-900">
       <Navbar />
       {/* Add padding-top if premium ad is displayed at top */}
       {hasPremiumAd && <div style={{ height: '90px' }} />}
@@ -316,7 +316,7 @@ const Index = () => {
                 </Link>
                 {!user && (
                   <Link to="/register" className="w-full sm:w-auto">
-                    <Button variant="outline" className="w-full sm:w-auto border-white text-primary hover:bg-white hover:text-black px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
+                    <Button variant="outline" className="w-full sm:w-auto border-white text-black hover:bg-white hover:text-primary px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
                       Become a Vendor
                     </Button>
                   </Link>
@@ -326,7 +326,7 @@ const Index = () => {
             
             {/* Animated Image Carousel */}
             <div className="relative h-[300px] sm:h-[400px] md:h-[450px] lg:h-[500px] w-full">
-              <div className="relative w-full h-full rounded-lg shadow-2xl overflow-hidden bg-gray-200">
+              <div className="relative w-full h-full rounded-lg shadow-2xl overflow-hidden bg-gray-200 dark:bg-gray-800">
                 {heroImages.map((image, index) => (
                   <div
                     key={`hero-image-${index}-${image.url.substring(0, 20)}`}
@@ -428,14 +428,14 @@ const Index = () => {
       {/* Features Section */}
       <section 
         ref={featuresRef}
-        className="py-16 bg-white"
+        className="py-16 bg-white dark:bg-gray-900"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out">
             <h2 className="text-3xl md:text-3xl font-bold text-primary mb-4">
               Why Choose PoultryHubKenya (KE)?
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
               We're revolutionizing Kenya's poultry industry by connecting farmers directly with customers
             </p>
           </div>
@@ -452,7 +452,7 @@ const Index = () => {
                     {feature.icon}
                   </div>
                   <h3 className="text-xl font-semibold mb-2 text-primary">{feature.title}</h3>
-                  <p className="text-gray-600">{feature.description}</p>
+                  <p className="text-gray-600 dark:text-gray-300">{feature.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -463,14 +463,14 @@ const Index = () => {
       {/* Categories Section */}
       <section 
         ref={categoriesRef}
-        className="py-16 bg-beige"
+        className="py-16 bg-beige dark:bg-gray-800"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out">
             <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">
               Shop by Category
             </h2>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-gray-600 dark:text-gray-300">
               Find exactly what you need for your poultry business
             </p>
           </div>
@@ -493,7 +493,7 @@ const Index = () => {
                   </div>
                 </div>
                 <CardContent className="p-6">
-                  <p className="text-gray-600 mb-4">{category.description}</p>
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">{category.description}</p>
                   <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
                     Shop Now
                     <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
@@ -508,7 +508,7 @@ const Index = () => {
       {/* Testimonials Section */}
       <section 
         ref={testimonialsRef}
-        className="py-16 bg-white"
+        className="py-16 bg-white dark:bg-gray-900"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out">
@@ -536,7 +536,7 @@ const Index = () => {
                   <p className="text-gray-600 mb-4 italic">"{testimonial.content}"</p>
                   <div>
                     <p className="font-semibold text-primary">{testimonial.name}</p>
-                    <p className="text-sm text-gray-500">{testimonial.role}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{testimonial.role}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -557,7 +557,7 @@ const Index = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center opacity-0 translate-y-8 transition-all duration-1000 delay-400 ease-out animate-out">
             {!user && (
               <Link to="/register" className="inline-block">
-                <Button className="bg-accent hover:bg-accent/90 text-black font-semibold px-8 py-3 text-lg transform hover:scale-105 transition-transform">
+                <Button className="bg-accent hover:bg-accent/90 text-black dark:text-black font-semibold px-8 py-3 text-lg transform hover:scale-105 transition-transform">
                   Start Selling
                 </Button>
               </Link>

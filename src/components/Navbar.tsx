@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, User, LogOut, ShoppingCart } from 'lucide-react';
+import { Menu, X, User, LogOut, ShoppingCart, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { Button } from './ui/button';
 import { getApiUrl } from '../config/api';
 import Cart from './Cart';
@@ -16,6 +17,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { cartSummary, getLocalCart } = useCart();
+  const { theme, toggleTheme } = useTheme();
   const [localCartCount, setLocalCartCount] = useState(0);
 
   // Update local cart count for non-logged-in users
@@ -112,7 +114,7 @@ const Navbar = () => {
 
   return (
     <>
-    <nav className="bg-white shadow-lg sticky top-0 z-50">
+    <nav className="bg-white dark:bg-gray-900 shadow-lg sticky top-0 z-50">
       <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 md:h-24">
           {/* Logo - Left side */}
@@ -131,7 +133,7 @@ const Navbar = () => {
                 className={`px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                   isActive(path)
                     ? 'text-primary border-b-2 border-primary'
-                    : 'text-gray-700 hover:text-primary'
+                    : 'text-gray-900 dark:text-white hover:text-primary dark:hover:text-primary font-semibold'
                 }`}
               >
                 {label}
@@ -141,6 +143,17 @@ const Navbar = () => {
 
           {/* User Menu - Right side */}
           <div className="hidden md:flex items-center flex-shrink-0 space-x-4">
+            {/* Dark Mode Toggle - Always visible */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleTheme}
+              className="flex items-center space-x-2"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            
             {adminInfo ? (
               <div className="flex items-center space-x-4">
                 <Link to="/admin-dashboard">
@@ -212,10 +225,18 @@ const Navbar = () => {
 
           {/* Mobile menu button and cart */}
           <div className="md:hidden flex items-center space-x-4">
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="text-gray-900 dark:text-gray-100 hover:text-primary dark:hover:text-primary p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+            </button>
             {/* Cart button for mobile header - show for all users */}
             <button
               onClick={() => setShowCart(true)}
-              className="relative text-gray-700 hover:text-primary"
+              className="relative text-gray-700 dark:text-gray-300 hover:text-primary"
             >
               <ShoppingCart className="h-6 w-6" />
               {(user ? cartSummary.items_count : localCartCount) > 0 && (
@@ -227,7 +248,7 @@ const Navbar = () => {
             
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="text-gray-700 hover:text-primary"
+              className="text-gray-700 dark:text-gray-300 hover:text-primary"
             >
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -238,7 +259,7 @@ const Navbar = () => {
 
       {/* Mobile Navigation */}
       {isOpen && (
-        <div className="md:hidden bg-white border-t">
+        <div className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
           <div className="px-2 pt-2 pb-3 space-y-1">
             {navLinks.map(({ path, label }) => (
               <Link
@@ -247,7 +268,7 @@ const Navbar = () => {
                 className={`block px-3 py-2 text-base font-medium transition-colors ${
                   isActive(path)
                     ? 'text-primary bg-primary/10'
-                    : 'text-gray-700 hover:text-primary hover:bg-gray-50'
+                    : 'text-gray-900 dark:text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
                 onClick={() => setIsOpen(false)}
               >
@@ -263,7 +284,7 @@ const Navbar = () => {
                 >
                   Admin Dashboard
                 </Link>
-                <div className="px-3 py-2 text-sm text-gray-500">
+                <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                   Admin: {adminInfo.full_name}
                 </div>
                 <button
@@ -282,7 +303,7 @@ const Navbar = () => {
                     setShowCart(true);
                     setIsOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 flex items-center space-x-2"
+                  className="w-full text-left px-3 py-2 text-base font-medium text-gray-900 dark:text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center space-x-2"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   <span>Cart</span>
@@ -316,7 +337,7 @@ const Navbar = () => {
                     setShowCart(true);
                     setIsOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50 flex items-center space-x-2"
+                  className="w-full text-left px-3 py-2 text-base font-medium text-gray-900 dark:text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center space-x-2"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   <span>Cart</span>
@@ -328,14 +349,14 @@ const Navbar = () => {
                 </button>
                 <Link
                   to="/login"
-                  className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50"
+                  className="block px-3 py-2 text-base font-medium text-gray-900 dark:text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800"
                   onClick={() => setIsOpen(false)}
                 >
                   Login
                 </Link>
                 <Link
                   to="/register"
-                  className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary hover:bg-gray-50"
+                  className="block px-3 py-2 text-base font-medium text-gray-900 dark:text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800"
                   onClick={() => setIsOpen(false)}
                 >
                   Register

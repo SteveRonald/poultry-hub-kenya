@@ -202,8 +202,8 @@ class OpenRouterChat {
             CURLOPT_HTTPHEADER => [
                 'Authorization: Bearer ' . $this->apiKey,
                 'Content-Type: application/json',
-                'HTTP-Referer: https://poultryhubkenya.com', // Optional: for analytics
-                'X-Title: PoultryHubKenya Chatbot' // Optional: for analytics
+                'HTTP-Referer: https://kukusoko.com', // Optional: for analytics
+                'X-Title: KukuSoko Chatbot' // Optional: for analytics
             ],
             CURLOPT_POSTFIELDS => json_encode($data),
             CURLOPT_TIMEOUT => 30, // 30 second timeout

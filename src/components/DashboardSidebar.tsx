@@ -67,7 +67,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     } else if (type === 'vendor') {
       return new Set(['dashboard', 'products', 'orders', 'sales', 'account']);
     } else {
-      return new Set(['dashboard', 'orders', 'account']);
+      return new Set(['dashboard', 'orders', 'communication', 'account']);
     }
   };
 
@@ -152,6 +152,15 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       ]
     },
     {
+      id: 'communication',
+      label: 'Messages',
+      icon: MessageSquare,
+      collapsible: false,
+      items: [
+        { id: 'messages', label: 'Customer Messages', icon: MessageSquare }
+      ]
+    },
+    {
       id: 'account',
       label: 'Account',
       icon: User,
@@ -182,6 +191,20 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           label: 'My Orders', 
           icon: ShoppingCart,
           badge: stats.pendingOrders || 0
+        }
+      ]
+    },
+    {
+      id: 'communication',
+      label: 'Messages',
+      icon: MessageSquare,
+      collapsible: false,
+      items: [
+        { 
+          id: 'messages', 
+          label: 'My Messages', 
+          icon: MessageSquare,
+          badge: stats.unreadMessages || 0
         }
       ]
     },
@@ -308,7 +331,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-16 sm:top-20 md:top-24 left-0 h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] md:h-[calc(100vh-6rem)] bg-gray-50 border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out overflow-y-auto",
+          "fixed top-16 sm:top-20 md:top-24 left-0 h-[calc(100vh-4rem)] sm:h-[calc(100vh-5rem)] md:h-[calc(100vh-6rem)] bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 z-50 transition-transform duration-300 ease-in-out overflow-y-auto",
           "lg:translate-x-0 lg:fixed lg:top-24 lg:left-0 lg:h-[calc(100vh-6rem)] lg:z-30 lg:overflow-y-auto",
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
           "w-64"
@@ -316,13 +339,15 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       >
         <div className="flex flex-col h-full">
           {/* Mobile Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 lg:hidden">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 lg:hidden">
             <h2 className="text-lg font-semibold text-primary">
               {type === 'vendor' ? 'Vendor Dashboard' : type === 'admin' ? 'Admin Dashboard' : 'Customer Dashboard'}
             </h2>
             <button
               onClick={onMobileClose}
               className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              aria-label="Close sidebar"
+              title="Close sidebar"
             >
               <X className="h-5 w-5" />
             </button>
@@ -342,8 +367,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                       onClick={() => toggleGroup(group.id)}
                       className={cn(
                         "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                        "hover:bg-gray-100",
-                        hasActiveItem ? "text-primary bg-primary/10" : "text-gray-700"
+                        "hover:bg-gray-100 dark:hover:bg-gray-800",
+                        hasActiveItem ? "text-primary bg-primary/10 dark:bg-primary/20" : "text-gray-700 dark:text-gray-200"
                       )}
                     >
                       <div className="flex items-center space-x-2">
@@ -358,8 +383,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                     </button>
                   ) : (
                     <div className="px-3 py-2 flex items-center space-x-2">
-                      <group.icon className="h-4 w-4 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-700">{group.label}</span>
+                      <group.icon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{group.label}</span>
                     </div>
                   )}
 
@@ -376,10 +401,10 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                             onClick={() => handleItemClick(item.id)}
                             className={cn(
                               "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors",
-                              "hover:bg-gray-100",
+                              "hover:bg-gray-100 dark:hover:bg-gray-800",
                               isActive
                                 ? "bg-primary text-white hover:bg-primary/90"
-                                : "text-gray-700 hover:text-primary"
+                                : "text-gray-700 dark:text-gray-200 hover:text-primary"
                             )}
                           >
                             <div className="flex items-center space-x-2">
@@ -391,7 +416,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                                 className={cn(
                                   "px-2 py-0.5 rounded-full text-xs font-medium",
                                   isActive
-                                    ? "bg-white text-primary"
+                                    ? "bg-white dark:bg-gray-800 text-primary"
                                     : "bg-primary text-white"
                                 )}
                               >

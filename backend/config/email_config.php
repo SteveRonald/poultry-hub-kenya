@@ -13,7 +13,7 @@ return [
         'password' => getenv('SMTP_PASSWORD') ?: '',
         'encryption' => getenv('SMTP_ENCRYPTION') ?: 'tls',
         'from_email' => getenv('SMTP_FROM_EMAIL') ?: getenv('SMTP_USERNAME') ?: '',
-        'from_name' => getenv('SMTP_FROM_NAME') ?: 'Poultry Hub Kenya'
+        'from_name' => getenv('SMTP_FROM_NAME') ?: 'KukuSoko'
     ],
     
     'admin_email' => getenv('ADMIN_EMAIL') ?: getenv('SMTP_USERNAME') ?: '',

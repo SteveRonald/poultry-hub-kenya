@@ -1,6 +1,6 @@
 {
-    "name": "poultry-hub-kenya/backend",
-    "description": "Poultry Hub Kenya Backend API",
+    "name": "kukusoko/backend",
+    "description": "KukuSoko Backend API",
     "type": "project",
     "require": {
         "php": ">=7.4",
@@ -19,7 +19,7 @@
     }, 
     "scripts": {
         "post-install-cmd": [
-            "echo 'Poultry Hub Kenya Backend installed successfully'"
+            "echo 'KukuSoko Backend installed successfully'"
         ]
     },
     "config": {

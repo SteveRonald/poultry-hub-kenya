@@ -1,4 +1,5 @@
 <?php
+// Chat and Conversation Handler Routes for KukuSoko
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/env_loader.php'; // Load environment variables
 require_once __DIR__ . '/../utils/auth.php';
@@ -638,7 +639,7 @@ function processIntent($intent, $message, $userId = null, $conversationId = null
             foreach ($createPatterns as $pattern) {
                 if (stripos($messageLower, $pattern) !== false) {
                     // Detailed account creation instructions
-                    $response['message'] = "Here's how to create an account on PoultryHubKenya:\n\n📝 Steps to Register:\n\n1. Click on 'Register' button (top right of the page)\n2. Fill in your details:\n   • Full Name\n   • Email Address\n   • Phone Number (optional)\n   • Password\n3. Choose your account type:\n   • Customer - For buying products\n   • Vendor/Farmer - For selling products\n4. Click 'Register'\n5. If registering as a vendor, provide additional details:\n   • Farm Name\n   • Farm Description\n   • Location\n   • ID Number\n\n✅ Once registered, you can:\n• Browse and buy products (as customer)\n• List and sell products (as vendor)\n• Track your orders\n• Manage your profile\n\nNeed help with anything else?";
+                    $response['message'] = "Here's how to create an account on KukuSoko:\n\n📝 Steps to Register:\n\n1. Click on 'Register' button (top right of the page)\n2. Fill in your details:\n   • Full Name\n   • Email Address\n   • Phone Number (optional)\n   • Password\n3. Choose your account type:\n   • Customer - For buying products\n   • Vendor/Farmer - For selling products\n4. Click 'Register'\n5. If registering as a vendor, provide additional details:\n   • Farm Name\n   • Farm Description\n   • Location\n   • ID Number\n\n✅ Once registered, you can:\n• Browse and buy products (as customer)\n• List and sell products (as vendor)\n• Track your orders\n• Manage your profile\n\nNeed help with anything else?";
                     $response['quick_replies'] = [
                         ['text' => 'Go to Register Page', 'action' => 'navigate', 'payload' => ['url' => '/register']],
                         ['text' => 'Login Help', 'action' => 'message', 'payload' => ['message' => 'How do I log in?']]
@@ -964,8 +965,8 @@ function handleChatMessage() {
             if (!$isWebsiteQ) {
                 // Non-poultry, non-website question - return polite decline with helpful suggestions
                 $declineMessages = [
-                    'en' => "I'm a poultry farming expert assistant for PoultryHubKenya. I can only help with poultry-related questions.\n\nI can help you with:\n\n• Poultry farming advice (chickens, ducks, turkeys)\n• Chicken breeds (broilers, layers, kienyeji/indigenous)\n• Feeding and nutrition\n• Health and disease management\n• Egg production\n• Housing and management\n• Market prices and trends\n\nHow can I assist you with poultry farming?",
-                    'sw' => "Mimi ni msaidizi wa mtaalamu wa ufugaji wa kuku wa PoultryHubKenya. Ninaweza kusaidia tu kuhusu masuala ya ufugaji wa kuku.\n\nNinaweza kukusaidia kuhusu:\n\n• Ushauri wa ufugaji wa kuku (kuku, bata, bata mzinga)\n• Aina za kuku (broiler, layer, kienyeji)\n• Chakula na lishe\n• Afya na udhibiti wa magonjwa\n• Uzalishaji wa mayai\n• Makao na usimamizi\n• Bei za soko na mienendo\n\nNisaidieje kuhusu ufugaji wa kuku?"
+                    'en' => "I'm a poultry farming expert assistant for KukuSoko. I can only help with poultry-related questions.\n\nI can help you with:\n\n• Poultry farming advice (chickens, ducks, turkeys)\n• Chicken breeds (broilers, layers, kienyeji/indigenous)\n• Feeding and nutrition\n• Health and disease management\n• Egg production\n• Housing and management\n• Market prices and trends\n\nHow can I assist you with poultry farming?",
+                    'sw' => "Mimi ni msaidizi wa mtaalamu wa ufugaji wa kuku wa KukuSoko. Ninaweza kusaidia tu kuhusu masuala ya ufugaji wa kuku.\n\nNinaweza kukusaidia kuhusu:\n\n• Ushauri wa ufugaji wa kuku (kuku, bata, bata mzinga)\n• Aina za kuku (broiler, layer, kienyeji)\n• Chakula na lishe\n• Afya na udhibiti wa magonjwa\n• Uzalishaji wa mayai\n• Makao na usimamizi\n• Bei za soko na mienendo\n\nNisaidieje kuhusu ufugaji wa kuku?"
                 ];
                 
                 $quickReplies = [

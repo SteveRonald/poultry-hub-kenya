@@ -270,7 +270,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-beige">
+    <div className="min-h-screen bg-beige dark:bg-gray-900">
       <Navbar />
       <div className="py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md mx-auto">
@@ -279,7 +279,7 @@ const Login = () => {
               <CardTitle className="text-2xl font-bold text-primary">
                 {step === 1 ? 'Welcome Back' : 'Verify Your Identity'}
               </CardTitle>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-600 dark:text-gray-300 mt-2">
                 {step === 1 
                   ? 'Sign in to your PoultryHubKE account' 
                   : 'Enter the 6-digit code sent to your email'}
@@ -304,7 +304,7 @@ const Login = () => {
                   </div>
 
                   <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Password
                     </label>
                     <div className="relative">
@@ -319,7 +319,7 @@ const Login = () => {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -387,7 +387,7 @@ const Login = () => {
                   </Button>
 
                   <div className="text-center space-y-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
                       {countdown > 0 ? (
                         <span className="flex items-center justify-center gap-1">
                           <Clock className="h-4 w-4" />
@@ -418,12 +418,12 @@ const Login = () => {
 
               {step === 1 && (
                 <div className="mt-6 text-center space-y-3">
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-300">
                     <Link to="/forgot-password" className="text-primary hover:underline font-medium">
                       Forgot your password?
                     </Link>
                   </p>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-300">
                     Don't have an account?{' '}
                     <Link to="/register" className="text-primary hover:underline font-medium">
                       Sign up here

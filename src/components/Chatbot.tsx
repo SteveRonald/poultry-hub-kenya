@@ -817,7 +817,7 @@ const Chatbot: React.FC = () => {
       }}
     >
       <div 
-        className="bg-white rounded-lg shadow-2xl border-2 border-primary relative" 
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 border-primary relative" 
         style={{ 
           animation: 'slide-up-fade-in 0.5s ease-out',
           backgroundColor: '#ffffff',
@@ -831,7 +831,7 @@ const Chatbot: React.FC = () => {
         {/* Close button */}
         <button
           onClick={() => setShowWelcomeNotification(false)}
-          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 transition-colors z-10"
+          className="absolute top-2 right-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors z-10"
           aria-label="Close notification"
         >
           <X className="h-4 w-4" />
@@ -863,7 +863,7 @@ const Chatbot: React.FC = () => {
         </div>
         
         {/* Arrow pointing to chatbot button */}
-        <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white border-r-2 border-b-2 border-primary transform rotate-45"></div>
+        <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white dark:bg-gray-800 border-r-2 border-b-2 border-primary transform rotate-45"></div>
       </div>
     </div>
   ) : null;
@@ -973,7 +973,7 @@ const Chatbot: React.FC = () => {
           
           {/* Conversations Sidebar (for logged-in users) */}
           {user && showConversations && (
-            <div className="absolute inset-0 bg-white z-10 flex flex-col">
+            <div className="absolute inset-0 bg-white dark:bg-gray-800 z-10 flex flex-col">
               {/* Conversations Header */}
               <div className="bg-gradient-to-r from-primary to-secondary text-white p-3 sm:p-4 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2 flex-1">
@@ -1059,8 +1059,8 @@ const Chatbot: React.FC = () => {
               {/* Conversations List */}
               <div className="flex-1 overflow-y-auto p-2">
                 {conversations.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
                     <p className="text-sm">No previous conversations</p>
                     <p className="text-xs text-gray-400 mt-1">Start chatting to create your first conversation</p>
                   </div>
@@ -1071,7 +1071,7 @@ const Chatbot: React.FC = () => {
                       <div className="mb-2 pb-2 border-b border-gray-200">
                         <button
                           onClick={selectAllConversations}
-                          className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 w-full p-2 rounded-lg hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 w-full p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                         >
                           {selectedConversations.size === conversations.length ? (
                             <CheckSquare className="h-5 w-5 text-primary" />
@@ -1128,7 +1128,7 @@ const Chatbot: React.FC = () => {
                                 className="flex-1 min-w-0 text-left"
                               >
                                 <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-medium text-sm text-gray-900 truncate">
+                                  <h4 className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
                                     {conv.title || 'New Conversation'}
                                   </h4>
                                   {currentConversationId === conv.id && !isSelectMode && (
@@ -1140,7 +1140,7 @@ const Chatbot: React.FC = () => {
                                     {conv.last_message}
                                   </p>
                                 )}
-                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
                                   <span>{conv.message_count} {conv.message_count === 1 ? 'message' : 'messages'}</span>
                                   {conv.last_message_at && (
                                     <>
@@ -1205,7 +1205,7 @@ const Chatbot: React.FC = () => {
           {/* Messages - Hide when conversations sidebar is open */}
           {!showConversations && (
             <>
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 dark:bg-gray-900">
               {messages.map((message) => (
               <div
                 key={message.id}
@@ -1215,7 +1215,7 @@ const Chatbot: React.FC = () => {
                   className={`max-w-[85%] sm:max-w-[80%] rounded-lg p-2.5 sm:p-3 ${
                     message.sender === 'user'
                       ? 'bg-primary text-white'
-                      : 'bg-white text-gray-800 border border-gray-200'
+                      : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700'
                   }`}
                 >
                   <div className="flex items-start gap-2">
@@ -1239,7 +1239,7 @@ const Chatbot: React.FC = () => {
                             className="p-1.5 hover:bg-green-50 rounded-full transition-colors group"
                             title="Helpful"
                           >
-                            <ThumbsUp className="h-4 w-4 text-gray-400 group-hover:text-green-500 transition-colors" />
+                            <ThumbsUp className="h-4 w-4 text-gray-400 dark:text-gray-500 group-hover:text-green-500 transition-colors" />
                           </button>
                           <button
                             onClick={() => handleFeedback(message.message_id!, 'negative', message.conversation_id)}
@@ -1279,7 +1279,7 @@ const Chatbot: React.FC = () => {
             {/* Loading Indicator with Blinking Dots */}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 max-w-[85%] sm:max-w-[80%] shadow-sm">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 max-w-[85%] sm:max-w-[80%] shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <Bot className="h-5 w-5 sm:h-6 sm:w-6 text-primary animate-pulse" />
@@ -1301,7 +1301,7 @@ const Chatbot: React.FC = () => {
 
             {/* Language Selector - Within chat area with blinking animation (only for logged-in users) */}
             {user && (
-              <div className="border-t border-gray-200 px-3 sm:px-4 pt-2 pb-1 bg-white flex-shrink-0">
+              <div className="border-t border-gray-200 dark:border-gray-700 px-3 sm:px-4 pt-2 pb-1 bg-white dark:bg-gray-800 flex-shrink-0">
                 <div className="flex items-center justify-center">
                   <div className="relative">
                     <style>{`
@@ -1350,6 +1350,8 @@ const Chatbot: React.FC = () => {
                         }}
                         onClick={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
+                        title="Select preferred language"
+                        aria-label="Select preferred language"
                         className="absolute inset-0 opacity-0 cursor-pointer z-10"
                         disabled={isLoadingLanguage}
                         style={{ fontSize: 'inherit' }}
@@ -1364,7 +1366,7 @@ const Chatbot: React.FC = () => {
             )}
 
             {/* Input */}
-            <div className="border-t border-gray-200 p-3 sm:p-4 bg-white rounded-b-lg flex-shrink-0">
+            <div className="border-t border-gray-200 dark:border-gray-700 p-3 sm:p-4 bg-white dark:bg-gray-800 rounded-b-lg flex-shrink-0">
               <div className="flex gap-2">
                 <input
                   ref={inputRef}
@@ -1381,7 +1383,7 @@ const Chatbot: React.FC = () => {
                   }}
                   onKeyPress={handleKeyPress}
                   placeholder="Ask me anything..."
-                  className="flex-1 border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   disabled={isLoading}
                 />
                 <button
@@ -1402,17 +1404,17 @@ const Chatbot: React.FC = () => {
       {/* Custom Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 border-2 border-gray-200">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full mx-4 border-2 border-gray-200 dark:border-gray-700">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="bg-red-100 rounded-full p-2">
-                  <Trash2 className="h-6 w-6 text-red-600" />
+                <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-2">
+                  <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   {conversationToDelete ? 'Delete Conversation' : 'Delete Conversations'}
                 </h3>
               </div>
-              <p className="text-gray-600 mb-6">
+              <p className="text-gray-600 dark:text-gray-300 mb-6">
                 {conversationToDelete 
                   ? 'Are you sure you want to delete this conversation? This action cannot be undone.'
                   : `Are you sure you want to delete ${selectedConversations.size} ${selectedConversations.size === 1 ? 'conversation' : 'conversations'}? This action cannot be undone.`

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Star, MapPin, Check, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Star, MapPin, Check, ChevronDown, ChevronUp, X, MessageSquare } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
 import ProductRatings from '../components/ProductRatings';
+import ChatButton from '../components/ChatButton';
 
 interface ProductDetails {
   id: string;
@@ -431,6 +432,16 @@ const ProductDetails = () => {
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Order Now
               </Button>
+            </div>
+
+            {/* Chat action separated to avoid mis-clicks */}
+            <div className="pt-3 border-t mt-2">
+              <ChatButton
+                productId={product.id}
+                vendorId={product.vendor_id}
+                vendorUserId={product.vendor_profiles?.user_id}
+                className="w-full h-10 text-sm"
+              />
             </div>
 
             {/* Stock Status */}

@@ -76,7 +76,7 @@ const Contact = () => {
     {
       icon: <Mail className="h-6 w-6 text-accent" />,
       title: "Email",
-      details: ["okothroni863@gmail.com", "support@poultryhubkenya.com", "kothroni863@gmail.com"],
+      details: ["okothroni863@gmail.com", "support@kukusoko.com", "kothroni863@gmail.com"],
       description: "We'll respond within 24 hours"
     },
     {
@@ -95,7 +95,7 @@ const Contact = () => {
 
   const faqs = [
     {
-      question: "How do I become a vendor on PoultryHubKenya(KE)?",
+      question: "How do I become a vendor on KukuSoko?",
       answer: "You can register as a vendor by clicking the 'Register' button and selecting 'Vendor/Farmer' as your account type. Your application will be reviewed by our admin team."
     },
     {

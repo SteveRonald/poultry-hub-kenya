@@ -81,7 +81,7 @@ class SMSTemplates {
         
         $message = "Hello {$customerName}, your order #{$orderId} has been delivered successfully! ";
         $message .= "Total: KES {$totalAmount}. ";
-        $message .= "Thank you for shopping with Poultry Hub Kenya! We hope to serve you again soon.";
+        $message .= "Thank you for shopping with KukuSoko! We hope to serve you again soon.";
         
         return $message;
     }

@@ -17,6 +17,7 @@ import AdvertisementManager from '../components/AdvertisementManager';
 import CreateAdvertisementForm from '../components/CreateAdvertisementForm';
 import MarketInsightsWidget from '../components/MarketInsightsWidget';
 import { useToast } from '../hooks/use-toast';
+import VendorInbox from './VendorInbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1416,7 +1417,7 @@ const VendorDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-gray-900">
       <Navbar />
       
       <div className="flex">
@@ -1459,7 +1460,7 @@ const VendorDashboard = () => {
                   <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {user?.name || user?.name || user?.email || 'Vendor'}!</p>
                 </div>
                 <div className="hidden lg:flex items-center space-x-2 sm:space-x-4">
-                  <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center space-x-1 sm:space-x-2">
                       <span className="text-xs sm:text-sm text-gray-600">Notifications:</span>
                       <NotificationsMenu />
@@ -1696,7 +1697,7 @@ const VendorDashboard = () => {
                               <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
+                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {(products || []).map(product => (
                               <tr key={product.id} className="hover:bg-gray-50">
                                 <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
@@ -1780,7 +1781,7 @@ const VendorDashboard = () => {
                               <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
+                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {(orders || []).map(order => (
                               <tr key={order.id} className="hover:bg-gray-50">
                                 <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
@@ -1906,7 +1907,7 @@ const VendorDashboard = () => {
                                 <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Revenue Generated</th>
                               </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                               {earnings.ad_revenue_breakdown.map((ad: any, index: number) => (
                                 <tr key={ad.ad_id || index} className="hover:bg-gray-50">
                                   <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">
@@ -1956,7 +1957,7 @@ const VendorDashboard = () => {
                                 <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Your Earnings</th>
                               </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                               {earnings.earnings_breakdown.map((earning: any, index: number) => (
                                 <tr key={index} className="hover:bg-gray-50">
                                   <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-sm text-gray-900">
@@ -2139,6 +2140,13 @@ const VendorDashboard = () => {
                       </div>
                     </CardContent>
                   </Card>
+                </div>
+              )}
+
+              {/* Messages Tab */}
+              {activeTab === 'messages' && (
+                <div id="tab-section-messages" className="scroll-mt-24">
+                  <VendorInbox />
                 </div>
               )}
             </div>

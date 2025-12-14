@@ -1327,7 +1327,7 @@ const AdminDashboard = () => {
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-gray-900">
       <div className="fixed top-0 left-0 right-0 z-50">
         <Navbar />
       </div>
@@ -1382,7 +1382,7 @@ const AdminDashboard = () => {
             <div className="lg:hidden mb-6 flex items-center justify-between">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                 aria-label="Open sidebar menu"
                 title="Open sidebar menu"
               >
@@ -1401,7 +1401,7 @@ const AdminDashboard = () => {
                   <p className="text-gray-600 mt-2 text-sm sm:text-base">Welcome back, {admin?.full_name || 'Admin'}! Manage your marketplace.</p>
                 </div>
                 <div className="hidden lg:flex items-center space-x-2 sm:space-x-4">
-                  <div className="bg-white rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md px-3 sm:px-4 py-2 border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center space-x-1 sm:space-x-2">
                       <span className="text-xs sm:text-sm text-gray-600">Notifications:</span>
                       <NotificationsMenu isAdmin={true} />
@@ -1417,7 +1417,7 @@ const AdminDashboard = () => {
               <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
                   <Users className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
-                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Vendors</p>
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 dark:text-gray-300 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Vendors</p>
                   <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats?.totalVendors || '0'}</p>
                 </div>
               </CardContent>
@@ -1439,7 +1439,7 @@ const AdminDashboard = () => {
               <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
                   <Package className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
-                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Products</p>
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 dark:text-gray-300 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Products</p>
                   <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats ? (stats.totalProducts ?? 0) : 0}</p>
                 </div>
               </CardContent>
@@ -1461,7 +1461,7 @@ const AdminDashboard = () => {
               <CardContent className="p-2 sm:p-3 md:p-4">
                 <div className="text-center">
                   <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-accent mx-auto mb-1" />
-                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Orders</p>
+                  <p className="text-[10px] min-[375px]:text-xs sm:text-sm text-gray-600 dark:text-gray-300 mb-1 line-clamp-2 min-h-[2rem] flex items-center justify-center">Total Orders</p>
                   <p className="text-base sm:text-lg md:text-xl font-bold text-primary">{stats ? (stats.totalOrders ?? 0) : 0}</p>
                 </div>
               </CardContent>

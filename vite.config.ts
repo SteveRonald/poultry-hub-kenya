@@ -37,9 +37,12 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    dedupe: ['socket.io-client'],
   },
   optimizeDeps: {
     force: true, // Force re-optimization to fix chunk errors
+    include: ['socket.io-client'],
+    exclude: [],
   },
   build: {
     // Remove console.log statements in production

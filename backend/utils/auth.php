@@ -94,4 +94,51 @@ function getBearerToken() {
 
     return null;
 }
+
+/**
+ * Validate authentication token - supports both JWT (for customers/vendors) and session tokens (for admins)
+ * Returns user payload with user_id and role, or false on failure
+ */
+function validateAuthToken($token) {
+    global $pdo;
+    
+    if (!$token) {
+        return false;
+    }
+    
+    // First, try to validate as JWT (for customers/vendors)
+    $jwtPayload = validateJWT($token);
+    if ($jwtPayload) {
+        return $jwtPayload;
+    }
+    
+    // If JWT validation fails, try to validate as admin session token
+    try {
+        // First check if it's a valid session token format (64 hex characters)
+        if (strlen($token) === 64 && ctype_xdigit($token)) {
+            $stmt = $pdo->prepare("
+                SELECT s.admin_id, u.role, u.email, u.full_name
+                FROM admin_sessions s
+                JOIN user_profiles u ON s.admin_id = u.id
+                WHERE s.session_token = ? AND s.expires_at > NOW() AND u.role = 'admin'
+            ");
+            $stmt->execute([$token]);
+            $session = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($session) {
+                // Return in same format as JWT payload
+                return [
+                    'user_id' => $session['admin_id'],
+                    'email' => $session['email'],
+                    'role' => $session['role'],
+                    'exp' => time() + (24 * 60 * 60) // Session expires in 24 hours
+                ];
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("Error validating admin session: " . $e->getMessage());
+    }
+    
+    return false;
+}
 ?>

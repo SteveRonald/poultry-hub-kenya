@@ -33,7 +33,7 @@ app.use('/api/upload', uploadRouter);
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.get('/', (req, res) => {
-  res.send('Poultry Hub Backend API');
+  res.send('KukuSoko Backend API');
 });
 
 const PORT = process.env.PORT || 5000;

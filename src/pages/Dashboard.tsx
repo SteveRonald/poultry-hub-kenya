@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import DashboardSidebar from '../components/DashboardSidebar';
@@ -10,9 +10,13 @@ import { Badge } from '../components/ui/badge';
 import { Eye, Package, ShoppingCart, TrendingUp, X, Menu } from 'lucide-react';
 import { getApiUrl, getImageUrl } from '../config/api';
 import MarketInsightsWidget from '../components/MarketInsightsWidget';
+import CustomerInbox from './CustomerInbox';
+import { useChat } from '../contexts/ChatContext';
 
 const Dashboard = () => {
   const { user, fetchUser } = useAuth();
+  const { conversations } = useChat();
+  const location = useLocation();
   const [stats, setStats] = useState({
     totalOrders: 0,
     activeOrders: 0,
@@ -24,12 +28,19 @@ const Dashboard = () => {
   const [editingProfile, setEditingProfile] = useState(false);
   const [showViewOrderModal, setShowViewOrderModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'overview');
   const [showShippingUpdateModal, setShowShippingUpdateModal] = useState(false);
   const [newShippingAddress, setNewShippingAddress] = useState('');
   const [updatingShipping, setUpdatingShipping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // Handle activeTab from navigation state
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   // Auto-scroll to section when tab changes
   useEffect(() => {
@@ -120,6 +131,16 @@ const Dashboard = () => {
       window.removeEventListener('focus', handleFocus);
     };
   }, [user]);
+
+  // Update unread messages count
+  useEffect(() => {
+    if (conversations && Array.isArray(conversations)) {
+      const unreadCount = conversations.reduce((total, conv) => {
+        return total + (conv.unread_count || 0);
+      }, 0);
+      setStats(prev => ({ ...prev, unreadMessages: unreadCount }));
+    }
+  }, [conversations]);
 
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
@@ -268,7 +289,7 @@ const Dashboard = () => {
 
   // Customer dashboard
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-gray-900">
       <Navbar />
       <div className="flex">
         {/* Sidebar */}
@@ -291,7 +312,9 @@ const Dashboard = () => {
             <div className="lg:hidden mb-4">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="Open sidebar menu"
+                title="Open sidebar menu"
               >
                 <Menu className="h-6 w-6" />
               </button>
@@ -311,7 +334,7 @@ const Dashboard = () => {
               <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
                   <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Total Orders</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">Total Orders</p>
                   <p className="text-lg sm:text-xl font-bold text-primary">{stats.totalOrders}</p>
                 </div>
               </CardContent>
@@ -323,7 +346,7 @@ const Dashboard = () => {
                   <div className="h-5 w-5 sm:h-6 sm:w-6 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-1 sm:mb-2">
                     <span className="text-xs text-yellow-800 font-bold">{stats.pendingOrders}</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-600">Pending Orders</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">Pending Orders</p>
                   <p className="text-lg sm:text-xl font-bold text-primary">{stats.pendingOrders}</p>
                 </div>
               </CardContent>
@@ -333,7 +356,7 @@ const Dashboard = () => {
               <CardContent className="p-3 sm:p-4">
                 <div className="text-center">
                   <Package className="h-5 w-5 sm:h-6 sm:w-6 text-accent mx-auto mb-1 sm:mb-2" />
-                  <p className="text-xs sm:text-sm text-gray-600">Active Orders</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">Active Orders</p>
                   <p className="text-lg sm:text-xl font-bold text-primary">{stats.activeOrders}</p>
                 </div>
               </CardContent>
@@ -351,7 +374,7 @@ const Dashboard = () => {
           </div>
 
           {/* Content Area */}
-          <div className="bg-white rounded-lg shadow-md mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md mb-6">
             <div className="p-4 sm:p-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
@@ -398,7 +421,7 @@ const Dashboard = () => {
                             );
                           })}
                           {orders.length === 0 && (
-                            <p className="text-gray-500 text-center py-4">No orders yet</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-center py-4">No orders yet</p>
                           )}
                         </div>
                       </CardContent>
@@ -411,7 +434,7 @@ const Dashboard = () => {
                       <CardContent>
                         <div className="space-y-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Pending</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">Pending</span>
                             <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium">
                               {stats.pendingOrders}
                             </span>
@@ -423,7 +446,7 @@ const Dashboard = () => {
                             </span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Total Orders</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">Total Orders</span>
                             <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
                               {stats.totalOrders}
                             </span>
@@ -441,8 +464,8 @@ const Dashboard = () => {
                   <h2 className="text-xl font-semibold text-primary">My Orders</h2>
 
                   {orders.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                      <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                       <p>No orders yet</p>
                       <p className="text-sm mt-2">Your orders will appear here once you make a purchase</p>
                     </div>
@@ -480,11 +503,11 @@ const Dashboard = () => {
                                 </div>
                                 <div className="flex justify-between items-center">
                                   <div>
-                                    <p className="text-sm text-gray-600">Quantity</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-300">Quantity</p>
                                     <p className="font-medium">{order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0}</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-sm text-gray-600">Total</p>
+                                    <p className="text-sm text-gray-600 dark:text-gray-300">Total</p>
                                     <p className="font-medium">KSH {order.total_amount}</p>
                                   </div>
                                 </div>
@@ -508,7 +531,7 @@ const Dashboard = () => {
                         <div className="inline-block min-w-full align-middle">
                           <div className="overflow-hidden">
                             <table className="min-w-full divide-y divide-gray-200">
-                              <thead className="bg-gray-50">
+                              <thead className="bg-gray-50 dark:bg-gray-800">
                                 <tr>
                                   <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order Number</th>
                                   <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Quantity</th>
@@ -557,6 +580,13 @@ const Dashboard = () => {
                 </div>
               )}
 
+              {/* Messages Tab */}
+              {activeTab === 'messages' && (
+                <div id="tab-section-messages" className="space-y-6 scroll-mt-24">
+                  <CustomerInbox />
+                </div>
+              )}
+
               {/* Profile Tab */}
               {activeTab === 'profile' && (
                 <div id="tab-section-profile" className="space-y-6 scroll-mt-24">
@@ -570,7 +600,7 @@ const Dashboard = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">Email</label>
                 <input
                   type="email"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   id="email"
                     name="email"
                     value={profileForm.email}
@@ -581,7 +611,7 @@ const Dashboard = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">Name</label>
                   <input
                     type="text"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     id="name"
                     name="name"
                     value={profileForm.name}
@@ -592,7 +622,7 @@ const Dashboard = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="phone">Phone</label>
                 <input
                   type="text"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     id="phone"
                     name="phone"
                     value={profileForm.phone}
@@ -608,16 +638,16 @@ const Dashboard = () => {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <p className="text-gray-900 break-all">{user.email}</p>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                    <p className="text-gray-900 dark:text-gray-100 break-all">{user.email}</p>
                   </div>
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">Name</label>
-                    <p className="text-gray-900">{user.name}</p>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+                    <p className="text-gray-900 dark:text-gray-100">{user.name}</p>
                   </div>
                   <div className="space-y-2 sm:col-span-2 lg:col-span-1">
-                    <label className="block text-sm font-medium text-gray-700">Phone</label>
-                    <p className="text-gray-900">{user.phone || 'Not provided'}</p>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+                    <p className="text-gray-900 dark:text-gray-100">{user.phone || 'Not provided'}</p>
                   </div>
                 </div>
                 <div className="pt-4">
@@ -636,7 +666,7 @@ const Dashboard = () => {
         {/* View Order Details Modal */}
         {showViewOrderModal && selectedOrder && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
               <div className="p-4 sm:p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-2xl font-bold text-primary">Order Details</h2>
@@ -652,19 +682,19 @@ const Dashboard = () => {
 
                 <div className="space-y-6">
                   {/* Order Header */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
-                        <p className="text-lg font-semibold text-gray-900">#{selectedOrder.order_number}</p>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Order Number</label>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">#{selectedOrder.order_number}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Order Date</label>
-                        <p className="text-lg text-gray-900">{new Date(selectedOrder.created_at).toLocaleString()}</p>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Order Date</label>
+                        <p className="text-lg text-gray-900 dark:text-gray-100">{new Date(selectedOrder.created_at).toLocaleString()}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Order Type</label>
-                        <Badge className={selectedOrder.order_type === 'direct' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Order Type</label>
+                        <Badge className={selectedOrder.order_type === 'direct' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'}>
                           {selectedOrder.order_type}
                         </Badge>
                       </div>
@@ -691,8 +721,8 @@ const Dashboard = () => {
                                 />
                               )}
                               <div className="flex-1">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
-                                <p className="text-gray-900 font-medium">{item.product_name}</p>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product</label>
+                                <p className="text-gray-900 dark:text-gray-100 font-medium">{item.product_name}</p>
                               </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -701,8 +731,8 @@ const Dashboard = () => {
                                 <p className="text-gray-900">{item.quantity}</p>
                               </div>
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
-                                <p className="text-gray-900">KSH {item.unit_price}</p>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unit Price</label>
+                                <p className="text-gray-900 dark:text-gray-100">KSH {item.unit_price}</p>
                               </div>
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
@@ -710,8 +740,8 @@ const Dashboard = () => {
                               </div>
                             </div>
                             <div className="mt-2">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
-                              <p className="text-gray-900">{item.vendor_name}</p>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vendor</label>
+                              <p className="text-gray-900 dark:text-gray-100">{item.vendor_name}</p>
                             </div>
                           </div>
                         );
@@ -729,8 +759,8 @@ const Dashboard = () => {
                           <p className="text-gray-900">{selectedOrder.shipping_address}</p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
-                          <p className="text-gray-900">{selectedOrder.contact_phone}</p>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact Phone</label>
+                          <p className="text-gray-900 dark:text-gray-100">{selectedOrder.contact_phone}</p>
                         </div>
                       </div>
                     </div>
@@ -739,8 +769,8 @@ const Dashboard = () => {
                       <h3 className="text-lg font-semibold text-primary">Payment Information</h3>
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                          <Badge className="bg-blue-100 text-blue-800 capitalize">{selectedOrder.payment_method}</Badge>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
+                          <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 capitalize">{selectedOrder.payment_method}</Badge>
               </div>
               <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
@@ -749,7 +779,7 @@ const Dashboard = () => {
                           </Badge>
               </div>
               <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Order Status</label>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Order Status</label>
                           <Badge className={getStatusColor(selectedOrder.status)}>
                             {selectedOrder.status}
                           </Badge>
@@ -762,14 +792,14 @@ const Dashboard = () => {
                   {selectedOrder.items && selectedOrder.items.length > 0 && (
                     <div className="space-y-4">
                       <h3 className="text-lg font-semibold text-primary">Vendor Contact Information</h3>
-                      <div className="bg-blue-50 p-4 rounded-lg">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name</label>
                             <p className="text-gray-900">{selectedOrder.items[0].vendor_name}</p>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact Email</label>
                             <a 
                               href={`mailto:${selectedOrder.items[0].vendor_email}`}
                               className="text-blue-600 hover:text-blue-800 underline"

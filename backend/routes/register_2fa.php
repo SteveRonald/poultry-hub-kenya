@@ -45,7 +45,7 @@ function handleSendRegisterOTP() {
     // Validate email domain exists (check DNS MX records)
     if (!validateEmailDomain($email)) {
         http_response_code(400);
-        echo json_encode(['error' => 'The email address you provided does not exist. Please check your email address and try again.']);
+        echo json_encode(['error' => 'Invalid email. Please check your email address and try again.']);
         return;
     }
     
@@ -75,7 +75,7 @@ function handleSendRegisterOTP() {
         ];
         
         $emailHtml = getEmailTemplate('register_otp', $data);
-        $subject = 'Your Poultry Hub Kenya Registration Verification Code';
+        $subject = 'Your KukuSoko Registration Verification Code';
         
         $emailSent = sendEmail($email, $subject, $emailHtml);
         
@@ -86,7 +86,7 @@ function handleSendRegisterOTP() {
             error_log('Failed to send registration OTP email to: ' . $email);
             http_response_code(503);
             echo json_encode([
-                'error' => 'Unable to send verification code. The email service is temporarily unavailable. Please try again later or contact support if this issue persists.'
+                'error' => 'Unable to send verification code. Please try again later or contact support if this issue persists.'
             ]);
             return;
         }
@@ -262,7 +262,7 @@ function handleResendRegisterOTP() {
         ];
         
         $emailHtml = getEmailTemplate('register_otp', $data);
-        $subject = 'Your Poultry Hub Kenya Registration Verification Code';
+        $subject = 'Your KukuSoko Registration Verification Code';
         
         $emailSent = sendEmail($email, $subject, $emailHtml);
         

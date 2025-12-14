@@ -1720,4 +1720,58 @@ function handleToggleUserAccountStatus() {
         echo json_encode(['error' => 'Failed to update account status: ' . $e->getMessage()]);
     }
 }
+
+function handleValidateAdminSession() {
+    global $pdo;
+    
+    // Get Authorization header
+    $token = '';
+    
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        if (isset($headers['Authorization'])) {
+            $token = $headers['Authorization'];
+        }
+    } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['HTTP_AUTHORIZATION'];
+    } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $token = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    
+    $token = preg_replace('/^Bearer\s+/i', '', $token);
+    
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Authorization token required']);
+        return;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("SELECT admin_id FROM admin_sessions WHERE session_token = ? AND expires_at > NOW()");
+        $stmt->execute([$token]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$session) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid or expired admin session']);
+            return;
+        }
+        
+        echo json_encode([
+            'admin_id' => $session['admin_id'],
+            'user_id' => $session['admin_id'],
+            'valid' => true
+        ]);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        error_log("Error validating admin session: " . $e->getMessage());
+        echo json_encode(['error' => 'Failed to validate session']);
+    }
+}
 ?>

@@ -868,8 +868,8 @@ const Register = () => {
                 : isCurrent
                 ? 'bg-primary border-primary text-white'
                 : isAccessible
-                ? 'bg-white border-gray-300 text-gray-600 hover:border-primary'
-                : 'bg-gray-100 border-gray-300 text-gray-400'
+                ? 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-primary'
+                : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500'
             }`}
           >
             {isCompleted ? (
@@ -880,19 +880,19 @@ const Register = () => {
           </div>
                 <div className="ml-2 sm:ml-3 hidden sm:block">
             <div className={`text-sm font-medium ${
-              isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : isAccessible ? 'text-gray-700' : 'text-gray-400'
+              isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : isAccessible ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'
             }`}>
                     Step {stepNumber}
             </div>
             <div className={`text-xs ${
-              isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-500'
+              isCurrent ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'
                   }`}>{stepLabels[i]}</div>
           </div>
               </div>
               {stepNumber < totalSteps && (
             <div
                   className={`mx-2 sm:mx-4 h-0.5 w-6 sm:w-12 transition-colors ${
-                    isCompleted ? 'bg-green-500' : completedSteps.includes(stepNumber + 1) ? 'bg-green-500' : 'bg-gray-300'
+                    isCompleted ? 'bg-green-500' : completedSteps.includes(stepNumber + 1) ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-700'
               }`}
             />
           )}
@@ -908,7 +908,7 @@ const Register = () => {
       <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Personal Information</h3>
       
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Full Name *
         </label>
         <Input
@@ -923,7 +923,7 @@ const Register = () => {
       </div>
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Email Address * {otpVerified && verifiedEmail === formData.email.trim() && (
             <span className="text-green-600 text-xs ml-2">✓ Verified</span>
           )}
@@ -966,7 +966,7 @@ const Register = () => {
       </div>
 
       <div>
-        <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Phone Number *
         </label>
         <Input
@@ -985,10 +985,10 @@ const Register = () => {
       {showOtpInput && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
           <div className="mb-3">
-            <p className="text-sm font-medium text-gray-700 mb-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Email Verification
             </p>
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
               We sent a verification code to <strong>{verifiedEmail || formData.email}</strong>
             </p>
           </div>
@@ -1040,7 +1040,7 @@ const Register = () => {
 
             <div className="text-center text-xs">
               {otpCountdown > 0 ? (
-                <p className="text-gray-600">Resend in {otpCountdown}s</p>
+                <p className="text-gray-600 dark:text-gray-300">Resend in {otpCountdown}s</p>
               ) : (
                 <button
                   type="button"
@@ -1066,7 +1066,7 @@ const Register = () => {
 
   const renderStep2 = () => (
     <div className="space-y-3 sm:space-y-4">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Account Credentials</h3>
+      <h3 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 sm:mb-4">Account Credentials</h3>
       
       <div>
         <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
@@ -1121,7 +1121,7 @@ const Register = () => {
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Password *
         </label>
         <div className="relative">
@@ -1146,7 +1146,7 @@ const Register = () => {
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Confirm Password *
         </label>
         <Input
@@ -1187,10 +1187,10 @@ const Register = () => {
 
   const renderStep4 = () => (
     <div className="space-y-3 sm:space-y-4">
-      <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">Farm Details</h3>
+      <h3 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 sm:mb-4">Farm Details</h3>
       
       <div>
-        <label htmlFor="farmName" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="farmName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Farm Name *
         </label>
         <Input
@@ -1221,7 +1221,7 @@ const Register = () => {
       </div>
 
       <div>
-        <label htmlFor="farmDescription" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="farmDescription" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Farm Description
         </label>
         <Textarea
@@ -1255,7 +1255,7 @@ const Register = () => {
   const isLastStep = currentStep === totalSteps;
 
   return (
-    <div className="min-h-screen bg-beige">
+    <div className="min-h-screen bg-beige dark:bg-gray-900">
       <Navbar />
       <div className="py-4 sm:py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto">

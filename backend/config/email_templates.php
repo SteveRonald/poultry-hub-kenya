@@ -99,7 +99,7 @@ function getBaseTemplate($title, $content, $baseUrl) {
     // Use CID reference for logo - will be embedded by PHPMailer
     // Reduced size from 200px to 120px for better email client compatibility
     // The logo will be embedded as an inline attachment with CID 'logo'
-    $logoHtml = "<img src='cid:logo' alt='Poultry Hub Kenya Logo' class='header-logo' width='120' style='max-width: 120px; width: 120px; height: auto; margin: 0 auto 10px; display: block; border: 0; outline: none; text-decoration: none;' />";
+    $logoHtml = "<img src='cid:logo' alt='KukuSoko Logo' class='header-logo' width='120' style='max-width: 120px; width: 120px; height: auto; margin: 0 auto 10px; display: block; border: 0; outline: none; text-decoration: none;' />";
     $subtitleHtml = "<p style='margin: 0; opacity: 0.9; font-size: 16px;'>Your Trusted Poultry Partner</p>";
     
     return "
@@ -308,9 +308,9 @@ function getBaseTemplate($title, $content, $baseUrl) {
                 $content
             </div>
             <div class='footer'>
-                <p>&copy; 2025 Poultry Hub Kenya. All rights reserved.</p>
+                <p>&copy; 2025 KukuSoko. All rights reserved.</p>
                 <p>Visit us at <a href='$baseUrl'>$baseUrl</a></p>
-                <p>For support, contact us at support@poultryhubkenya.com</p>
+                <p>For support, contact us at support@kukusoko.com</p>
             </div>
         </div>
     </body>
@@ -402,10 +402,10 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
         </div>
         
         <p>If you have any questions about your order, please don't hesitate to contact us.</p>
-        <p>Thank you for choosing Poultry Hub Kenya!</p>
+        <p>Thank you for choosing KukuSoko!</p>
     ";
     
-    return getBaseTemplate('Order Confirmation - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('Order Confirmation - KukuSoko', $content, $baseUrl);
 }
 
 function getOrderStatusUpdateTemplate($data, $baseUrl) {
@@ -456,10 +456,10 @@ function getOrderStatusUpdateTemplate($data, $baseUrl) {
             <a href='$baseUrl/dashboard' class='button'>View Order Details</a>
         </div>
         
-        <p>Thank you for your patience and for choosing Poultry Hub Kenya!</p>
+        <p>Thank you for your patience and for choosing KukuSoko!</p>
     ";
     
-    return getBaseTemplate('Order Status Update - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('Order Status Update - KukuSoko', $content, $baseUrl);
 }
 
 function getVendorNotificationTemplate($data, $baseUrl) {
@@ -537,10 +537,10 @@ function getVendorNotificationTemplate($data, $baseUrl) {
             <a href='$baseUrl/vendor-dashboard' class='button'>View Order in Dashboard</a>
         </div>
         
-        <p>Thank you for being part of Poultry Hub Kenya!</p>
+        <p>Thank you for being part of KukuSoko!</p>
     ";
     
-    return getBaseTemplate('New Order - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('New Order - KukuSoko', $content, $baseUrl);
 }
 
 function getAdminNotificationTemplate($data, $baseUrl) {
@@ -578,7 +578,7 @@ function getAdminNotificationTemplate($data, $baseUrl) {
         <p>Please monitor the order processing and ensure timely delivery.</p>
     ";
     
-    return getBaseTemplate('New Order Alert - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('New Order Alert - KukuSoko', $content, $baseUrl);
 }
 
 function getOTPEmailTemplate($data, $baseUrl) {
@@ -588,7 +588,7 @@ function getOTPEmailTemplate($data, $baseUrl) {
     $content = "
         <h2 style='color: #1a4d2e; margin-top: 0;'>Password Reset Request</h2>
         <p>Dear $userName,</p>
-        <p>You have requested to reset your password for your Poultry Hub Kenya account.</p>
+        <p>You have requested to reset your password for your KukuSoko account.</p>
         
         <div class='order-details'>
             <h3 style='color: #1a4d2e; margin-top: 0;'>Your OTP Code</h3>
@@ -616,10 +616,10 @@ function getOTPEmailTemplate($data, $baseUrl) {
         </div>
         
         <p>If you have any questions or need assistance, please contact our support team.</p>
-        <p>Thank you for choosing Poultry Hub Kenya!</p>
+        <p>Thank you for choosing KukuSoko!</p>
     ";
     
-    return getBaseTemplate('Password Reset OTP - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('Password Reset OTP - KukuSoko', $content, $baseUrl);
 }
 
 function getLoginOTPEmailTemplate($data, $baseUrl) {
@@ -629,7 +629,7 @@ function getLoginOTPEmailTemplate($data, $baseUrl) {
     $content = "
         <h2 style='color: #1a4d2e; margin-top: 0;'>Login Verification Code</h2>
         <p>Dear $userName,</p>
-        <p>You have initiated a login to your Poultry Hub Kenya account. Please use the verification code below to complete your login.</p>
+        <p>You have initiated a login to your KukuSoko account. Please use the verification code below to complete your login.</p>
         
         <div class='order-details'>
             <h3 style='color: #1a4d2e; margin-top: 0;'>Your Verification Code</h3>
@@ -639,7 +639,7 @@ function getLoginOTPEmailTemplate($data, $baseUrl) {
                 </div>
             </div>
             <!-- Mobile autofill support: Gmail and iOS Mail will detect this pattern -->
-            <p style='text-align: center; margin: 10px 0 0 0; font-size: 16px; font-weight: 600; color: #1a4d2e;'>PoultryHubKE $otp</p>
+            <p style='text-align: center; margin: 10px 0 0 0; font-size: 16px; font-weight: 600; color: #1a4d2e;'>KukuSoko $otp</p>
         </div>
         
         <div class='warning'>
@@ -658,10 +658,10 @@ function getLoginOTPEmailTemplate($data, $baseUrl) {
         </div>
         
         <p>If you have any questions or need assistance, please contact our support team.</p>
-        <p>Thank you for using Poultry Hub Kenya!</p>
+        <p>Thank you for using KukuSoko!</p>
     ";
     
-    return getBaseTemplate('Login Verification Code - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('Login Verification Code - KukuSoko', $content, $baseUrl);
 }
 
 function getRegisterOTPEmailTemplate($data, $baseUrl) {
@@ -671,7 +671,7 @@ function getRegisterOTPEmailTemplate($data, $baseUrl) {
     $content = "
         <h2 style='color: #1a4d2e; margin-top: 0;'>Registration Verification Code</h2>
         <p>Hello,</p>
-        <p>Thank you for signing up with Poultry Hub Kenya! Please use the verification code below to verify your email address and complete your registration.</p>
+        <p>Thank you for signing up with KukuSoko! Please use the verification code below to verify your email address and complete your registration.</p>
         
         <div class='order-details'>
             <h3 style='color: #1a4d2e; margin-top: 0;'>Your Verification Code</h3>
@@ -682,7 +682,7 @@ function getRegisterOTPEmailTemplate($data, $baseUrl) {
             </div>
             <p style='text-align: center; margin: 0; font-size: 14px; color: #666;'>Verification code is: $otp</p>
             <!-- Mobile autofill support: Gmail and iOS Mail will detect this pattern -->
-            <p style='text-align: center; margin: 10px 0 0 0; font-size: 16px; font-weight: 600; color: #1a4d2e;'>PoultryHubKE $otp</p>
+            <p style='text-align: center; margin: 10px 0 0 0; font-size: 16px; font-weight: 600; color: #1a4d2e;'>KukuSoko $otp</p>
         </div>
         
         <div class='warning'>
@@ -701,21 +701,21 @@ function getRegisterOTPEmailTemplate($data, $baseUrl) {
         </div>
         
         <p>If you have any questions or need assistance, please contact our support team.</p>
-        <p>Welcome to Poultry Hub Kenya!</p>
+        <p>Welcome to KukuSoko!</p>
     ";
     
-    return getBaseTemplate('Email Verification - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('Email Verification - KukuSoko', $content, $baseUrl);
 }
 
 function getDefaultTemplate($data, $baseUrl) {
     $content = "
-        <h2 style='color: #1a4d2e; margin-top: 0;'>Notification from Poultry Hub Kenya</h2>
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Notification from KukuSoko</h2>
         <p>Hello,</p>
-        <p>This is a notification from Poultry Hub Kenya.</p>
+        <p>This is a notification from KukuSoko.</p>
         <p>Thank you for using our platform!</p>
     ";
     
-    return getBaseTemplate('Notification - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('Notification - KukuSoko', $content, $baseUrl);
 }
 
 function getBackupNotificationTemplate($data, $baseUrl) {
@@ -750,7 +750,7 @@ function getBackupNotificationTemplate($data, $baseUrl) {
     $content = "
         <h2 style='color: #1a4d2e; margin-top: 0;'>Backup Notification</h2>
         <p>Dear Admin,</p>
-        <p>A backup operation has been performed on your Poultry Hub Kenya system.</p>
+        <p>A backup operation has been performed on your KukuSoko system.</p>
         
         <div class='order-details'>
             <h3 style='color: #1a4d2e; margin-top: 0;'>Backup Summary</h3>
@@ -781,7 +781,7 @@ function getBackupNotificationTemplate($data, $baseUrl) {
         "$typeName Backup Completed Successfully" : 
         "$typeName Backup Failed";
     
-    return getBaseTemplate("$title - Poultry Hub Kenya", $content, $baseUrl);
+    return getBaseTemplate("$title - KukuSoko", $content, $baseUrl);
 }
 
 function getContactNotificationTemplate($data, $baseUrl) {
@@ -825,10 +825,10 @@ function getContactNotificationTemplate($data, $baseUrl) {
             <a href='$baseUrl/admin-dashboard' class='button'>View in Admin Dashboard</a>
         </div>
         
-        <p>This message was sent from the Poultry Hub Kenya contact form.</p>
+        <p>This message was sent from the KukuSoko contact form.</p>
     ";
     
-    return getBaseTemplate('New Contact Message - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('New Contact Message - KukuSoko', $content, $baseUrl);
 }
 
 function getContactConfirmationTemplate($data, $baseUrl) {
@@ -864,10 +864,10 @@ function getContactConfirmationTemplate($data, $baseUrl) {
         </div>
         
         <p>If you have any urgent inquiries, please feel free to contact us directly.</p>
-        <p>Thank you for choosing Poultry Hub Kenya!</p>
+        <p>Thank you for choosing KukuSoko!</p>
     ";
     
-    return getBaseTemplate('Contact Form Confirmation - Poultry Hub Kenya', $content, $baseUrl);
+    return getBaseTemplate('Contact Form Confirmation - KukuSoko', $content, $baseUrl);
 }
 
 ?>

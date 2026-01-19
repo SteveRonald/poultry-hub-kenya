@@ -32,6 +32,7 @@ import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import Chatbot from "./components/Chatbot";
 import ChatPage from "./pages/ChatPage";
 import PaystackSuccess from "./pages/PaystackSuccess";
+import PaymentPage from "./pages/PaymentPage";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,11 @@ const App = () => (
                         </ProtectedRoute>
                       } />
                       <Route path="/checkout" element={<Checkout />} />
+                      <Route path="/payment" element={
+                        <ProtectedRoute>
+                          <PaymentPage />
+                        </ProtectedRoute>
+                      } />
                       <Route path="/training" element={<Training />} />
                       <Route path="/blog" element={<Blog />} />
                       <Route path="/checkout/success" element={<PaystackSuccess />} />

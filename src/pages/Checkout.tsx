@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, MapPin, Phone, CreditCard, Check } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, MapPin, Phone, CreditCard, Shield, Lock, Truck } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import OrderSuccessModal from '../components/OrderSuccessModal';
+import PaymentMethodSelector from '../components/PaymentMethodSelector';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { toast } from 'sonner';
@@ -26,8 +26,6 @@ const Checkout = () => {
   const [formData, setFormData] = useState({
     shipping_address: '',
     contact_phone: user?.phone || '',
-    payment_method: 'paystack',
-    payment_account_number: '',
     notes: ''
   });
 
@@ -130,154 +128,193 @@ const Checkout = () => {
     setLoading(true);
 
     try {
-      if (formData.payment_method === 'paystack') {
-        // Handle Paystack payment flow
-        // First create the order
-        const orderPromises = checkoutItems.map((item) =>
-          fetch(getApiUrl('/api/orders'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-              product_id: item.product_id,
-              quantity: item.quantity,
-              shipping_address: formData.shipping_address.trim(),
-              contact_phone: formData.contact_phone.trim(),
-              payment_method: formData.payment_method,
-              payment_account_number: formData.payment_account_number.trim(),
-              notes: formData.notes.trim() || 'Order from checkout'
-            })
-          })
-        );
+      console.log('Initializing payment with data:', {
+        order_id: 0,
+        amount: totalAmount,
+        email: user?.email || 'customer@poultryhubkenya.com',
+        callback_url: `${window.location.origin}/checkout/success`
+      });
 
-        const responses = await Promise.all(orderPromises);
-        const results = await Promise.all(responses.map(r => r.json()));
+      // Check if token exists and is valid
+      const token = localStorage.getItem('token');
+      console.log('JWT Token:', token ? 'exists' : 'missing');
+      
+      if (!token) {
+        console.error('No JWT token found');
+        toast.error('Please login to continue');
+        setLoading(false);
+        navigate('/login');
+        return;
+      }
 
-        // Check if all orders succeeded
-        const failedOrders = results.filter(r => !r.success && r.success !== undefined);
-
-        if (failedOrders.length > 0) {
-          toast.error('Some orders failed. Please try again.');
+      // Test token validity first
+      try {
+        const tokenTestResponse = await fetch(getApiUrl('/api/users/me'), {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (tokenTestResponse.status === 401) {
+          console.error('JWT token expired or invalid');
+          toast.error('Your session has expired. Please login again.');
+          localStorage.removeItem('token');
+          setLoading(false);
+          navigate('/login');
           return;
         }
+        
+        console.log('Token is valid');
+      } catch (tokenError) {
+        console.error('Token validation failed:', tokenError);
+        toast.error('Authentication error. Please login again.');
+        localStorage.removeItem('token');
+        setLoading(false);
+        navigate('/login');
+        return;
+      }
 
-        // Get the first order ID for payment initialization
-        const firstOrder = results.find(r => r.order_id);
-        if (!firstOrder) {
-          toast.error('Failed to create order. Please try again.');
-          return;
-        }
+      // Test API connectivity first
+      try {
+        const testResponse = await fetch(getApiUrl('/test_api.php'));
+        console.log('Test API response:', testResponse.status);
+        const testData = await testResponse.json();
+        console.log('Test API data:', testData);
+      } catch (testError) {
+        console.error('Test API failed:', testError);
+        toast.error('API connectivity test failed. Check if backend is running.');
+        setLoading(false);
+        return;
+      }
 
-        // Initialize Paystack payment
-        const paymentResponse = await fetch(getApiUrl('/api/payments/paystack/initialize'), {
+      // Initialize Paystack payment first (no order created yet)
+      const apiUrl = getApiUrl('/test_payment_init.php'); // Test endpoint first
+      console.log('API URL:', apiUrl);
+
+      const paymentResponse = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          order_id: 0, // Temporary ID for payment initialization
+          amount: totalAmount,
+          email: user?.email || 'customer@poultryhubkenya.com',
+          callback_url: `${window.location.origin}/checkout/success`
+        })
+      });
+
+      console.log('Payment response status:', paymentResponse.status);
+      console.log('Payment response headers:', Object.fromEntries(paymentResponse.headers.entries()));
+
+      // Get response text first to see if it's valid JSON
+      const responseText = await paymentResponse.text();
+      console.log('Raw response text:', responseText);
+
+      let paymentData;
+      try {
+        paymentData = JSON.parse(responseText);
+        console.log('Parsed payment data:', paymentData);
+      } catch (parseError) {
+        console.error('Failed to parse JSON response:', parseError);
+        console.error('Response was:', responseText);
+        toast.error('Invalid response from server. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      if (!paymentData.success) {
+        console.error('Payment initialization failed:', paymentData);
+        toast.error(paymentData.error || 'Failed to initialize payment. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Store checkout data in session storage for payment page
+      sessionStorage.setItem('pendingCheckout', JSON.stringify({
+        items: checkoutItems,
+        shipping_address: formData.shipping_address.trim(),
+        contact_phone: formData.contact_phone.trim(),
+        notes: formData.notes.trim() || 'Order from checkout',
+        payment_reference: paymentData.reference
+      }));
+
+      // Navigate to payment page instead of opening popup
+      navigate('/payment');
+      setLoading(false);
+
+    } catch (error) {
+      console.error('Error initializing payment:', error);
+      toast.error('Failed to initialize payment. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const createOrdersAfterPayment = async (paymentReference: string) => {
+    try {
+      const pendingCheckout = sessionStorage.getItem('pendingCheckout');
+      if (!pendingCheckout) {
+        toast.error('Checkout data lost. Please try again.');
+        return;
+      }
+
+      const checkoutData = JSON.parse(pendingCheckout);
+      
+      // Create orders now that payment is successful
+      const orderPromises = checkoutData.items.map((item: any) =>
+        fetch(getApiUrl('/api/orders'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
           body: JSON.stringify({
-            order_id: firstOrder.order_id,
-            amount: totalAmount,
-            email: user?.email || 'customer@poultryhubkenya.com',
-            callback_url: `${window.location.origin}/checkout/success`
+            product_id: item.product_id,
+            quantity: item.quantity,
+            shipping_address: checkoutData.shipping_address,
+            contact_phone: checkoutData.contact_phone,
+            payment_method: 'paystack',
+            payment_account_number: '',
+            notes: checkoutData.notes,
+            payment_reference: paymentReference
           })
-        });
+        })
+      );
 
-        const paymentData = await paymentResponse.json();
+      const responses = await Promise.all(orderPromises);
+      const results = await Promise.all(responses.map(r => r.json()));
 
-        if (!paymentData.success) {
-          toast.error('Failed to initialize payment. Please try again.');
-          return;
-        }
+      // Check if all orders succeeded
+      const failedOrders = results.filter(r => !r.success && r.success !== undefined);
 
-        // Use Paystack Popup for better UX
-        const script = document.createElement('script');
-        script.src = 'https://js.paystack.co/v1/inline.js';
-        script.async = true;
-        script.onload = () => {
-          const handler = (window as any).PaystackPop.setup({
-            key: paymentData.public_key,
-            email: user?.email || 'customer@poultryhubkenya.com',
-            amount: totalAmount * 100, // Convert to kobo/cents
-            ref: paymentData.reference,
-            callback: function(response: any) {
-              // Payment successful - redirect to success page
-              window.location.href = `/checkout/success?reference=${response.reference}`;
-            },
-            onClose: function() {
-              toast.info('Payment window closed. You can try again.');
-              setLoading(false);
-            }
-          });
-          
-          handler.openIframe();
-        };
-        
-        document.body.appendChild(script);
-
-      } else {
-        // Handle other payment methods (M-Pesa, etc.)
-        const orderPromises = checkoutItems.map((item) =>
-          fetch(getApiUrl('/api/orders'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-              product_id: item.product_id,
-              quantity: item.quantity,
-              shipping_address: formData.shipping_address.trim(),
-              contact_phone: formData.contact_phone.trim(),
-              payment_method: formData.payment_method,
-              payment_account_number: formData.payment_account_number.trim(),
-              notes: formData.notes.trim() || 'Order from checkout'
-            })
-          })
-        );
-
-        const responses = await Promise.all(orderPromises);
-        const results = await Promise.all(responses.map(r => r.json()));
-
-        // Check if all orders succeeded
-        const failedOrders = results.filter(r => !r.success && r.success !== undefined);
-
-        if (failedOrders.length > 0) {
-          toast.error('Some orders failed. Please try again.');
-          return;
-        }
-
-        // Clear cart after successful order
-        if (user) {
-          // Clear database cart
-          await fetch(getApiUrl('/api/cart/clear'), {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          refreshCart();
-        } else {
-          // Clear local cart
-          localStorage.removeItem('local_cart');
-        }
-
-        // Extract order number from first successful order
-        const firstOrder = results.find(r => r.order_number || r.order_id);
-        if (firstOrder) {
-          setOrderNumber(firstOrder.order_number || `#${firstOrder.order_id}`);
-        }
-
-        // Show success modal instead of immediate redirect
-        setShowSuccessModal(true);
+      if (failedOrders.length > 0) {
+        toast.error('Some orders failed. Please contact support.');
+        return;
       }
+
+      // Clear cart after successful order creation
+      if (user) {
+        await fetch(getApiUrl('/api/cart/clear'), {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        refreshCart();
+      } else {
+        localStorage.removeItem('local_cart');
+      }
+
+      // Clear session storage
+      sessionStorage.removeItem('pendingCheckout');
+
+      // Redirect to success page
+      window.location.href = `/checkout/success?reference=${paymentReference}`;
+
     } catch (error) {
-      console.error('Error placing order:', error);
-      toast.error('Failed to place order. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Error creating orders after payment:', error);
+      toast.error('Order creation failed. Please contact support with your payment reference.');
     }
   };
 
@@ -319,7 +356,7 @@ const Checkout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
       
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -333,17 +370,19 @@ const Checkout = () => {
           Back
         </Button>
 
-        <h1 className="text-3xl font-bold text-primary mb-8">Checkout</h1>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column: Order Form */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Delivery Information */}
             <Card>
               <CardHeader>
-                <CardTitle>Delivery Details</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5" />
+                  Delivery Information
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Shipping Address <span className="text-red-500">*</span>
@@ -354,12 +393,14 @@ const Checkout = () => {
                       placeholder="Enter your complete delivery address"
                       required
                       rows={3}
+                      disabled={loading}
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Contact Phone <span className="text-red-500">*</span>
+                      <span className="text-xs text-gray-500 ml-1">(For delivery updates)</span>
                     </label>
                     <Input
                       type="tel"
@@ -367,78 +408,9 @@ const Checkout = () => {
                       onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
                       placeholder="07XX XXX XXX"
                       required
+                      disabled={loading}
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Payment Method <span className="text-red-500">*</span>
-                    </label>
-                    <Select
-                      value={formData.payment_method}
-                      onValueChange={(value) => {
-                        setFormData({ ...formData, payment_method: value, payment_account_number: '' });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? (
-                          <>
-                            <SelectItem value="paystack">Paystack (Card, Bank Transfer)</SelectItem>
-                            <SelectItem value="mpesa">M-Pesa</SelectItem>
-                            <SelectItem value="bank" disabled>Bank Transfer (Coming Soon)</SelectItem>
-                          </>
-                        ) : (
-                          <>
-                            <SelectItem value="paystack">Paystack (Card, Bank Transfer)</SelectItem>
-                            <SelectItem value="mpesa">M-Pesa</SelectItem>
-                            <SelectItem value="bank" disabled>Bank Transfer (Coming Soon)</SelectItem>
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {formData.payment_method === 'mpesa' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        M-Pesa Number <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        type="tel"
-                        value={formData.payment_account_number}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, ''); // Only numbers
-                          if (value.length <= 10) {
-                            setFormData({ ...formData, payment_account_number: value });
-                          }
-                        }}
-                        placeholder="07XX XXX XXX"
-                        required
-                        maxLength={10}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Enter your M-Pesa phone number (10 digits)</p>
-                    </div>
-                  )}
-
-                  {formData.payment_method === 'bank' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Bank Account Number <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        type="text"
-                        value={formData.payment_account_number}
-                        onChange={(e) => setFormData({ ...formData, payment_account_number: e.target.value })}
-                        placeholder="Enter bank account number"
-                        required
-                        disabled
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Bank transfer is coming soon</p>
-                    </div>
-                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -449,12 +421,13 @@ const Checkout = () => {
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       placeholder="Any special instructions for delivery"
                       rows={2}
+                      disabled={loading}
                     />
                   </div>
 
                   {!user && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                      <p className="text-sm text-yellow-800">
+                      <p className="text-sm text-yellow-800 mb-3">
                         Please login to complete your order. Your items will be saved.
                       </p>
                       <Button
@@ -464,7 +437,7 @@ const Checkout = () => {
                           const redirectUrl = `/checkout${currentParams.toString() ? `?${currentParams.toString()}` : ''}`;
                           navigate(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
                         }}
-                        className="mt-2"
+                        className="w-full"
                       >
                         Login to Continue
                       </Button>
@@ -472,71 +445,131 @@ const Checkout = () => {
                   )}
 
                   {user && (
-                    <Button
-                      type="submit"
-                      className="w-full bg-primary hover:bg-primary/90 text-white h-12 text-lg"
-                      disabled={loading || checkoutItems.length === 0}
-                    >
-                      {loading ? (
-                        <span className="flex items-center gap-1">
-                          <span>Placing Order</span>
-                          <span className="animate-dots">
-                            <span>.</span>
-                            <span>.</span>
-                            <span>.</span>
+                    <>
+                      {/* Payment Notice */}
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 text-orange-600 flex-shrink-0">
+                            <svg fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="text-sm text-orange-700">
+                            <span className="font-medium">Clicking "Proceed to Payment" will open Paystack's secure popup</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full bg-primary hover:bg-primary/90 text-white h-12 text-lg font-semibold"
+                        disabled={loading || checkoutItems.length === 0}
+                      >
+                        {loading ? (
+                          <span className="flex items-center gap-2">
+                            <span>Initializing Payment</span>
+                            <span className="animate-dots">
+                              <span>.</span>
+                              <span>.</span>
+                              <span>.</span>
+                            </span>
                           </span>
-                        </span>
-                      ) : 'Proceed to Payment'}
-                    </Button>
+                        ) : (
+                          <span className="flex items-center justify-center gap-2">
+                            <CreditCard className="w-5 h-5" />
+                            <span>Proceed to Payment</span>
+                          </span>
+                        )}
+                      </Button>
+                    </>
                   )}
                 </form>
+              </CardContent>
+            </Card>
+
+            {/* Trust Signals */}
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-center space-x-8 text-sm text-blue-700">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    <span>Secure Payment</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-5 w-5" />
+                    <span>Fast Delivery</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-5 w-5" />
+                    <span>SSL Encrypted</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Right Column: Order Summary */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Order Items */}
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
-                    {checkoutItems.map((item, index) => (
-                      <div key={index} className="flex items-center gap-3 pb-3 border-b">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{item.product_name}</p>
-                          <p className="text-xs text-gray-600">
-                            {item.quantity} x KSH {item.price.toLocaleString()}
+            <div className="sticky top-4 space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" />
+                    Order Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Order Items */}
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {checkoutItems.map((item, index) => (
+                        <div key={index} className="flex items-center gap-3 pb-3 border-b">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{item.product_name}</p>
+                            <p className="text-xs text-gray-600">
+                              {item.quantity} x KSH {item.price.toLocaleString()}
+                            </p>
+                          </div>
+                          <p className="font-semibold">
+                            KSH {(item.price * item.quantity).toLocaleString()}
                           </p>
                         </div>
-                        <p className="font-semibold">
-                          KSH {(item.price * item.quantity).toLocaleString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
-                  {/* Totals */}
-                  <div className="space-y-2 pt-4 border-t">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Subtotal</span>
-                      <span>KSH {totalAmount.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Delivery</span>
-                      <span>KSH 0</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                      <span>Total</span>
-                      <span>KSH {totalAmount.toLocaleString()}</span>
+                    {/* Totals */}
+                    <div className="space-y-2 pt-4 border-t">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Subtotal</span>
+                        <span>KSH {totalAmount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Delivery</span>
+                        <span className="text-green-600">FREE</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                        <span>Total</span>
+                        <span className="text-primary">KSH {totalAmount.toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Payment Methods */}
+              <Card className="bg-gray-50">
+                <CardContent className="p-4">
+                  <div className="text-center space-y-2">
+                    <p className="text-xs text-gray-600 font-medium">We Accept</p>
+                    <div className="flex justify-center items-center space-x-2">
+                      <div className="w-8 h-5 bg-gray-800 rounded flex items-center justify-center text-white text-xs font-bold">VISA</div>
+                      <div className="w-8 h-5 bg-red-600 rounded flex items-center justify-center text-white text-xs font-bold">MC</div>
+                      <div className="w-8 h-5 bg-green-600 rounded flex items-center justify-center text-white text-xs font-bold">MPESA</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>

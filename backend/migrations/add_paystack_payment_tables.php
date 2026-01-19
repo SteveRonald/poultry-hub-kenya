@@ -20,17 +20,15 @@ try {
             `metadata` longtext NULL,
             `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
+            
             PRIMARY KEY (`id`),
             UNIQUE KEY `unique_transaction_reference` (`transaction_reference`),
             KEY `idx_order_id` (`order_id`),
             KEY `idx_user_id` (`user_id`),
             KEY `idx_payment_status` (`payment_status`),
-            KEY `idx_created_at` (`created_at`),
-
+            KEY `idx_created_at` (`created_at`)
+            
             /* Foreign key constraints removed for compatibility */
-            /* CONSTRAINT `fk_payment_transactions_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE, */
-            /* CONSTRAINT `fk_payment_transactions_user` FOREIGN KEY (`user_id`) REFERENCES `user_profiles` (`id`) ON DELETE CASCADE */
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 

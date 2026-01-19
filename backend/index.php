@@ -952,6 +952,13 @@ switch ($path) {
         }
         break;
         
+    case 'api/payments/manual/verify':
+        if ($method === 'POST') {
+            include 'routes/payments.php';
+            handleManualPaymentVerification();
+        }
+        break;
+        
     default:
         // Handle dynamic routes like /api/vendor/products/{id}
         if (strpos($path, 'api/vendor/products/') === 0 && $method === 'PUT') {

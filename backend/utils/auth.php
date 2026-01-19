@@ -1,4 +1,19 @@
 <?php
+// Load environment variables
+$envFile = __DIR__ . '/../.env';
+if (file_exists($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '#') === 0) continue; // Skip comments
+        if (strpos($line, '=') === false) continue; // Skip lines without =
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+        putenv("$key=$value");
+        $_ENV[$key] = $value;
+    }
+}
+
 // Simple JWT implementation for PHP
 function generateJWT($user_id, $email, $role) {
     $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
@@ -6,7 +21,7 @@ function generateJWT($user_id, $email, $role) {
         'user_id' => $user_id,
         'email' => $email,
         'role' => $role,
-        'exp' => time() + (24 * 60 * 60) // 24 hours
+        'exp' => time() + (7 * 24 * 60 * 60) // 7 days instead of 24 hours
     ]);
     
     $base64Header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
@@ -33,6 +48,7 @@ function generateJWT($user_id, $email, $role) {
 function validateJWT($token) {
     $parts = explode('.', $token);
     if (count($parts) !== 3) {
+        error_log('JWT validation failed: Invalid token format - ' . $token);
         return false;
     }
     
@@ -51,17 +67,36 @@ function validateJWT($token) {
     $expectedSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($expectedSignature));
     
     if (!hash_equals($signature, $expectedSignature)) {
+        error_log('JWT validation failed: Invalid signature for token - ' . $token);
         return false;
     }
     
     // Decode payload
     $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $payload)), true);
     
-    // Check expiration
-    if (isset($payload['exp']) && $payload['exp'] < time()) {
+    // Check expiration with detailed logging
+    if (isset($payload['exp'])) {
+        $currentTime = time();
+        $expirationTime = $payload['exp'];
+        $timeRemaining = $expirationTime - $currentTime;
+        
+        error_log("JWT check - Current time: $currentTime, Expiration: $expirationTime, Remaining: $timeRemaining seconds");
+        
+        if ($expirationTime < $currentTime) {
+            error_log("JWT validation failed: Token expired - Expired at " . date('Y-m-d H:i:s', $expirationTime) . ", Current time: " . date('Y-m-d H:i:s', $currentTime));
+            return false;
+        }
+        
+        // Log warning if token will expire soon (less than 1 hour remaining)
+        if ($timeRemaining < 3600) {
+            error_log("JWT warning: Token will expire soon - " . floor($timeRemaining / 60) . " minutes remaining");
+        }
+    } else {
+        error_log('JWT validation failed: No expiration in token payload');
         return false;
     }
     
+    error_log("JWT validation successful: Token valid for user ID: " . ($payload['user_id'] ?? 'unknown'));
     return $payload;
 }
 

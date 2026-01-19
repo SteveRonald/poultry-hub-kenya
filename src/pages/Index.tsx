@@ -316,7 +316,7 @@ const Index = () => {
                 </Link>
                 {!user && (
                   <Link to="/register" className="w-full sm:w-auto">
-                    <Button variant="outline" className="w-full sm:w-auto border-white text-black hover:bg-white hover:text-primary px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
+                    <Button variant="outline" className="w-full sm:w-auto border-white text-black dark:text-white hover:bg-white hover:text-primary dark:hover:bg-white dark:hover:text-primary px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
                       Become a Vendor
                     </Button>
                   </Link>
@@ -563,7 +563,7 @@ const Index = () => {
               </Link>
             )}
             <Link to="/products" className="inline-block">
-              <Button variant="outline" className="border-white text-black hover:bg-white hover:text-primary px-8 py-3 text-lg transform hover:scale-105 transition-transform">
+              <Button variant="outline" className="border-white text-black dark:text-white hover:bg-white hover:text-primary dark:hover:bg-white dark:hover:text-primary px-8 py-3 text-lg transform hover:scale-105 transition-transform">
                 Start Shopping
               </Button>
             </Link>

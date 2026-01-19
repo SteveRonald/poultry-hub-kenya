@@ -25,13 +25,13 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Training from "./pages/Training";
 import Blog from "./pages/Blog";
 import Contact from "./pages/Contact";
-import MarketInsights from "./pages/MarketInsights";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLogin from "./pages/AdminLogin";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import Chatbot from "./components/Chatbot";
 import ChatPage from "./pages/ChatPage";
+import PaystackSuccess from "./pages/PaystackSuccess";
 
 const queryClient = new QueryClient();
 
@@ -60,9 +60,9 @@ const App = () => (
                         </ProtectedRoute>
                       } />
                       <Route path="/checkout" element={<Checkout />} />
-                      <Route path="/market-insights" element={<MarketInsights />} />
                       <Route path="/training" element={<Training />} />
                       <Route path="/blog" element={<Blog />} />
+                      <Route path="/checkout/success" element={<PaystackSuccess />} />
                       <Route path="/contact" element={<Contact />} />
                       <Route path="/dashboard" element={
                         <ProtectedRoute>

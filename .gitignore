@@ -78,3 +78,59 @@ backend/vendor/**/Tests/**
 
 # Database documentation prompts
 DATABASE_ER_DIAGRAM_PROMPT.md
+
+# Railway deployment specific (keep the guide, exclude sensitive configs)
+!RAILWAY_DEPLOYMENT_GUIDE.md
+!railway.toml
+railway.toml.example
+
+# Paystack and payment configuration (keep setup guide, exclude sensitive data)
+!PAYSTACK_LOCALHOST_SETUP.md
+PAYSTACK_*_SECRETS.md
+*PAYSTACK*_KEYS.md
+
+# Local development setup guides with sensitive info
+*LOCALHOST*_SECRETS.md
+*SETUP*_SECRETS.md
+
+# Temporary deployment files
+deploy/
+deployment/
+*.tmp
+temp/
+
+# SSL certificates and keys
+*.pem
+*.key
+*.crt
+*.csr
+ssl/
+
+# Database dumps and exports
+*.sql
+*.sql.gz
+*.dump
+database_export_*
+local_database.*
+
+# Backup files with sensitive data
+**/backup_*.sql
+**/db_backup_*
+**/*_backup.sql
+
+# Configuration files with real credentials
+backend/config/production_*.php
+backend/config/live_*.php
+backend/config/*_config.php
+!backend/config/paystack_config.php
+
+# Session and authentication files
+**/sessions/
+**/cache/
+**/temp/
+**/.sessions/
+
+# Monitoring and analytics files
+**/analytics_*
+**/monitoring_*
+**/metrics_*

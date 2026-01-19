@@ -28,8 +28,23 @@ const getApiBaseUrl = () => {
     return `http://${host}/poultry-hub-kenya/backend`;
   }
   
-  // Production mode - you can set your production URL here
-   return 'https://PoultryhubKenya.great-site.net/backend';
+  // Production mode - check for Railway environment first
+  const railwayUrl = import.meta.env.VITE_RAILWAY_API_URL;
+  if (railwayUrl) {
+    return railwayUrl;
+  }
+  
+  // Check if we're on Railway domain
+  const currentHost = window.location.hostname;
+  if (currentHost.includes('railway.app')) {
+    // On Railway, backend and frontend are separate services
+    // Extract the service name and construct backend URL
+    const serviceName = currentHost.split('.')[0];
+    return `https://${serviceName}-api.railway.app`;
+  }
+  
+  // Fallback to hardcoded production URL
+  return 'https://api.poultryhubkenya.com';
 };
 
 export const API_BASE_URL = getApiBaseUrl();

@@ -32,7 +32,6 @@
 
 - **Connect Farmers & Customers**: Bridge the gap between poultry farmers and customers across Kenya
 - **Quality Assurance**: AI-powered product verification and quality assessment
-- **Market Insights**: Real-time market prices and AI-predicted price trends
 - **Trusted Marketplace**: Verified vendors and secure transaction platform
 - **Localized Experience**: Support for English and Kiswahili languages
 
@@ -69,14 +68,6 @@
   - General poultry farming advice (OpenRouter AI)
   - Support for English and Kiswahili
   - Conversation history and multi-conversation management
-
-### 📊 Market Insights
-
-- **Real-Time Prices**: Current market prices from KAMIS and vendor platform data
-- **Price Predictions**: AI-powered price forecasting using Prophet and ARIMA models
-- **Price Trends**: Interactive charts showing historical and predicted prices
-- **County-Level Data**: Filter prices by county and product type
-- **Time Period Aggregation**: View prices by daily, weekly, monthly, or yearly periods
 
 ### 📢 Advertisement System
 
@@ -139,7 +130,6 @@
 - **Vite 5.4**: Fast build tool and dev server
 - **Tailwind CSS 3.4**: Utility-first CSS framework
 - **Radix UI**: Accessible UI components
-- **Recharts 2.15**: Interactive charts for market insights
 - **React Router 6.26**: Client-side routing
 - **React Hook Form 7.53**: Form management
 - **Zod 3.23**: Schema validation
@@ -157,16 +147,6 @@
 
 - **Google Gemini 2.5 Flash**: Image analysis and description generation
 - **OpenRouter API**: General AI chat (DeepSeek, Mistral)
-- **Python 3.8+**: Machine learning scripts
-- **Prophet**: Time series forecasting
-- **ARIMA**: Statistical forecasting model
-- **Pandas**: Data manipulation
-- **NumPy**: Numerical computing
-
-### Data Sources
-
-- **KAMIS**: Kenya Agricultural Market Information System (scraping)
-- **Vendor Platform**: Aggregated vendor pricing data
 
 ### Infrastructure
 
@@ -201,7 +181,6 @@ poultry-hub-kenya/
 │   │   ├── orders.php      # Order management
 │   │   ├── vendors.php     # Vendor management
 │   │   ├── chat.php        # Chatbot API
-│   │   ├── market_insights.php # Market insights API
 │   │   └── ...
 │   ├── services/           # Service classes
 │   │   ├── ai/            # AI service integrations
@@ -210,10 +189,6 @@ poultry-hub-kenya/
 │   │   ├── auth.php       # Authentication utilities
 │   │   ├── security.php   # Security utilities
 │   │   └── ...
-│   ├── scripts/           # Utility scripts
-│   │   ├── predict_prices.py # Price prediction script
-│   │   ├── scrape_kamis_prices.php # KAMIS scraper
-│   │   └── aggregate_vendor_prices.php # Vendor price aggregator
 │   ├── cron/              # Cron job scripts
 │   ├── migrations/        # Database migrations
 │   └── vendor/            # Composer dependencies
@@ -227,7 +202,6 @@ poultry-hub-kenya/
 │   │   ├── Dashboard.tsx # User dashboard
 │   │   ├── VendorDashboard.tsx # Vendor dashboard
 │   │   ├── AdminDashboard.tsx # Admin dashboard
-│   │   ├── MarketInsights.tsx # Market insights page
 │   │   └── ...
 │   ├── contexts/         # React contexts
 │   ├── hooks/            # Custom React hooks
@@ -252,7 +226,6 @@ poultry-hub-kenya/
 - **PHP 7.4+** with extensions: `pdo`, `pdo_mysql`, `curl`, `json`
 - **MySQL 5.7+** or **MariaDB 10.3+**
 - **Node.js 18+** and **npm** or **yarn**
-- **Python 3.8+** with pip
 - **Composer** (PHP package manager)
 - **XAMPP** (for local development) or **Apache** + **PHP** + **MySQL**
 
@@ -276,13 +249,7 @@ composer install
 npm install
 ```
 
-### Step 4: Install Python Dependencies
-
-```bash
-pip install mysql-connector-python pandas prophet statsmodels numpy
-```
-
-### Step 5: Database Setup
+### Step 4: Database Setup
 
 1. Create a MySQL database:
 ```sql
@@ -296,7 +263,7 @@ mysql -u root -p `poultry marketplace` < database.sql
 
 3. Or run migrations manually (check `backend/migrations/` folder)
 
-### Step 6: Environment Configuration
+### Step 5: Environment Configuration
 
 1. Copy `.env.example` to `.env` in the root directory:
 ```bash
@@ -331,13 +298,13 @@ APP_ENV=development
 APP_URL=http://localhost/poultry-hub-kenya
 ```
 
-### Step 7: Configure Apache (XAMPP)
+### Step 6: Configure Apache (XAMPP)
 
 1. Ensure XAMPP is installed and running
 2. Place the project in `C:\xampp\htdocs\poultry-hub-kenya\` (Windows) or `/opt/lampp/htdocs/poultry-hub-kenya/` (Linux)
 3. Access the backend API at: `http://localhost/poultry-hub-kenya/backend/`
 
-### Step 8: Start Development Server
+### Step 7: Start Development Server
 
 ```bash
 # Start frontend dev server
@@ -388,12 +355,6 @@ Edit `backend/config/sms_config.php`:
 Set up the following cron jobs for automated tasks:
 
 ```bash
-# Fetch market prices (monthly)
-0 0 1 * * php /path/to/backend/cron/fetch_market_prices.php
-
-# Generate price predictions (daily)
-0 2 * * * php /path/to/backend/cron/generate_predictions.php
-
 # Expire advertisements (daily)
 0 0 * * * php /path/to/backend/cron/expire_advertisements.php
 
@@ -411,7 +372,7 @@ Use the provided batch files:
 
 ## 🗄️ Database Schema
 
-The database consists of **38 tables** organized into the following categories:
+The database consists of **35 tables** organized into the following categories:
 
 ### Core Tables
 
@@ -439,12 +400,6 @@ The database consists of **38 tables** organized into the following categories:
 - **chatbot_learned_synonyms**: ML learned synonyms
 - **chatbot_match_history**: Match history
 - **chatbot_training_examples**: Training examples
-
-### Market Insights Tables
-
-- **market_prices**: Actual market prices (KAMIS/Vendor)
-- **predicted_prices**: AI-predicted prices
-- **market_insights_metadata**: System metadata
 
 ### Advertisement Tables
 
@@ -480,6 +435,8 @@ The database consists of **38 tables** organized into the following categories:
 - **County → Constituencies → Wards** (Hierarchical): Location hierarchy
 
 For a detailed ER diagram, see the database schema documentation.
+
+**Note:** Market insights tables (`market_prices`, `predicted_prices`, `market_insights_metadata`) have been removed via migration `drop_market_insights_tables.php`.
 
 ---
 
@@ -532,13 +489,6 @@ Authorization: Bearer <jwt_token>
 - `DELETE /api/chat/conversations/:id` - Delete conversation
 - `GET /api/chat/settings/language` - Get language preference
 - `PUT /api/chat/settings/language` - Update language preference
-
-#### Market Insights
-
-- `GET /api/market-insights/combined` - Get combined actual and predicted prices
-- `GET /api/market-insights/filters` - Get filter options (products, counties)
-- `GET /api/market-insights/prices` - Get actual prices
-- `GET /api/market-insights/predictions` - Get predicted prices
 
 #### Location
 
@@ -720,18 +670,12 @@ For support, please contact:
 - [x] Hybrid chatbot system
 - [x] Multi-language support (English, Kiswahili)
 
-### Phase 3: Market Insights ✅
-- [x] Real-time market prices
-- [x] AI-powered price predictions
-- [x] Interactive price charts
-- [x] County-level filtering
-
-### Phase 4: Advertisement System ✅
+### Phase 3: Advertisement System ✅
 - [x] Product advertisements
 - [x] Advertisement analytics
 - [x] Click and view tracking
 
-### Phase 5: Future Enhancements 🚧
+### Phase 4: Future Enhancements 🚧
 - [ ] Mobile app (React Native)
 - [ ] Advanced analytics dashboard
 - [ ] Payment gateway integration (M-Pesa, PayPal)

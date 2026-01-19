@@ -285,3 +285,20 @@ const ChatDrawer: React.FC<ChatDrawerProps> = ({ isOpen, onClose, productId, ven
 
 export default ChatDrawer;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

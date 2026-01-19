@@ -26,7 +26,7 @@ const Checkout = () => {
   const [formData, setFormData] = useState({
     shipping_address: '',
     contact_phone: user?.phone || '',
-    payment_method: 'mpesa',
+    payment_method: 'paystack',
     payment_account_number: '',
     notes: ''
   });
@@ -130,60 +130,149 @@ const Checkout = () => {
     setLoading(true);
 
     try {
-      // Create orders for each item
-      const orderPromises = checkoutItems.map((item) =>
-        fetch(getApiUrl('/api/orders'), {
+      if (formData.payment_method === 'paystack') {
+        // Handle Paystack payment flow
+        // First create the order
+        const orderPromises = checkoutItems.map((item) =>
+          fetch(getApiUrl('/api/orders'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+              product_id: item.product_id,
+              quantity: item.quantity,
+              shipping_address: formData.shipping_address.trim(),
+              contact_phone: formData.contact_phone.trim(),
+              payment_method: formData.payment_method,
+              payment_account_number: formData.payment_account_number.trim(),
+              notes: formData.notes.trim() || 'Order from checkout'
+            })
+          })
+        );
+
+        const responses = await Promise.all(orderPromises);
+        const results = await Promise.all(responses.map(r => r.json()));
+
+        // Check if all orders succeeded
+        const failedOrders = results.filter(r => !r.success && r.success !== undefined);
+
+        if (failedOrders.length > 0) {
+          toast.error('Some orders failed. Please try again.');
+          return;
+        }
+
+        // Get the first order ID for payment initialization
+        const firstOrder = results.find(r => r.order_id);
+        if (!firstOrder) {
+          toast.error('Failed to create order. Please try again.');
+          return;
+        }
+
+        // Initialize Paystack payment
+        const paymentResponse = await fetch(getApiUrl('/api/payments/paystack/initialize'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
           body: JSON.stringify({
-            product_id: item.product_id,
-            quantity: item.quantity,
-            shipping_address: formData.shipping_address.trim(),
-            contact_phone: formData.contact_phone.trim(),
-            payment_method: formData.payment_method,
-            payment_account_number: formData.payment_account_number.trim(),
-            notes: formData.notes.trim() || 'Order from checkout'
+            order_id: firstOrder.order_id,
+            amount: totalAmount,
+            email: user?.email || 'customer@poultryhubkenya.com',
+            callback_url: `${window.location.origin}/checkout/success`
           })
-        })
-      );
-
-      const responses = await Promise.all(orderPromises);
-      const results = await Promise.all(responses.map(r => r.json()));
-
-      // Check if all orders succeeded
-      const failedOrders = results.filter(r => !r.success && r.success !== undefined);
-      
-      if (failedOrders.length > 0) {
-        toast.error('Some orders failed. Please try again.');
-        return;
-      }
-
-      // Clear cart after successful order
-      if (user) {
-        // Clear database cart
-        await fetch(getApiUrl('/api/cart/clear'), {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
         });
-        refreshCart();
+
+        const paymentData = await paymentResponse.json();
+
+        if (!paymentData.success) {
+          toast.error('Failed to initialize payment. Please try again.');
+          return;
+        }
+
+        // Use Paystack Popup for better UX
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v1/inline.js';
+        script.async = true;
+        script.onload = () => {
+          const handler = (window as any).PaystackPop.setup({
+            key: paymentData.public_key,
+            email: user?.email || 'customer@poultryhubkenya.com',
+            amount: totalAmount * 100, // Convert to kobo/cents
+            ref: paymentData.reference,
+            callback: function(response: any) {
+              // Payment successful - redirect to success page
+              window.location.href = `/checkout/success?reference=${response.reference}`;
+            },
+            onClose: function() {
+              toast.info('Payment window closed. You can try again.');
+              setLoading(false);
+            }
+          });
+          
+          handler.openIframe();
+        };
+        
+        document.body.appendChild(script);
+
       } else {
-        // Clear local cart
-        localStorage.removeItem('local_cart');
-      }
+        // Handle other payment methods (M-Pesa, etc.)
+        const orderPromises = checkoutItems.map((item) =>
+          fetch(getApiUrl('/api/orders'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+              product_id: item.product_id,
+              quantity: item.quantity,
+              shipping_address: formData.shipping_address.trim(),
+              contact_phone: formData.contact_phone.trim(),
+              payment_method: formData.payment_method,
+              payment_account_number: formData.payment_account_number.trim(),
+              notes: formData.notes.trim() || 'Order from checkout'
+            })
+          })
+        );
 
-      // Extract order number from first successful order
-      const firstOrder = results.find(r => r.order_number || r.order_id);
-      if (firstOrder) {
-        setOrderNumber(firstOrder.order_number || `#${firstOrder.order_id}`);
-      }
+        const responses = await Promise.all(orderPromises);
+        const results = await Promise.all(responses.map(r => r.json()));
 
-      // Show success modal instead of immediate redirect
-      setShowSuccessModal(true);
+        // Check if all orders succeeded
+        const failedOrders = results.filter(r => !r.success && r.success !== undefined);
+
+        if (failedOrders.length > 0) {
+          toast.error('Some orders failed. Please try again.');
+          return;
+        }
+
+        // Clear cart after successful order
+        if (user) {
+          // Clear database cart
+          await fetch(getApiUrl('/api/cart/clear'), {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          refreshCart();
+        } else {
+          // Clear local cart
+          localStorage.removeItem('local_cart');
+        }
+
+        // Extract order number from first successful order
+        const firstOrder = results.find(r => r.order_number || r.order_id);
+        if (firstOrder) {
+          setOrderNumber(firstOrder.order_number || `#${firstOrder.order_id}`);
+        }
+
+        // Show success modal instead of immediate redirect
+        setShowSuccessModal(true);
+      }
     } catch (error) {
       console.error('Error placing order:', error);
       toast.error('Failed to place order. Please try again.');
@@ -295,8 +384,19 @@ const Checkout = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="mpesa">M-Pesa</SelectItem>
-                        <SelectItem value="bank" disabled>Bank Transfer (Coming Soon)</SelectItem>
+                        {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? (
+                          <>
+                            <SelectItem value="paystack">Paystack (Card, Bank Transfer)</SelectItem>
+                            <SelectItem value="mpesa">M-Pesa</SelectItem>
+                            <SelectItem value="bank" disabled>Bank Transfer (Coming Soon)</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="paystack">Paystack (Card, Bank Transfer)</SelectItem>
+                            <SelectItem value="mpesa">M-Pesa</SelectItem>
+                            <SelectItem value="bank" disabled>Bank Transfer (Coming Soon)</SelectItem>
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -386,7 +486,7 @@ const Checkout = () => {
                             <span>.</span>
                           </span>
                         </span>
-                      ) : 'Place Order'}
+                      ) : 'Proceed to Payment'}
                     </Button>
                   )}
                 </form>

@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, ShoppingCart, Star, MapPin, Plus, X } from 'lucide-react';
+import { Search, Filter, ShoppingCart, Star, MapPin, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { useProducts, Product } from '../hooks/useProducts';
@@ -23,6 +24,7 @@ const Products = () => {
   const highlightedProductId = searchParams.get('product');
   const productRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [minPrice, setMinPrice] = useState('');
@@ -32,6 +34,10 @@ const Products = () => {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState('all');
+  const [expandedSections, setExpandedSections] = useState({
+    quickFilters: true,
+    searchCategory: true
+  });
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedDescription, setSelectedDescription] = useState<{ name: string; description: string } | null>(null);
   const [advertisements, setAdvertisements] = useState<any[]>([]);
@@ -40,13 +46,72 @@ const Products = () => {
   const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { addToCart, loading: cartLoading } = useCart();
   const { user } = useAuth();
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // URL parameter persistence
+  useEffect(() => {
+    // Read initial filter values from URL parameters
+    const urlParams = new URLSearchParams(searchParams);
+
+    const search = urlParams.get('search') || '';
+    const category = urlParams.get('category') || 'all';
+    const location = urlParams.get('location') || 'all';
+    const minPriceParam = urlParams.get('minPrice') || '';
+    const maxPriceParam = urlParams.get('maxPrice') || '';
+    const minRatingParam = urlParams.get('minRating') || '0';
+    const sortByParam = urlParams.get('sortBy') || 'newest';
+    const inStockOnlyParam = urlParams.get('inStockOnly') === 'true';
+    const vendorParam = urlParams.get('vendor') || 'all';
+
+    setSearchTerm(search);
+    setDebouncedSearchTerm(search); // Set both to prevent delay on initial load
+    setSelectedCategory(category);
+    setSelectedLocation(location);
+    setMinPrice(minPriceParam);
+    setMaxPrice(maxPriceParam);
+    setMinRating(minRatingParam);
+    setSortBy(sortByParam);
+    setInStockOnly(inStockOnlyParam);
+    setSelectedVendor(vendorParam);
+  }, []); // Only run on mount
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (searchTerm) params.set('search', searchTerm);
+    if (selectedCategory !== 'all') params.set('category', selectedCategory);
+    if (selectedLocation !== 'all') params.set('location', selectedLocation);
+    if (minPrice) params.set('minPrice', minPrice);
+    if (maxPrice) params.set('maxPrice', maxPrice);
+    if (minRating !== '0') params.set('minRating', minRating);
+    if (sortBy !== 'newest') params.set('sortBy', sortBy);
+    if (inStockOnly) params.set('inStockOnly', 'true');
+    if (selectedVendor !== 'all') params.set('vendor', selectedVendor);
+
+    const newSearch = params.toString();
+    const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`;
+
+    // Only update URL if it actually changed
+    if (window.location.search !== `?${newSearch}`) {
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [debouncedSearchTerm, selectedCategory, selectedLocation, minPrice, maxPrice, minRating, sortBy, inStockOnly, selectedVendor]);
   
   // Scroll animation refs
   const productsGridRef = useRef<HTMLDivElement>(null);
   
   // Get products first
   const { data: allProducts = [], isLoading, error } = useProducts(
-    searchTerm || undefined,
+    debouncedSearchTerm || undefined,
     selectedCategory,
     selectedLocation
   );
@@ -61,7 +126,7 @@ const Products = () => {
     const ratingMatch = (p.average_rating || 0) >= minRatingNum;
     const stockMatch = !inStockOnly || (p.stock_quantity && p.stock_quantity > 0);
     const vendorMatch = selectedVendor === 'all' || p.vendor_profiles?.farm_name === selectedVendor;
-    
+
     return priceMatch && ratingMatch && stockMatch && vendorMatch;
   }).sort((a, b) => {
     switch(sortBy) {
@@ -79,6 +144,19 @@ const Products = () => {
   
   // Get unique vendors
   const vendors = Array.from(new Set(allProducts.map(p => p.vendor_profiles?.farm_name).filter(Boolean)));
+
+  // Calculate result counts for filter options
+  const getCategoryCount = (category: string) => {
+    return allProducts.filter(p => category === 'all' || p.category === category).length;
+  };
+
+  const getLocationCount = (location: string) => {
+    return allProducts.filter(p => location === 'all' || p.vendor_profiles?.location === location).length;
+  };
+
+  const getVendorCount = (vendor: string) => {
+    return allProducts.filter(p => vendor === 'all' || p.vendor_profiles?.farm_name === vendor).length;
+  };
   
   // Function to check if description needs truncation (more than ~150 characters or 2 lines)
   const needsTruncation = (description: string): boolean => {
@@ -398,70 +476,273 @@ const Products = () => {
             ))}
 
           {/* Filters */}
-          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  type="text"
-                  placeholder="Search products or vendors..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="chicks">Chicks</SelectItem>
-                  <SelectItem value="eggs">Eggs</SelectItem>
-                  <SelectItem value="chickens">Chickens</SelectItem>
-                  <SelectItem value="feed">Feed</SelectItem>
-                  <SelectItem value="equipment">Equipment</SelectItem>
-                  <SelectItem value="medicine">Medicine</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map(location => (
-                    <SelectItem key={location} value={location}>
-                      {location === 'all' ? 'All Locations' : location}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button 
-                variant="outline" 
-                className="flex items-center"
-                onClick={() => setShowMoreFilters(true)}
+          <div className="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+            {/* Search & Category Section */}
+            <div className="border-b border-gray-100">
+              <button
+                onClick={() => setExpandedSections(prev => ({ ...prev, searchCategory: !prev.searchCategory }))}
+                className="w-full px-4 sm:px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                aria-expanded={expandedSections.searchCategory}
+                aria-controls="search-category-section"
               >
-                <Filter className="h-4 w-4 mr-2" />
-                More Filters
-              </Button>
+                <h3 className="font-semibold text-gray-900">Search & Categories</h3>
+                {expandedSections.searchCategory ? (
+                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                )}
+              </button>
+
+              {expandedSections.searchCategory && (
+                <div id="search-category-section" className="px-4 sm:px-6 pb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        type="text"
+                        placeholder="Search products or vendors..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                        aria-label="Search products"
+                      />
+                    </div>
+
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger aria-label={`Product category filter, ${selectedCategory === 'all' ? 'showing all categories' : `filtered to ${selectedCategory}`}`}>
+                        <SelectValue placeholder="All Categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories ({allProducts.length})</SelectItem>
+                        <SelectItem value="chicks">Chicks ({getCategoryCount('chicks')})</SelectItem>
+                        <SelectItem value="eggs">Eggs ({getCategoryCount('eggs')})</SelectItem>
+                        <SelectItem value="chickens">Chickens ({getCategoryCount('chickens')})</SelectItem>
+                        <SelectItem value="feed">Feed ({getCategoryCount('feed')})</SelectItem>
+                        <SelectItem value="equipment">Equipment ({getCategoryCount('equipment')})</SelectItem>
+                        <SelectItem value="medicine">Medicine ({getCategoryCount('medicine')})</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                      <SelectTrigger aria-label={`Location filter, ${selectedLocation === 'all' ? 'showing all locations' : `filtered to ${selectedLocation}`}`}>
+                        <SelectValue placeholder="All Locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map(location => (
+                          <SelectItem key={location} value={location}>
+                            {location === 'all' ? `All Locations (${allProducts.length})` : `${location} (${getLocationCount(location)})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Filters Section */}
+            <div className="border-b border-gray-100">
+              <button
+                onClick={() => setExpandedSections(prev => ({ ...prev, quickFilters: !prev.quickFilters }))}
+                className="w-full px-4 sm:px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                aria-expanded={expandedSections.quickFilters}
+                aria-controls="quick-filters-section"
+              >
+                <h3 className="font-semibold text-gray-900">Quick Filters</h3>
+                {expandedSections.quickFilters ? (
+                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                )}
+              </button>
+
+              {expandedSections.quickFilters && (
+                <div id="quick-filters-section" className="px-4 sm:px-6 pb-4">
+                  <div className="space-y-4">
+                    {/* Price Range Quick Select */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Price Range</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <Button
+                          variant={minPrice === '' && maxPrice === '100' ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => { setMinPrice(''); setMaxPrice('100'); }}
+                          className="text-xs h-8"
+                        >
+                          Under 100 KSH
+                        </Button>
+                        <Button
+                          variant={minPrice === '100' && maxPrice === '500' ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => { setMinPrice('100'); setMaxPrice('500'); }}
+                          className="text-xs h-8"
+                        >
+                          100-500 KSH
+                        </Button>
+                        <Button
+                          variant={minPrice === '500' && maxPrice === '' ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => { setMinPrice('500'); setMaxPrice(''); }}
+                          className="text-xs h-8"
+                        >
+                          500+ KSH
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Rating & Availability */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Rating & Availability</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <Button
+                          variant={minRating === '4' ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setMinRating(minRating === '4' ? '0' : '4')}
+                          className="text-xs h-8"
+                        >
+                          4+ ⭐ Rating
+                        </Button>
+                        <Button
+                          variant={inStockOnly ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setInStockOnly(!inStockOnly)}
+                          className="text-xs h-8"
+                        >
+                          In Stock Only
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Filter Actions */}
+            <div className="px-4 sm:px-6 py-4 bg-gray-50 border-t border-gray-100">
+              <div className="flex flex-col sm:flex-row gap-3">
+                {(() => {
+                  const advancedFilterCount = [
+                    sortBy !== 'newest',
+                    selectedVendor !== 'all',
+                    minPrice || maxPrice,
+                    minRating !== '0'
+                  ].filter(Boolean).length;
+
+                  const hasAnyFilters = searchTerm || selectedCategory !== 'all' || selectedLocation !== 'all' ||
+                                       minPrice || maxPrice || minRating !== '0' || inStockOnly;
+
+                  return (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="flex items-center justify-center sm:flex-1 h-10"
+                        onClick={() => setShowMoreFilters(true)}
+                        aria-label={`Advanced filters ${advancedFilterCount > 0 ? `(${advancedFilterCount} active)` : ''}`}
+                      >
+                        <Filter className="h-4 w-4 mr-2" />
+                        Advanced Filters
+                        {advancedFilterCount > 0 && (
+                          <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs bg-primary text-white">
+                            {advancedFilterCount}
+                          </Badge>
+                        )}
+                      </Button>
+
+                      {hasAnyFilters && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setSearchTerm('');
+                            setSelectedCategory('all');
+                            setSelectedLocation('all');
+                            setMinPrice('');
+                            setMaxPrice('');
+                            setMinRating('0');
+                            setInStockOnly(false);
+                          }}
+                          className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 h-10 sm:w-auto"
+                          aria-label="Clear all filters"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Clear All
+                        </Button>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 
+          {/* Active Filter Chips */}
+          {(() => {
+            const activeFilters = [];
+
+            if (searchTerm) activeFilters.push({ type: 'search', label: `Search: "${searchTerm}"`, clear: () => setSearchTerm('') });
+            if (selectedCategory !== 'all') activeFilters.push({ type: 'category', label: `Category: ${selectedCategory}`, clear: () => setSelectedCategory('all') });
+            if (selectedLocation !== 'all') activeFilters.push({ type: 'location', label: `Location: ${selectedLocation}`, clear: () => setSelectedLocation('all') });
+            if (minPrice || maxPrice) activeFilters.push({ type: 'price', label: `Price: ${minPrice || '0'} - ${maxPrice || '∞'} KSH`, clear: () => { setMinPrice(''); setMaxPrice(''); } });
+            if (minRating !== '0') activeFilters.push({ type: 'rating', label: `Rating: ${minRating}+ stars`, clear: () => setMinRating('0') });
+            if (sortBy !== 'newest') activeFilters.push({ type: 'sort', label: `Sort: ${sortBy === 'price-low' ? 'Low to High' : sortBy === 'price-high' ? 'High to Low' : sortBy === 'rating' ? 'Best Rated' : 'Newest'}`, clear: () => setSortBy('newest') });
+            if (inStockOnly) activeFilters.push({ type: 'stock', label: 'In Stock Only', clear: () => setInStockOnly(false) });
+            if (selectedVendor !== 'all') activeFilters.push({ type: 'vendor', label: `Vendor: ${selectedVendor}`, clear: () => setSelectedVendor('all') });
+
+            return activeFilters.length > 0 && (
+              <div className="bg-white p-3 sm:p-4 rounded-lg shadow-md mb-6">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Active Filters:</span>
+                  <div className="flex flex-wrap items-center gap-2 flex-1">
+                    {activeFilters.map((filter, index) => (
+                      <Badge key={index} variant="secondary" className="flex items-center gap-1 px-2 sm:px-3 py-1 text-xs">
+                        <span className="truncate max-w-24 sm:max-w-none">{filter.label}</span>
+                        <button
+                          onClick={filter.clear}
+                          className="ml-1 hover:bg-gray-300 rounded-full p-0.5 transition-colors flex-shrink-0"
+                          aria-label={`Remove ${filter.label} filter`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedCategory('all');
+                      setSelectedLocation('all');
+                      setMinPrice('');
+                      setMaxPrice('');
+                      setMinRating('0');
+                      setSortBy('newest');
+                      setInStockOnly(false);
+                      setSelectedVendor('all');
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 whitespace-nowrap mt-1 sm:mt-0"
+                  >
+                    Clear All
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Advanced Filters Modal */}
           {showMoreFilters && (
-            <div 
+            <div
               className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4"
               onClick={() => setShowMoreFilters(false)}
             >
               <Card className="w-full sm:max-w-md animate-in zoom-in-95 duration-200 rounded-t-2xl sm:rounded-xl max-h-[90vh] overflow-y-auto sm:max-h-[95vh] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <CardHeader className="sticky top-0 bg-white dark:bg-gray-800 border-b flex justify-between items-center px-4 sm:px-6 py-4">
-                  <CardTitle className="text-lg sm:text-xl font-bold text-gray-900">Advanced Filters</CardTitle>
+                <CardHeader className="sticky top-0 bg-white dark:bg-gray-800 border-b flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4">
+                  <div className="flex items-center gap-3">
+                    <Filter className="h-5 w-5 text-gray-600" />
+                    <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Advanced Filters</CardTitle>
+                  </div>
                   <button
                     onClick={() => setShowMoreFilters(false)}
-                    className="flex-shrink-0 ml-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 transition-colors duration-150"
+                    className="flex-shrink-0 p-3 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors duration-150 touch-manipulation"
                     aria-label="Close filters"
                     title="Close"
                   >
@@ -508,10 +789,10 @@ const Products = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Vendors</SelectItem>
+                        <SelectItem value="all">All Vendors ({allProducts.length})</SelectItem>
                         {vendors.map(vendor => (
                           <SelectItem key={vendor} value={vendor || 'Unknown'}>
-                            {vendor || 'Unknown'}
+                            {vendor || 'Unknown'} ({getVendorCount(vendor)})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -562,7 +843,7 @@ const Products = () => {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-2 sm:gap-3 pt-4 sm:pt-4">
+                  <div className="flex gap-3 sm:gap-3 pt-6 sm:pt-4 sticky bottom-0 bg-white dark:bg-gray-800 border-t mt-6 -mb-6 -mx-4 px-4 py-4 sm:relative sm:bg-transparent sm:border-t-0 sm:mt-0 sm:-mb-0 sm:-mx-0 sm:px-0 sm:py-0">
                     <Button
                       variant="outline"
                       onClick={() => {
@@ -573,13 +854,13 @@ const Products = () => {
                         setInStockOnly(false);
                         setSelectedVendor('all');
                       }}
-                      className="flex-1 text-xs sm:text-sm"
+                      className="flex-1 h-12 sm:h-10 text-sm sm:text-sm touch-manipulation font-medium"
                     >
                       Reset All
                     </Button>
                     <Button
                       onClick={() => setShowMoreFilters(false)}
-                      className="flex-1 btn-primary text-xs sm:text-sm"
+                      className="flex-1 h-12 sm:h-10 btn-primary text-sm sm:text-sm touch-manipulation font-medium"
                     >
                       Apply Filters
                     </Button>
@@ -589,10 +870,18 @@ const Products = () => {
             </div>
           )}
 
+          {/* Screen Reader Announcements */}
+          <div className="sr-only" aria-live="polite" aria-atomic="true">
+            {products.length === 1 ? '1 product found' : `${products.length} products found`}
+            {searchTerm && ` matching "${searchTerm}"`}
+            {selectedCategory !== 'all' && ` in ${selectedCategory} category`}
+            {selectedLocation !== 'all' && ` from ${selectedLocation}`}
+          </div>
+
           {/* Loading State */}
           {isLoading && (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <div className="text-center py-12" aria-label="Loading products">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" aria-hidden="true"></div>
               <p className="text-gray-500 mt-4">Loading products...</p>
             </div>
           )}

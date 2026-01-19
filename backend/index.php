@@ -74,6 +74,26 @@ $path = str_replace('/backend/', '', $path);
 $path = str_replace('index.php/', '', $path); // Remove index.php/ if present
 $path = ltrim($path, '/'); // Remove leading slash
 
+// Handle dynamic route for payment verification (before switch)
+if (preg_match('#^api/payments/paystack/verify/([^/]+)$#', $path, $matches)) {
+    $reference = $matches[1] ?? null;
+    if ($method === 'GET' && $reference) {
+        include 'routes/payments.php';
+        handleVerifyPaystackPayment($reference);
+        exit;
+    }
+}
+
+// Handle dynamic route for payment status (before switch)
+if (preg_match('#^api/payments/status/([^/]+)$#', $path, $matches)) {
+    $orderId = $matches[1] ?? null;
+    if ($method === 'GET' && $orderId) {
+        include 'routes/payments.php';
+        handleGetPaymentStatus($orderId);
+        exit;
+    }
+}
+
 // Handle dynamic routes for conversation deletion (before switch)
 if (preg_match('#^api/chat/conversations/([^/]+)$#', $path, $matches)) {
     $conversationId = $matches[1] ?? null;
@@ -899,21 +919,6 @@ switch ($path) {
             handleReactivateAdvertisement();
         }
         break;
-        
-    case 'api/market-insights/prices':
-        if ($method === 'GET') {
-            include 'routes/market_insights.php';
-            handleGetMarketPrices();
-        }
-        break;
-        
-    case 'api/market-insights/predictions':
-        if ($method === 'GET') {
-            include 'routes/market_insights.php';
-            handleGetPredictedPrices();
-        }
-        break;
-        
     case 'api/admin/system-logs':
         if ($method === 'GET') {
             include 'routes/system_logs.php';
@@ -927,24 +932,24 @@ switch ($path) {
             handleGetLogActions();
         }
         break;
-        
-    case 'api/market-insights/combined':
-        if ($method === 'GET') {
-            include 'routes/market_insights.php';
-            handleGetCombinedPrices();
-        }
-        break;
-        
-    case 'api/market-insights/filter-options':
-        if ($method === 'GET') {
-            include 'routes/market_insights.php';
-            handleGetFilterOptions();
-        }
-        break;
-        
     case 'api/ratings':
         include 'routes/ratings.php';
         // Functions handle routing internally based on method and query params
+        break;
+        
+    // Payment routes
+    case 'api/payments/paystack/initialize':
+        if ($method === 'POST') {
+            include 'routes/payments.php';
+            handleInitializePaystackPayment();
+        }
+        break;
+        
+    case 'api/payments/paystack/webhook':
+        if ($method === 'POST') {
+            include 'routes/payments.php';
+            handlePaystackWebhook();
+        }
         break;
         
     default:

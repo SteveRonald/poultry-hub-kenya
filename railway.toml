@@ -1,43 +1,9 @@
-# Railway Deployment Configuration
-# This file tells Railway how to build and deploy your application
+# Simple Railway Configuration
+# Let Railway auto-detect services
 
-# Frontend Service Configuration
 [build]
 builder = "NIXPACKS"
 
-# Environment Variables
 [variables]
 NODE_ENV = "production"
 PHP_ENV = "production"
-
-# Health Check Configuration
-[deploy]
-healthcheckPath = "/"
-healthcheckTimeout = 300
-restartPolicyType = "ON_FAILURE"
-startCommand = "npm start"
-
-# Services Configuration
-[[services]]
-name = "frontend"
-source = "."
-[services.build]
-builder = "NIXPACKS"
-[services.build.buildCommand]
-[services.build.startCommand]
-[services.deploy]
-healthcheckPath = "/"
-healthcheckTimeout = 300
-restartPolicyType = "ON_FAILURE"
-
-[[services]]
-name = "backend"
-source = "./backend"
-[services.build]
-builder = "NIXPACKS"
-[services.build.buildCommand]
-[services.build.startCommand]
-[services.deploy]
-healthcheckPath = "/api"
-healthcheckTimeout = 300
-restartPolicyType = "ON_FAILURE"

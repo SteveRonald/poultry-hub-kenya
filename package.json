@@ -47,7 +47,7 @@
     "@radix-ui/react-toggle": "^1.1.0",
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.4",
-    "@tanstack/react-query": "^5.56.2",
+    "@tanstack/react-query": "^5.90.19",
     "bcryptjs": "^3.0.2",
     "caniuse-lite": "^1.0.30001727",
     "class-variance-authority": "^0.7.1",

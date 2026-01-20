@@ -134,3 +134,10 @@ backend/config/*_config.php
 **/analytics_*
 **/monitoring_*
 **/metrics_*
+
+# All .md files (except specific ones we want to keep)
+*.md
+!README.md
+!RAILWAY_DEPLOYMENT_GUIDE.md
+!railway.toml
+!PAYSTACK_LOCALHOST_SETUP.md

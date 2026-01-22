@@ -174,21 +174,8 @@ const Checkout = () => {
         return;
       }
 
-      // Test API connectivity first
-      try {
-        const testResponse = await fetch(getApiUrl('/test_api.php'));
-        console.log('Test API response:', testResponse.status);
-        const testData = await testResponse.json();
-        console.log('Test API data:', testData);
-      } catch (testError) {
-        console.error('Test API failed:', testError);
-        toast.error('API connectivity test failed. Check if backend is running.');
-        setLoading(false);
-        return;
-      }
-
       // Initialize Paystack payment first (no order created yet)
-      const apiUrl = getApiUrl('/test_payment_init.php'); // Test endpoint first
+      const apiUrl = getApiUrl('/api/payments/paystack/initialize'); // Production endpoint
       console.log('API URL:', apiUrl);
 
       const paymentResponse = await fetch(apiUrl, {
@@ -201,7 +188,13 @@ const Checkout = () => {
           order_id: 0, // Temporary ID for payment initialization
           amount: totalAmount,
           email: user?.email || 'customer@poultryhubkenya.com',
-          callback_url: `${window.location.origin}/checkout/success`
+          callback_url: `${window.location.origin}/checkout/success`,
+          // Include checkout data for webhook processing
+          items: checkoutItems,
+          shipping_address: formData.shipping_address.trim(),
+          contact_phone: formData.contact_phone.trim(),
+          notes: formData.notes.trim() || 'Order from checkout',
+          payment_method: 'paystack'
         })
       });
 
@@ -557,14 +550,56 @@ const Checkout = () => {
               </Card>
 
               {/* Payment Methods */}
-              <Card className="bg-gray-50">
-                <CardContent className="p-4">
-                  <div className="text-center space-y-2">
-                    <p className="text-xs text-gray-600 font-medium">We Accept</p>
-                    <div className="flex justify-center items-center space-x-2">
-                      <div className="w-8 h-5 bg-gray-800 rounded flex items-center justify-center text-white text-xs font-bold">VISA</div>
-                      <div className="w-8 h-5 bg-red-600 rounded flex items-center justify-center text-white text-xs font-bold">MC</div>
-                      <div className="w-8 h-5 bg-green-600 rounded flex items-center justify-center text-white text-xs font-bold">MPESA</div>
+              <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-2">
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-gray-700 mb-1">Secure Payment Methods</p>
+                      <p className="text-xs text-gray-500">Powered by Paystack</p>
+                    </div>
+                    
+                    {/* Payment Icons Grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Visa */}
+                      <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                        <div className="flex flex-col items-center space-y-1">
+                          <div className="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-700 rounded flex items-center justify-center">
+                            <span className="text-white font-bold text-sm italic">VISA</span>
+                          </div>
+                          <span className="text-xs text-gray-600">Visa Card</span>
+                        </div>
+                      </div>
+                      
+                      {/* Mastercard */}
+                      <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                        <div className="flex flex-col items-center space-y-1">
+                          <div className="w-12 h-8 bg-gradient-to-r from-red-500 to-orange-500 rounded flex items-center justify-center">
+                            <div className="flex space-x-[-4px]">
+                              <div className="w-4 h-4 bg-red-600 rounded-full opacity-80"></div>
+                              <div className="w-4 h-4 bg-orange-500 rounded-full opacity-80"></div>
+                            </div>
+                          </div>
+                          <span className="text-xs text-gray-600">Mastercard</span>
+                        </div>
+                      </div>
+                      
+                      {/* M-PESA */}
+                      <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                        <div className="flex flex-col items-center space-y-1">
+                          <div className="w-12 h-8 bg-gradient-to-r from-green-600 to-green-700 rounded flex items-center justify-center">
+                            <span className="text-white font-bold text-xs">M-PESA</span>
+                          </div>
+                          <span className="text-xs text-gray-600">Mobile Money</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Security Badge */}
+                    <div className="flex items-center justify-center space-x-2 pt-2 border-t border-gray-200">
+                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-xs text-gray-600 font-medium">SSL Encrypted & Secure</span>
                     </div>
                   </div>
                 </CardContent>

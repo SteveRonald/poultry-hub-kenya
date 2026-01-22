@@ -311,6 +311,13 @@ const Training = () => {
               Access expert knowledge and training resources from trusted institutions across Kenya. 
               Learn from leading agricultural universities, research institutes, and industry experts.
             </p>
+            
+            {/* Disclaimer */}
+            <div className="mt-6 max-w-4xl mx-auto bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                <strong className="text-amber-800 dark:text-amber-400">Disclaimer:</strong> The training videos and educational content provided on this page include third-party materials from YouTube and other sources. We do not claim ownership of these videos. All content remains the property of its respective creators and organizations (FAO, ILRI, KALRO, and other educational institutions). These resources are shared for educational purposes only to support the poultry farming community in Kenya.
+              </p>
+            </div>
           </div>
 
           {/* Stats */}

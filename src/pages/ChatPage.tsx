@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useChat } from '../contexts/ChatContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
-import { X, Send, Circle, Trash2, MoreVertical } from 'lucide-react';
+import { X, Send, Circle, Trash2, MoreVertical, MessageCircle, User, Store, Image as ImageIcon, Clock } from 'lucide-react';
 import { getImageUrl } from '../config/api';
 import { toast } from 'sonner';
 
@@ -323,10 +323,12 @@ const ChatPage: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">
           {conversationMessages.length === 0 && (
             <div className="text-center text-gray-500 dark:text-gray-400 py-8 sm:py-12">
-              <div className="space-y-3 max-w-xs mx-auto">
-                <div className="text-4xl sm:text-5xl mb-3 animate-pulse">💬</div>
-                <div className="font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg">Start a conversation</div>
-                <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Send a message to get started</div>
+              <div className="space-y-4 max-w-sm mx-auto">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-2">
+                  <MessageCircle className="h-10 w-10 text-primary" />
+                </div>
+                <div className="font-semibold text-gray-700 dark:text-gray-300 text-lg sm:text-xl">Start a conversation</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Send a message to get started with the vendor</div>
               </div>
             </div>
           )}
@@ -343,17 +345,21 @@ const ChatPage: React.FC = () => {
                 className={`flex gap-2 sm:gap-3 ${isOwn ? 'justify-end' : 'justify-start'} items-end mb-2`}
               >
                 {!isOwn && !sameSenderAsPrev && (
-                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center text-xs sm:text-sm text-gray-700 dark:text-gray-300 font-semibold border border-gray-300 dark:border-gray-600">
-                    {isVendor ? 'V' : 'C'}
+                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-primary to-primary/80 flex-shrink-0 flex items-center justify-center shadow-md border-2 border-white dark:border-gray-800">
+                    {isVendor ? (
+                      <Store className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                    ) : (
+                      <User className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                    )}
                   </div>
                 )}
                 {!isOwn && sameSenderAsPrev && <div className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0" />}
 
                 <div className={`max-w-[75%] sm:max-w-[70%] ${isOwn ? 'order-first' : 'order-last'}`}>
                   <div
-                    className={`px-3 py-2 sm:px-4 sm:py-3 rounded-2xl shadow-sm ${
+                    className={`px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-md ${
                       isOwn
-                        ? 'bg-green-500 text-white rounded-tr-sm'
+                        ? 'bg-gradient-to-br from-primary to-primary/90 text-white rounded-tr-sm'
                         : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-tl-sm'
                     }`}
                   >
@@ -361,21 +367,24 @@ const ChatPage: React.FC = () => {
                       {message.message_text}
                     </p>
                     <div
-                      className={`text-xs mt-1.5 sm:mt-2 font-medium ${
-                        isOwn ? 'text-green-100' : 'text-gray-500 dark:text-gray-400'
+                      className={`flex items-center gap-1 text-xs mt-2 ${
+                        isOwn ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'
                       }`}
                     >
-                      {new Date(message.created_at).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      <Clock className="h-3 w-3" />
+                      <span>
+                        {new Date(message.created_at).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 {isOwn && !sameSenderAsPrev && (
-                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex-shrink-0 flex items-center justify-center text-xs text-white font-semibold border-2 border-green-300 shadow-sm">
-                    You
+                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-accent to-accent/80 flex-shrink-0 flex items-center justify-center shadow-md border-2 border-white dark:border-gray-800">
+                    <User className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                   </div>
                 )}
                 {isOwn && sameSenderAsPrev && <div className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0" />}
@@ -385,14 +394,14 @@ const ChatPage: React.FC = () => {
 
           {isTyping && (
             <div className="flex gap-2 sm:gap-3 justify-start items-end mb-2">
-              <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center text-xs sm:text-sm text-gray-700 dark:text-gray-300 font-semibold border border-gray-300 dark:border-gray-600">
-                V
+              <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-primary to-primary/80 flex-shrink-0 flex items-center justify-center shadow-md border-2 border-white dark:border-gray-800">
+                <Store className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-tl-sm px-3 py-2 sm:px-4 sm:py-3 shadow-sm">
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-tl-sm px-4 py-3 sm:px-5 sm:py-3.5 shadow-md">
                 <div className="flex gap-1.5">
-                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             </div>
@@ -403,30 +412,32 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 sm:p-4 relative z-[10000]">
-        <div className="max-w-4xl mx-auto flex gap-2 sm:gap-3 px-2 sm:px-0">
-          <input
-            ref={inputRef}
-            value={messageText}
-            onChange={handleInputChange}
-            onKeyPress={handleKeyPress}
-            placeholder={!activeConversation ? 'Loading...' : 'Type a message...'}
-            className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-full px-3 sm:px-5 py-2 sm:py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed disabled:placeholder-gray-400 dark:disabled:placeholder-gray-500"
-            disabled={sending || !activeConversation || loading}
-          />
-          <Button
-            onClick={handleSend}
-            disabled={!activeConversation || sending || loading || !messageText.trim()}
-            className="flex-shrink-0 rounded-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 sm:px-6 py-2 sm:py-3 transition-all duration-200 shadow-sm hover:shadow-md min-w-[44px] sm:min-w-auto"
-            size="lg"
-            title={!activeConversation ? 'Loading conversation...' : sending ? 'Sending...' : 'Send message'}
-          >
-            {sending ? (
-              <div className="h-4 w-4 sm:h-5 sm:w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-            )}
-          </Button>
+      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 sm:p-5 relative z-[10000] shadow-lg">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex gap-3 items-end bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-2 border border-gray-200 dark:border-gray-700">
+            <input
+              ref={inputRef}
+              value={messageText}
+              onChange={handleInputChange}
+              onKeyPress={handleKeyPress}
+              placeholder={!activeConversation ? 'Loading...' : 'Type your message...'}
+              className="flex-1 bg-transparent border-none px-3 sm:px-4 py-3 text-sm sm:text-base focus:outline-none disabled:cursor-not-allowed disabled:placeholder-gray-400 dark:disabled:placeholder-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+              disabled={sending || !activeConversation || loading}
+            />
+            <Button
+              onClick={handleSend}
+              disabled={!activeConversation || sending || loading || !messageText.trim()}
+              className="flex-shrink-0 rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 sm:px-5 py-3 transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none min-w-[48px] sm:min-w-auto"
+              size="lg"
+              title={!activeConversation ? 'Loading conversation...' : sending ? 'Sending...' : 'Send message'}
+            >
+              {sending ? (
+                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

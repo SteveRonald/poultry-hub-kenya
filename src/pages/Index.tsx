@@ -48,6 +48,9 @@ const Index = () => {
   const { user } = useAuth();
   const [advertisements, setAdvertisements] = useState<any[]>([]);
   const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
+  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const autoScrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -63,16 +66,14 @@ const Index = () => {
   const ctaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setupScrollAnimations();
     fetchAdvertisements();
     
-    // Start hero image carousel
+    // Hero image carousel - rotate every 5 seconds
     heroImageIntervalRef.current = setInterval(() => {
-      setCurrentHeroImageIndex((prev) => (prev + 1) % heroImages.length);
-    }, 5000); // Change image every 5 seconds
-    
-    // Setup scroll animations
-    setupScrollAnimations();
-    
+      setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroImages.length);
+    }, 5000);
+
     return () => {
       if (adRotationIntervalRef.current) {
         clearInterval(adRotationIntervalRef.current);
@@ -80,8 +81,38 @@ const Index = () => {
       if (heroImageIntervalRef.current) {
         clearInterval(heroImageIntervalRef.current);
       }
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+      }
     };
   }, []);
+
+  // Auto-scroll categories
+  useEffect(() => {
+    if (!isAutoScrolling) return;
+
+    autoScrollIntervalRef.current = setInterval(() => {
+      if (categoryScrollRef.current) {
+        const container = categoryScrollRef.current;
+        const scrollAmount = 400;
+        
+        // Check if we've reached the end
+        if (container.scrollLeft + container.clientWidth >= container.scrollWidth - 10) {
+          // Reset to start
+          container.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          // Scroll right
+          container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
+      }
+    }, 3000); // Auto-scroll every 3 seconds
+
+    return () => {
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+      }
+    };
+  }, [isAutoScrolling]);
   
   const setupScrollAnimations = () => {
     const observerOptions = {
@@ -460,7 +491,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Categories Section */}
+      {/* Categories Section with Auto-Scroll */}
       <section 
         ref={categoriesRef}
         className="py-16 bg-beige dark:bg-gray-800"
@@ -475,34 +506,88 @@ const Index = () => {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {categories.map((category, index) => (
-              <Card 
-                key={index} 
-                className="card-hover overflow-hidden opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out transform hover:scale-105"
-                style={{ transitionDelay: `${index * 150}ms` }}
-              >
-                <div className="relative h-48 overflow-hidden">
-                  <img 
-                    src={category.image} 
-                    alt={category.name}
-                    className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-                    <h3 className="text-2xl font-bold text-white">{category.name}</h3>
+          {/* Scrollable Categories Container */}
+          <div className="relative group">
+            {/* Left Arrow */}
+            <button
+              onClick={() => {
+                if (categoryScrollRef.current) {
+                  categoryScrollRef.current.scrollBy({ left: -400, behavior: 'smooth' });
+                  setIsAutoScrolling(false);
+                  setTimeout(() => setIsAutoScrolling(true), 5000);
+                }
+              }}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full p-3 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0"
+              aria-label="Scroll left"
+            >
+              <ChevronRight className="h-6 w-6 text-primary rotate-180" />
+            </button>
+
+            {/* Scrollable Container */}
+            <div
+              ref={categoryScrollRef}
+              className="flex gap-8 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              onMouseEnter={() => setIsAutoScrolling(false)}
+              onMouseLeave={() => setIsAutoScrolling(true)}
+            >
+              {categories.map((category, index) => (
+                <Card 
+                  key={index} 
+                  className="card-hover overflow-hidden flex-shrink-0 w-80 md:w-96 opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out transform hover:scale-105"
+                  style={{ transitionDelay: `${index * 150}ms` }}
+                >
+                  <div className="relative h-48 overflow-hidden">
+                    <img 
+                      src={category.image} 
+                      alt={category.name}
+                      className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+                      <h3 className="text-2xl font-bold text-white">{category.name}</h3>
+                    </div>
                   </div>
-                </div>
-                <CardContent className="p-6">
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">{category.description}</p>
-                  <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
-                    Shop Now
-                    <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
+                  <CardContent className="p-6">
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">{category.description}</p>
+                    <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
+                      Shop Now
+                      <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Right Arrow */}
+            <button
+              onClick={() => {
+                if (categoryScrollRef.current) {
+                  categoryScrollRef.current.scrollBy({ left: 400, behavior: 'smooth' });
+                  setIsAutoScrolling(false);
+                  setTimeout(() => setIsAutoScrolling(true), 5000);
+                }
+              }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full p-3 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="h-6 w-6 text-primary" />
+            </button>
+          </div>
+
+          {/* Auto-scroll Indicator */}
+          <div className="flex items-center justify-center mt-6 gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {isAutoScrolling ? 'Auto-scrolling' : 'Paused'}
+            </span>
           </div>
         </div>
+
+        {/* Hide scrollbar */}
+        <style>{`
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
       </section>
 
       {/* Testimonials Section */}

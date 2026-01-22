@@ -45,6 +45,7 @@ const Register = () => {
   const [otpError, setOtpError] = useState('');
   const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
   const [isResendingOTP, setIsResendingOTP] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -729,6 +730,12 @@ const Register = () => {
       return;
     }
     
+    // Check if user agreed to terms
+    if (!agreedToTerms) {
+      toast.error('Please agree to the Terms and Conditions to continue');
+      return;
+    }
+    
     // Mark that user has attempted to submit the form (all steps)
     // This ensures errors are shown for all steps that have issues
     const allSteps = formData.role === 'vendor' ? [1, 2, 3, 4] : [1, 2];
@@ -1307,6 +1314,31 @@ const Register = () => {
                 <div className="min-h-0">
                   {renderCurrentStep()}
                 </div>
+                
+                {/* Terms and Conditions Checkbox - Show on last step */}
+                {isLastStep && (
+                  <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="mt-1 h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary cursor-pointer"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        I agree to the{' '}
+                        <Link
+                          to="/terms"
+                          target="_blank"
+                          className="text-primary font-semibold hover:underline"
+                        >
+                          Terms and Conditions
+                        </Link>
+                        {' '}and confirm that I have read and understood the policies governing the use of KukuSoko platform.
+                      </span>
+                    </label>
+                  </div>
+                )}
                 
                 {/* Navigation Buttons */}
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0 pt-4 sm:pt-6 border-t mt-4 sm:mt-6">

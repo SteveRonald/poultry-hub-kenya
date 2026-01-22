@@ -156,6 +156,10 @@
   animation: blink-attention 2s ease-in-out infinite !important;
 }
 
+.animate-slide-up-fade-in {
+  animation: slide-up-fade-in 0.5s ease-out !important;
+}
+
 @keyframes analyze-pulse {
   0%, 100% {
     transform: scale(1);
@@ -377,4 +381,35 @@
 
 .animate-dots span:nth-child(3) {
   animation-delay: 0.4s;
+}
+
+/* Chatbase Widget Positioning */
+.chatbase-widget {
+  position: fixed !important;
+  left: 20px !important;
+  bottom: 20px !important;
+  right: auto !important;
+  z-index: 9999 !important;
+}
+
+/* Ensure Chatbase doesn't interfere with existing chatbot */
+.chatbase-widget .chatbase-chatbot-container {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border-radius: 12px !important;
+}
+
+/* Chatbase button styling */
+.chatbase-widget button {
+  background: linear-gradient(135deg, #1a4d2e 0%, #0f2e1a 100%) !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 56px !important;
+  height: 56px !important;
+  box-shadow: 0 4px 12px rgba(26, 77, 46, 0.3) !important;
+  transition: all 0.3s ease !important;
+}
+
+.chatbase-widget button:hover {
+  transform: scale(1.05) !important;
+  box-shadow: 0 6px 16px rgba(26, 77, 46, 0.4) !important;
 }

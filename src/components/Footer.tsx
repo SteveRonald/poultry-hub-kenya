@@ -59,6 +59,7 @@ const Footer = () => {
               <li><Link to="/training" className="text-gray-200 hover:text-accent transition-colors">Training</Link></li>
               <li><Link to="/blog" className="text-gray-200 hover:text-accent transition-colors">Blog</Link></li>
               <li><Link to="/contact" className="text-gray-200 hover:text-accent transition-colors">Contact</Link></li>
+              <li><Link to="/terms" className="text-gray-200 hover:text-accent transition-colors">Terms & Conditions</Link></li>
               {!user && <li><Link to="/register" className="text-gray-200 hover:text-accent transition-colors">Become a Vendor</Link></li>}
             </ul>
           </div>
@@ -85,7 +86,7 @@ const Footer = () => {
 
         <div className="border-t border-gray-600 mt-8 pt-8 text-center">
           <p className="text-gray-200">
-            &copy; 2025 KukuSoko. All rights reserved. Empowering Kenya's poultry industry.
+            &copy; 2026 KukuSoko. All rights reserved. Empowering Kenya's poultry industry.
           </p>
         </div>
       </div>

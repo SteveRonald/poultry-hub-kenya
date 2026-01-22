@@ -14,12 +14,12 @@ const PaymentPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { cartItems, cartSummary, getLocalCart } = useCart();
+  const { cartItems, cartSummary, getLocalCart, clearCart } = useCart();
   
   const [loading, setLoading] = useState(false);
   const [paymentData, setPaymentData] = useState<any>(null);
   const [error, setError] = useState<string>('');
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'processing' | 'success' | 'failed'>('pending');
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'initializing' | 'verifying' | 'success' | 'failed'>('pending');
 
   useEffect(() => {
     // Get payment data from session storage
@@ -43,7 +43,7 @@ const PaymentPage: React.FC = () => {
 
   const initializePayment = async (checkoutData: any) => {
     setLoading(true);
-    setPaymentStatus('processing');
+    setPaymentStatus('initializing');
     setError('');
 
     try {
@@ -136,6 +136,7 @@ const PaymentPage: React.FC = () => {
             transaction: response.transaction, // Payment method details
             channel: response.channel || selectedPaymentMethod, // Use selected method as primary
             selected_method: selectedPaymentMethod, // Store user's selection from checkout
+            amount: totalAmount, // Include the total amount
             customer: response.customer,
             paid_at: new Date().toISOString()
           };
@@ -171,6 +172,9 @@ const PaymentPage: React.FC = () => {
 
   const verifyPaymentManually = async (reference: string) => {
     try {
+      // Set status to verifying
+      setPaymentStatus('verifying');
+      
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
@@ -214,30 +218,46 @@ const PaymentPage: React.FC = () => {
         const successData = {
           reference: reference,
           message: `Payment completed and ${result.order_count} order(s) created successfully`,
-          order_ids: result.order_ids
+          order_ids: result.order_ids,
+          amount: result.amount,
+          payment_method: result.payment_method,
+          channel: result.channel,
+          selected_method: result.selected_method
         };
         
+        console.log('=== STORING SUCCESS DATA ===');
+        console.log('Success data to store:', successData);
+        console.log('Amount:', successData.amount);
+        console.log('Payment method:', successData.payment_method);
+        console.log('Selected method:', successData.selected_method);
+        
         sessionStorage.setItem('payment_success', JSON.stringify(successData));
-        console.log('payment_success set to:', successData);
+        
+        // Verify it was stored correctly
+        const storedData = sessionStorage.getItem('payment_success');
+        console.log('Verification - Stored data:', storedData);
         
         toast.success(`Payment verified! ${result.order_count} order(s) created.`);
         
         // Clear payment details from session
         sessionStorage.removeItem('payment_details');
-        
-        // Clear cart after successful payment
-        if (typeof localStorage !== 'undefined') {
-          localStorage.removeItem('cart');
-          // Also clear any cart-related session data
-          sessionStorage.removeItem('cart_items');
-          sessionStorage.removeItem('cart_summary');
-          console.log('Cart and session cleared after successful payment');
-        }
-        
-        // Clear pending checkout
         sessionStorage.removeItem('pendingCheckout');
         
-        console.log('=== NAVIGATING TO SUCCESS PAGE ===');
+        // Clear cart using cart context (this will clear both backend and frontend)
+        console.log('=== CLEARING CART AFTER SUCCESSFUL PAYMENT ===');
+        await clearCart(true); // Silent clear (no toast)
+        
+        // Also clear local storage cart items
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('cart');
+          localStorage.removeItem('cart_items');
+          localStorage.removeItem('cart_summary');
+          localStorage.removeItem('local_cart');
+          sessionStorage.removeItem('cart_items');
+          sessionStorage.removeItem('cart_summary');
+          console.log('=== CART CLEARED SUCCESSFULLY ===');
+        }
+        
         console.log('=== NAVIGATING TO SUCCESS PAGE ===');
         console.log('Navigation URL:', `/checkout/success?reference=${reference}`);
         navigate(`/checkout/success?reference=${reference}`);
@@ -402,11 +422,19 @@ const PaymentPage: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {paymentStatus === 'processing' && (
+                {paymentStatus === 'initializing' && (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Initializing Payment...</h3>
                     <p className="text-gray-600">Please wait while we connect to Paystack</p>
+                  </div>
+                )}
+
+                {paymentStatus === 'verifying' && (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Verifying Payment...</h3>
+                    <p className="text-gray-600">Please wait while we confirm your payment with Paystack</p>
                   </div>
                 )}
 

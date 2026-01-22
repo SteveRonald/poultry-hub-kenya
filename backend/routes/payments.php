@@ -18,6 +18,15 @@ function handleInitializePaystackPayment() {
         $email = $input['email'] ?? null;
         $callback_url = $input['callback_url'] ?? null;
 
+        // Extract checkout data for persistent storage
+        $checkoutData = [
+            'items' => $input['items'] ?? [],
+            'shipping_address' => $input['shipping_address'] ?? '',
+            'contact_phone' => $input['contact_phone'] ?? '',
+            'notes' => $input['notes'] ?? '',
+            'payment_method' => $input['payment_method'] ?? 'card'
+        ];
+
         error_log("Parsed data - order_id: $order_id, amount: $amount, email: $email");
 
         if (!$amount || !$email) {
@@ -99,12 +108,19 @@ function handleInitializePaystackPayment() {
                 payment_method, payment_status, metadata, created_at
             ) VALUES (?, ?, ?, ?, 'KES', 'paystack', 'pending', ?, NOW())
         ");
+
+        // Include checkout data in metadata for webhook processing
+        $metadata = [
+            'initialized_at' => date('Y-m-d H:i:s'),
+            'checkout_data' => $checkoutData
+        ];
+
         $stmt->execute([
             $reference,
             $order_id,
             $user_id,
             $amount,
-            json_encode(['initialized_at' => date('Y-m-d H:i:s')])
+            json_encode($metadata)
         ]);
 
         // Prepare Paystack API request
@@ -372,6 +388,67 @@ function handleManualPaymentVerification() {
         
         error_log("Creating orders for " . count($checkoutData['items']) . " items");
         
+        // Get payment details ONCE before the loop (not per item)
+        $totalAmount = 0;
+        $paymentMethod = 'card';
+        $paymentChannel = 'card';
+        $paymentAccountNumber = null;
+        
+        // Calculate total amount from checkout items (most reliable source)
+        if ($checkoutData && isset($checkoutData['items'])) {
+            foreach ($checkoutData['items'] as $item) {
+                $itemTotal = ($item['price'] ?? 0) * ($item['quantity'] ?? 1);
+                $totalAmount += $itemTotal;
+            }
+            error_log("Calculated total amount from items: $totalAmount");
+        }
+        
+        if ($paymentDetails) {
+            // Use selected_method first (user's selection), then fallback to channel
+            $paymentMethod = $paymentDetails['selected_method'] ?? $paymentDetails['channel'] ?? 'card';
+            $paymentChannel = $paymentDetails['channel'] ?? 'card';
+            error_log("Payment method detected: $paymentMethod (selected_method: " . ($paymentDetails['selected_method'] ?? 'null') . ", channel: " . ($paymentDetails['channel'] ?? 'null') . ")");
+            
+            // Extract payment account number based on payment method
+            if ($paymentMethod === 'mpesa' || $paymentMethod === 'mobile_money') {
+                $phone = null;
+                if (isset($paymentDetails['transaction']['mobile_money_number'])) {
+                    $phone = $paymentDetails['transaction']['mobile_money_number'];
+                }
+                $paymentAccountNumber = $phone;
+                error_log("Mobile money/M-Pesa phone: $phone");
+            } elseif ($paymentMethod === 'card') {
+                // Handle card payment - transaction might be string or object
+                $cardLast4 = null;
+                if (is_string($paymentDetails['transaction'])) {
+                    // If transaction is just a string (transaction ID), use generic mask
+                    $cardLast4 = $paymentDetails['transaction'];
+                    $paymentAccountNumber = 'Transaction ID: ' . $cardLast4;
+                    error_log("Card transaction ID: $cardLast4");
+                } elseif (isset($paymentDetails['transaction']['card']['last4'])) {
+                    $cardLast4 = $paymentDetails['transaction']['card']['last4'];
+                    $paymentAccountNumber = '**** **** **** ' . $cardLast4;
+                    error_log("Card last4: $paymentAccountNumber");
+                } else {
+                    $paymentAccountNumber = 'Card Payment';
+                    error_log("Card payment - no details available");
+                }
+            } elseif ($paymentMethod === 'bank' && isset($paymentDetails['transaction']['account_number'])) {
+                $paymentAccountNumber = $paymentDetails['transaction']['account_number'];
+                error_log("Bank account: $paymentAccountNumber");
+            } else {
+                error_log("No payment account number found for method: $paymentMethod");
+                // Log all available keys for debugging
+                if (isset($paymentDetails['transaction'])) {
+                    if (is_array($paymentDetails['transaction'])) {
+                        error_log("Available transaction keys: " . implode(', ', array_keys($paymentDetails['transaction'])));
+                    } else {
+                        error_log("Transaction is string: " . $paymentDetails['transaction']);
+                    }
+                }
+            }
+        }
+        
         // Create order for each item in checkout
         $orderIds = [];
         foreach ($checkoutData['items'] as $item) {
@@ -387,63 +464,6 @@ function handleManualPaymentVerification() {
                 error_log("Product ID: {$item['product_id']}, Vendor ID: $vendorId");
             } else {
                 error_log("No product_id found in item: " . print_r($item, true));
-            }
-            
-            // Extract payment account number from Paystack details
-            $paymentAccountNumber = null;
-            $paymentMethod = 'card'; // default
-            
-            if ($paymentDetails) {
-                // Use selected_method first (user's selection), then fallback to channel
-                $paymentMethod = $paymentDetails['selected_method'] ?? $paymentDetails['channel'] ?? 'card';
-                error_log("Payment method detected: $paymentMethod (selected_method: " . ($paymentDetails['selected_method'] ?? 'null') . ", channel: " . ($paymentDetails['channel'] ?? 'null') . ")");
-                error_log("Payment details: " . print_r($paymentDetails, true));
-                
-                // Extract account number based on payment method
-                if ($paymentMethod === 'mobile_money' || $paymentMethod === 'mpesa') {
-                    // Try multiple possible phone number locations
-                    $phone = null;
-                    if (isset($paymentDetails['customer']['phone'])) {
-                        $phone = $paymentDetails['customer']['phone'];
-                    } elseif (isset($paymentDetails['transaction']['phone'])) {
-                        $phone = $paymentDetails['transaction']['phone'];
-                    } elseif (isset($paymentDetails['transaction']['mobile_money_number'])) {
-                        $phone = $paymentDetails['transaction']['mobile_money_number'];
-                    }
-                    $paymentAccountNumber = $phone;
-                    error_log("Mobile money/M-Pesa phone: $phone");
-                } elseif ($paymentMethod === 'card') {
-                    // Handle card payment - transaction might be string or object
-                    $cardLast4 = null;
-                    if (is_string($paymentDetails['transaction'])) {
-                        // If transaction is just a string (transaction ID), use generic mask
-                        $cardLast4 = $paymentDetails['transaction'];
-                        $paymentAccountNumber = 'Transaction ID: ' . $cardLast4;
-                        error_log("Card transaction ID: $cardLast4");
-                    } elseif (isset($paymentDetails['transaction']['card']['last4'])) {
-                        $cardLast4 = $paymentDetails['transaction']['card']['last4'];
-                        $paymentAccountNumber = '**** **** **** ' . $cardLast4;
-                        error_log("Card last4: $paymentAccountNumber");
-                    } else {
-                        $paymentAccountNumber = 'Card Payment';
-                        error_log("Card payment - no details available");
-                    }
-                } elseif ($paymentMethod === 'bank' && isset($paymentDetails['transaction']['account_number'])) {
-                    $paymentAccountNumber = $paymentDetails['transaction']['account_number'];
-                    error_log("Bank account: $paymentAccountNumber");
-                } else {
-                    error_log("No payment account number found for method: $paymentMethod");
-                    // Log all available keys for debugging
-                    if (isset($paymentDetails['transaction'])) {
-                        if (is_array($paymentDetails['transaction'])) {
-                            error_log("Available transaction keys: " . implode(', ', array_keys($paymentDetails['transaction'])));
-                        } else {
-                            error_log("Transaction is string: " . $paymentDetails['transaction']);
-                        }
-                    }
-                }
-            } else {
-                error_log("No payment details provided");
             }
             
             $stmt = $pdo->prepare("
@@ -498,19 +518,22 @@ function handleManualPaymentVerification() {
         
         error_log("Payment verification completed for reference: $reference, created " . count($orderIds) . " orders");
         
-        // Send order confirmation emails
-        foreach ($orderIds as $orderId) {
-            error_log("=== SENDING EMAILS FOR ORDER ID: $orderId ===");
-            $emailResult = sendOrderConfirmationEmail($orderId);
-            error_log("Email result for order $orderId: " . ($emailResult ? 'SUCCESS' : 'FAILED'));
-        }
+        // Queue order confirmation emails (background processing)
+        require_once __DIR__ . '/email_queue.php';
+        error_log("=== QUEUING EMAILS FOR PAYMENT REFERENCE: $reference ===");
+        queueOrderConfirmationEmail($orderIds[0]); // Queue once for first order
+        error_log("Email queued for payment $reference");
         
         echo json_encode([
             'success' => true,
             'message' => 'Payment verified and orders created successfully',
             'reference' => $reference,
             'order_ids' => $orderIds,
-            'order_count' => count($orderIds)
+            'order_count' => count($orderIds),
+            'amount' => $totalAmount,
+            'payment_method' => $paymentMethod,
+            'channel' => $paymentChannel,
+            'selected_method' => $paymentDetails['selected_method'] ?? $paymentMethod
         ]);
         
     } catch (Exception $e) {
@@ -529,53 +552,102 @@ function handleManualPaymentVerification() {
 // Send order confirmation email
 function sendOrderConfirmationEmail($orderId) {
     global $pdo;
-    
+
     try {
         error_log("=== SEND ORDER CONFIRMATION EMAIL STARTING ===");
         error_log("Order ID: $orderId");
-        
-        // Get order details with user info
-        $stmt = $pdo->prepare("
-            SELECT o.*, up.email as user_email, up.full_name as user_name 
-            FROM orders o 
-            LEFT JOIN user_profiles up ON o.user_id = up.id 
-            WHERE o.id = ?
-        ");
+
+        // First, get the payment reference from this order
+        $stmt = $pdo->prepare("SELECT payment_reference, user_id FROM orders WHERE id = ?");
         $stmt->execute([$orderId]);
-        $order = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$order) {
+        $orderInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$orderInfo) {
             error_log("Order not found for email: $orderId");
             return false;
         }
-        
-        if (!$order['user_email']) {
-            error_log("User email not found for order: $orderId");
+
+        $paymentReference = $orderInfo['payment_reference'];
+        $userId = $orderInfo['user_id'];
+
+        error_log("Payment reference: $paymentReference, User ID: $userId");
+
+        // Get ALL orders with the same payment reference (for multi-item orders)
+        $stmt = $pdo->prepare("
+            SELECT
+                o.*,
+                p.name as product_name,
+                p.price as unit_price,
+                v.farm_name as vendor_name,
+                up.email as user_email,
+                up.full_name as user_name
+            FROM orders o
+            LEFT JOIN products p ON o.product_id = p.id
+            LEFT JOIN vendors v ON o.vendor_id = v.id
+            LEFT JOIN user_profiles up ON o.user_id = up.id
+            WHERE o.payment_reference = ? AND o.user_id = ?
+            ORDER BY o.created_at ASC
+        ");
+        $stmt->execute([$paymentReference, $userId]);
+        $orderRecords = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($orderRecords)) {
+            error_log("No orders found for payment reference: $paymentReference");
             return false;
         }
-        
-        error_log("Order found: " . print_r($order, true));
-        
+
+        // Use the first order record as the main order data
+        $mainOrder = $orderRecords[0];
+
+        if (!$mainOrder['user_email']) {
+            error_log("User email not found for payment reference: $paymentReference");
+            return false;
+        }
+
+        // Build order items array and calculate total
+        $orderItems = [];
+        $totalAmount = 0;
+
+        foreach ($orderRecords as $orderRecord) {
+            $itemTotal = $orderRecord['total_amount'];
+            $totalAmount += $itemTotal;
+
+            $orderItems[] = [
+                'product_name' => $orderRecord['product_name'] ?: 'Product',
+                'vendor_name' => $orderRecord['vendor_name'] ?: 'Vendor',
+                'quantity' => $orderRecord['quantity'],
+                'unit_price' => floatval($orderRecord['unit_price'] ?: 0),
+                'total_amount' => floatval($itemTotal)
+            ];
+        }
+
+        // Create enhanced order data with all items
+        $enhancedOrder = $mainOrder;
+        $enhancedOrder['items'] = $orderItems;
+        $enhancedOrder['total_amount'] = $totalAmount;
+
+        error_log("Enhanced order data prepared with total: KSH $totalAmount");
+
         // Load email configuration and templates
         require_once __DIR__ . '/../config/email.php';
         require_once __DIR__ . '/../config/email_templates.php';
-        
+
         // Prepare data for email template
         $data = [
-            'order' => $order,
+            'order' => $enhancedOrder,
             'customer' => [
-                'name' => $order['user_name'] ?: 'Customer',
-                'email' => $order['user_email']
+                'name' => $mainOrder['user_name'] ?: 'Customer',
+                'email' => $mainOrder['user_email']
             ]
         ];
-        
+
         // Send customer email
         error_log("=== SENDING CUSTOMER EMAIL ===");
-        $customerResult = sendStyledEmail($order['user_email'], 'order_confirmation', $data);
-        
-        // Send vendor notification email
-        error_log("=== SENDING VENDOR EMAIL ===");
-        $vendorResult = sendVendorNotificationEmail($orderId, $order);
+        $customerResult = sendStyledEmail($mainOrder['user_email'], 'order_confirmation', $data);
+
+        // Send vendor notification email for ALL orders with same payment reference
+        error_log("=== SENDING VENDOR EMAILS FOR ALL ORDERS ===");
+        $vendorResult = sendVendorNotificationEmail($paymentReference, $enhancedOrder);
         
         if ($customerResult) {
             error_log("✅ Order confirmation email sent to: {$order['user_email']} for order: $orderId");
@@ -584,285 +656,185 @@ function sendOrderConfirmationEmail($orderId) {
         }
         
         if ($vendorResult) {
-            error_log("✅ Vendor notification email sent for order: $orderId");
+            error_log("✅ Vendor notification email sent for payment reference: {$order['payment_reference']}");
         } else {
-            error_log("❌ Failed to send vendor notification email for order: $orderId");
+            error_log("❌ Failed to send vendor notification email for payment reference: {$order['payment_reference']}");
         }
         
         return $customerResult && $vendorResult;
         
     } catch (Exception $e) {
         error_log("Email sending error for order $orderId: " . $e->getMessage());
+        error_log("Email error trace: " . $e->getTraceAsString());
         return false;
     }
 }
 
 // Send vendor notification email
-function sendVendorNotificationEmail($orderId, $order) {
+function sendVendorNotificationEmail($paymentReference, $order) {
     global $pdo;
     
     try {
-        // Get vendor details - vendors table doesn't have email, so join with user_profiles
+        // Get all orders for this payment reference to notify all vendors
         $stmt = $pdo->prepare("
-            SELECT v.farm_name, up.email, up.full_name, up.phone
-            FROM vendors v 
+            SELECT DISTINCT o.vendor_id, v.farm_name, up.email, up.full_name, up.phone
+            FROM orders o
+            LEFT JOIN vendors v ON o.vendor_id = v.id
             LEFT JOIN user_profiles up ON v.user_id = up.id
-            WHERE v.id = ?
+            WHERE o.payment_reference = ? AND o.vendor_id IS NOT NULL
         ");
-        $stmt->execute([$order['vendor_id']]);
-        $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->execute([$paymentReference]);
+        $vendors = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        if (!$vendor || !$vendor['email']) {
-            error_log("Vendor email not found for order: $orderId, vendor_id: {$order['vendor_id']}");
-            error_log("Vendor query result: " . print_r($vendor, true));
+        if (empty($vendors)) {
+            error_log("No vendors found for payment reference: $paymentReference");
             return false;
         }
         
-        // Get order items for vendor email (join with products to get product names)
-        $stmt = $pdo->prepare("
-            SELECT p.product_name, o.quantity, o.price as unit_price, 
-                   (o.quantity * o.price) as total_amount
-            FROM orders o
-            LEFT JOIN products p ON o.product_id = p.id
-            WHERE o.payment_reference = ? AND o.vendor_id = ? AND o.id = ?
-        ");
-        $stmt->execute([$order['payment_reference'], $order['vendor_id'], $orderId]);
-        $orderItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        error_log("Found " . count($vendors) . " vendors to notify for payment reference: $paymentReference");
         
         // Load email configuration and templates
         require_once __DIR__ . '/../config/email.php';
         require_once __DIR__ . '/../config/email_templates.php';
         
-        // Prepare complete data for vendor email template
-        $data = [
-            'order' => [
-                'order_number' => $order['order_number'],
-                'customer_name' => $order['user_name'] ?: 'Customer',
-                'created_at' => $order['created_at'],
-                'shipping_address' => $order['shipping_address'],
-                'contact_phone' => $order['contact_phone'],
-                'items' => $orderItems
-            ],
-            'vendor' => [
-                'name' => $vendor['farm_name'], // Template expects 'name'
-                'farm_name' => $vendor['farm_name'],
-                'email' => $vendor['email'],
-                'contact_person' => $vendor['full_name']
-            ],
-            'customer' => [
-                'name' => $order['user_name'] ?: 'Customer',
-                'email' => $order['user_email']
-            ]
-        ];
+        $allVendorsNotified = true;
         
-        // Send vendor email
-        $result = sendStyledEmail($vendor['email'], 'vendor_notification', $data);
-        
-        if ($result) {
-            error_log("✅ Vendor notification email sent to: {$vendor['email']} for order: $orderId");
-            error_log("Vendor email data: " . print_r($data, true));
-        } else {
-            error_log("❌ Failed to send vendor notification email to: {$vendor['email']} for order: $orderId");
+        // Send email to each vendor
+        foreach ($vendors as $vendor) {
+            if (!$vendor['email']) {
+                error_log("Vendor has no email: " . print_r($vendor, true));
+                $allVendorsNotified = false;
+                continue;
+            }
+            
+            // Get order items for this vendor
+            $stmt = $pdo->prepare("
+                SELECT p.product_name, o.quantity, o.price as unit_price, 
+                       (o.quantity * o.price) as total_amount, o.order_number
+                FROM orders o
+                LEFT JOIN products p ON o.product_id = p.id
+                WHERE o.payment_reference = ? AND o.vendor_id = ?
+            ");
+            $stmt->execute([$paymentReference, $vendor['vendor_id']]);
+            $orderItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (empty($orderItems)) {
+                error_log("No order items found for vendor {$vendor['vendor_id']} with payment reference: $paymentReference");
+                continue;
+            }
+            
+            // Prepare complete data for vendor email template
+            $data = [
+                'order' => [
+                    'order_number' => $orderItems[0]['order_number'],
+                    'customer_name' => $order['user_name'] ?: 'Customer',
+                    'created_at' => $order['created_at'],
+                    'shipping_address' => $order['shipping_address'],
+                    'contact_phone' => $order['contact_phone'],
+                    'items' => $orderItems
+                ],
+                'vendor' => [
+                    'name' => $vendor['farm_name'], // Template expects 'name'
+                    'farm_name' => $vendor['farm_name'],
+                    'email' => $vendor['email'],
+                    'contact_person' => $vendor['full_name']
+                ]
+            ];
+            
+            error_log("Sending vendor email to: " . $vendor['email'] . " for " . count($orderItems) . " items");
+            
+            // Send vendor email
+            $result = sendStyledEmail($vendor['email'], 'vendor_notification', $data);
+            
+            if ($result) {
+                error_log("✅ Vendor notification email sent to: {$vendor['email']} for payment reference: $paymentReference");
+            } else {
+                error_log("❌ Failed to send vendor notification email to: {$vendor['email']} for payment reference: $paymentReference");
+                $allVendorsNotified = false;
+            }
         }
         
-        return $result;
+        return $allVendorsNotified;
         
     } catch (Exception $e) {
-        error_log("Vendor email sending error for order $orderId: " . $e->getMessage());
+        error_log("Vendor email sending error for payment reference $paymentReference: " . $e->getMessage());
+        error_log("Vendor email error trace: " . $e->getTraceAsString());
         return false;
-    }
-}
-
-// Handle Paystack webhook
-function handlePaystackWebhook() {
-    global $pdo;
-    
-    try {
-        $payload = json_decode(file_get_contents('php://input'), true);
-        $signature = $_SERVER['HTTP_X_PAYSTACK_SIGNATURE'] ?? '';
-        
-        error_log("=== PAYSTACK WEBHOOK RECEIVED ===");
-        error_log("Webhook payload: " . print_r($payload, true));
-        error_log("Webhook signature: " . $signature);
-
-        // Load Paystack config
-        require_once __DIR__ . '/../config/paystack_config.php';
-        
-        // Verify webhook signature for security
-        if (PAYSTACK_SECRET_KEY) {
-            $expected_signature = hash_hmac('sha512', json_encode($payload), PAYSTACK_SECRET_KEY);
-
-            if ($signature !== $expected_signature) {
-                error_log('Invalid webhook signature received');
-                http_response_code(400);
-                echo json_encode(['error' => 'Invalid signature']);
-                return;
-            }
-        }
-
-        error_log("Webhook signature verified successfully");
-
-        // Store webhook data first (source of truth)
-        $stmt = $pdo->prepare("
-            INSERT INTO payment_webhooks (
-                paystack_event_id, event_type, transaction_reference,
-                webhook_data, processed_at, created_at
-            ) VALUES (?, ?, ?, ?, NOW(), NOW())
-        ");
-        $stmt->execute([
-            $payload['id'] ?? null,
-            $payload['event'] ?? null,
-            $payload['data']['reference'] ?? null,
-            json_encode($payload)
-        ]);
-
-        // Process webhook based on event type
-        if ($payload['event'] === 'charge.success') {
-            $reference = $payload['data']['reference'];
-            error_log("Webhook charge.success received for reference: $reference");
-
-            // Update payment status - webhook is the source of truth
-            $stmt = $pdo->prepare("
-                UPDATE payment_transactions SET
-                    payment_status = 'success',
-                    payment_method = ?, -- Use actual payment method from Paystack
-                    paystack_paid_at = ?,
-                    gateway_response = ?,
-                    updated_at = NOW()
-                WHERE paystack_reference = ? -- Use Paystack reference
-            ");
-            $stmt->execute([
-                $payload['data']['channel'] ?? 'paystack', // Use actual payment channel (card, bank, mobile_money, etc.)
-                $payload['data']['paid_at'] ?? null,
-                json_encode($payload),
-                $reference
-            ]);
-
-            // If no transaction found by Paystack reference, try our generated reference
-            if ($stmt->rowCount() === 0) {
-                error_log("No transaction found by Paystack reference $reference, trying generated reference");
-                $stmt = $pdo->prepare("
-                    UPDATE payment_transactions SET
-                        payment_status = 'success',
-                        payment_method = ?, -- Use actual payment method from Paystack
-                        paystack_paid_at = ?,
-                        gateway_response = ?,
-                        updated_at = NOW()
-                    WHERE transaction_reference = ? -- Try our generated reference
-                ");
-                $stmt->execute([
-                    $payload['data']['channel'] ?? 'paystack', // Use actual payment channel
-                    $payload['data']['paid_at'] ?? null,
-                    json_encode($payload),
-                    $reference
-                ]);
-            }
-
-            // Update order status
-            $stmt = $pdo->prepare("SELECT order_id FROM payment_transactions WHERE transaction_reference = ?");
-            $stmt->execute([$reference]);
-            $transaction = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($transaction) {
-                $stmt = $pdo->prepare("
-                    UPDATE orders SET
-                        payment_status = 'paid',
-                        payment_transaction_id = ?,
-                        payment_completed_at = NOW(),
-                        payment_reference = ?,
-                        updated_at = NOW()
-                    WHERE id = ?
-                ");
-                $stmt->execute([
-                    $payload['data']['id'],
-                    $reference,
-                    $transaction['order_id']
-                ]);
-            }
-        } elseif ($payload['event'] === 'charge.failed') {
-            // Handle failed payments
-            $reference = $payload['data']['reference'];
-            $stmt = $pdo->prepare("
-                UPDATE payment_transactions SET
-                    payment_status = 'failed',
-                    gateway_response = ?,
-                    updated_at = NOW()
-                WHERE transaction_reference = ?
-            ");
-            $stmt->execute([json_encode($payload), $reference]);
-        }
-
-        // Always respond with 200 to acknowledge receipt
-        echo json_encode(['success' => true, 'received' => true]);
-
-    } catch (Exception $e) {
-        error_log("Webhook processing error: " . $e->getMessage());
-        // Still return 200 to prevent Paystack from retrying
-        http_response_code(200);
-        echo json_encode(['success' => false, 'error' => 'Processing failed but acknowledged']);
     }
 }
 
 // Get payment status for an order
 function handleGetPaymentStatus($orderId) {
     global $pdo;
-    
+
     try {
-        $headers = getallheaders();
-        $auth_header = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-        $token = str_replace('Bearer ', '', $auth_header);
-        
-        if (!$token) {
-            http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'Authorization required']);
-            return;
-        }
-
-        $user_data = validateJWT($token);
-        if (!$user_data) {
-            http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'Invalid token']);
-            return;
-        }
-
-        $user_id = $user_data['user_id'];
-
+        // First, get the order and its payment reference
         $stmt = $pdo->prepare("
-            SELECT
-                o.id, o.payment_status, o.payment_transaction_id,
-                o.payment_reference, o.payment_completed_at,
-                pt.transaction_reference, pt.paystack_transaction_id,
-                pt.paystack_paid_at, pt.gateway_response
+            SELECT o.*, u.full_name as customer_name, u.email as customer_email
             FROM orders o
-            LEFT JOIN payment_transactions pt ON o.id = pt.order_id
-            WHERE o.id = ? AND o.user_id = ?
+            LEFT JOIN user_profiles u ON o.user_id = u.id
+            WHERE o.id = ? OR o.order_number = ?
         ");
-        $stmt->execute([$orderId, $user_id]);
+        $stmt->execute([$orderId, $orderId]);
         $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$order) {
             http_response_code(404);
-            echo json_encode(['success' => false, 'error' => 'Order not found']);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Order not found'
+            ]);
             return;
         }
 
-        echo json_encode([
-            'success' => true,
-            'data' => [
-                'order_id' => $order['id'],
-                'payment_status' => $order['payment_status'],
-                'payment_reference' => $order['payment_reference'],
-                'transaction_id' => $order['paystack_transaction_id'],
-                'paid_at' => $order['paystack_paid_at'],
-                'completed_at' => $order['payment_completed_at'],
-                'gateway_response' => $order['gateway_response'] ? json_decode($order['gateway_response']) : null
-            ]
-        ]);
+        $paymentReference = $order['payment_reference'];
 
-    } catch (Exception $e) {
-        error_log("Get payment status error: " . $e->getMessage());
+        // Get all orders with the same payment reference to calculate total
+        $stmt = $pdo->prepare("
+            SELECT SUM(total_amount) as total_amount, COUNT(*) as item_count
+            FROM orders
+            WHERE payment_reference = ?
+        ");
+        $stmt->execute([$paymentReference]);
+        $totalData = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Get payment transaction details
+        $stmt = $pdo->prepare("
+            SELECT pt.amount, pt.payment_status, pt.transaction_reference, pt.paystack_reference
+            FROM payment_transactions pt
+            WHERE pt.transaction_reference = ?
+        ");
+        $stmt->execute([$paymentReference]);
+        $paymentTransaction = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Format the response
+        $response = [
+            'success' => true,
+            'order_id' => $order['id'],
+            'order_number' => $order['order_number'],
+            'customer_name' => $order['customer_name'],
+            'customer_email' => $order['customer_email'],
+            'amount' => floatval($totalData['total_amount'] ?? 0),
+            'paid_amount' => $paymentTransaction ? floatval($paymentTransaction['amount']) : null,
+            'item_count' => intval($totalData['item_count'] ?? 0),
+            'order_status' => $order['status'],
+            'payment_status' => $order['payment_status'],
+            'payment_method' => $order['payment_method'],
+            'paystack_reference' => $paymentTransaction ? $paymentTransaction['paystack_reference'] : null,
+            'transaction_reference' => $paymentReference,
+            'created_at' => $order['created_at']
+        ];
+
+        echo json_encode($response);
+
+    } catch (PDOException $e) {
+        error_log("Error getting payment status: " . $e->getMessage());
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Failed to get payment status']);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Failed to retrieve payment status'
+        ]);
     }
 }
+
 ?>

@@ -250,113 +250,20 @@ function handleCreateOrder() {
         $vendorEmailsSent = [];
         $emailErrors = [];
 
-        // Send notification emails to vendors (best-effort, don't fail order)
-        $vendorEmails = [];
+        // Queue notification emails to vendors (background processing, don't fail order)
+        require_once __DIR__ . '/email_queue.php';
+
         foreach ($createdOrders as $order) {
-            if (!isset($vendorEmails[$order['vendor_id']])) {
-                $vendorEmails[$order['vendor_id']] = [
-                    'email' => $order['vendor_email'],
-                    'name' => $order['vendor_name'],
-                    'orders' => []
-                ];
-            }
-            $vendorEmails[$order['vendor_id']]['orders'][] = $order;
+            // Queue vendor notification email
+            queueVendorOrderNotification($order['order_id'], $order['vendor_id']);
         }
 
-        foreach ($vendorEmails as $vendorId => $vendorData) {
-            try {
-                // Prepare items for this vendor
-                $vendorItems = [];
-                foreach ($vendorData['orders'] as $order) {
-                    $vendorItems[] = [
-                        'product_name' => $order['product_name'],
-                        'quantity' => $order['quantity'],
-                        'unit_price' => $order['product_price'],
-                        'total_amount' => $order['total_amount']
-                    ];
-                }
-
-                $vendorEmailData = [
-                    'order' => [
-                        'order_number' => $orderNumber,
-                        'customer_name' => $vendorData['orders'][0]['customer_name'],
-                        'created_at' => $vendorData['orders'][0]['created_at'],
-                        'shipping_address' => $vendorData['orders'][0]['shipping_address'],
-                        'contact_phone' => $vendorData['orders'][0]['contact_phone'],
-                        'items' => $vendorItems
-                    ],
-                    'vendor' => [
-                        'name' => $vendorData['name']
-                    ]
-                ];
-
-                sendStyledEmail($vendorData['email'], 'vendor_notification', $vendorEmailData);
-                $vendorEmailsSent[$vendorId] = true;
-            } catch (Exception $vendorEmailError) {
-                $vendorEmailsSent[$vendorId] = false;
-                error_log("Failed to send email to vendor {$vendorId}: " . $vendorEmailError->getMessage());
-                // Don't add to emailErrors - we don't want to show this to customer
-            }
+        // Queue order confirmation email to customer (background processing)
+        foreach ($createdOrders as $order) {
+            queueOrderConfirmationEmail($order['order_id']);
+            break; // Only queue once for the first order (they share the same order number)
         }
-
-        // Send order confirmation email to customer
-        try {
-            $customerEmailData = [
-                'order' => [
-                    'order_number' => $orderNumber,
-                    'status' => 'pending',
-                    'total_amount' => array_sum(array_column($createdOrders, 'total_amount')),
-                    'shipping_address' => $createdOrders[0]['shipping_address'],
-                    'contact_phone' => $createdOrders[0]['contact_phone'],
-                    'payment_method' => $createdOrders[0]['payment_method'],
-                    'created_at' => $createdOrders[0]['created_at'],
-                    'items' => []
-                ],
-                'customer' => [
-                    'name' => $createdOrders[0]['customer_name'] ?? $customer['full_name'] ?? 'Customer',
-                    'email' => $createdOrders[0]['customer_email'] ?? $customer['email'] ?? ''
-                ]
-            ];
-
-            // Add items to customer email data
-            foreach ($createdOrders as $order) {
-                $customerEmailData['order']['items'][] = [
-                    'product_name' => $order['product_name'],
-                    'quantity' => $order['quantity'],
-                    'total_amount' => $order['total_amount'],
-                    'vendor_name' => $order['vendor_name']
-                ];
-            }
-
-            // Check if customer email is valid
-            $customerEmail = $createdOrders[0]['customer_email'] ?? $customer['email'] ?? '';
-            if (empty($customerEmail)) {
-                throw new Exception('Customer email is empty or not found');
-            }
-            
-            // Update customer email in email data if needed
-            if (empty($customerEmailData['customer']['email'])) {
-                $customerEmailData['customer']['email'] = $customerEmail;
-            }
-            
-            // Attempt to send email
-            $emailResult = sendStyledEmail($customerEmail, 'order_confirmation', $customerEmailData);
-            
-            if ($emailResult) {
-                $customerEmailSent = true;
-                error_log("Customer email sent successfully to: " . $customerEmail);
-            } else {
-                throw new Exception('Email sending returned false');
-            }
-        } catch (Exception $customerEmailError) {
-            $customerEmailSent = false;
-            $customerEmailForLog = $createdOrders[0]['customer_email'] ?? $customer['email'] ?? 'unknown';
-            error_log("=== EMAIL SEND FAILURE ===");
-            error_log("Customer email: {$customerEmailForLog}");
-            error_log("Error message: " . $customerEmailError->getMessage());
-            error_log("Stack trace: " . $customerEmailError->getTraceAsString());
-            $emailErrors[] = 'Failed to send confirmation email';
-        }
+        $customerEmailSent = true; // Assume success since we're queuing
 
         // Create notifications for vendors and admins (best-effort)
         try {

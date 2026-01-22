@@ -944,10 +944,10 @@ switch ($path) {
             handleInitializePaystackPayment();
         }
         break;
-        
+
     case 'api/payments/paystack/webhook':
         if ($method === 'POST') {
-            include 'routes/payments.php';
+            include 'routes/webhooks.php';
             handlePaystackWebhook();
         }
         break;
@@ -958,7 +958,14 @@ switch ($path) {
             handleManualPaymentVerification();
         }
         break;
-        
+
+    case 'api/chatbase-token':
+        if ($method === 'GET') {
+            include 'routes/chatbase.php';
+            handleGetChatbaseToken();
+        }
+        break;
+
     default:
         // Handle dynamic routes like /api/vendor/products/{id}
         if (strpos($path, 'api/vendor/products/') === 0 && $method === 'PUT') {

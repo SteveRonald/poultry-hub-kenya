@@ -30,9 +30,11 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLogin from "./pages/AdminLogin";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import Chatbot from "./components/Chatbot";
+import ChatbaseWidget from "./components/ChatbaseWidget";
 import ChatPage from "./pages/ChatPage";
 import PaystackSuccess from "./pages/PaystackSuccess";
 import PaymentPage from "./pages/PaymentPage";
+import TermsAndConditions from "./pages/TermsAndConditions";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +72,7 @@ const App = () => (
                       <Route path="/blog" element={<Blog />} />
                       <Route path="/checkout/success" element={<PaystackSuccess />} />
                       <Route path="/contact" element={<Contact />} />
+                      <Route path="/terms" element={<TermsAndConditions />} />
                       <Route path="/dashboard" element={
                         <ProtectedRoute>
                           <Dashboard />
@@ -99,6 +102,7 @@ const App = () => (
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <Chatbot />
+                    <ChatbaseWidget />
                   </BrowserRouter>
                 </AdminProvider>
               </ChatProvider>

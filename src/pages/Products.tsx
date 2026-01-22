@@ -888,7 +888,7 @@ const Products = () => {
 
           {/* Products Grid */}
           {!isLoading && (
-            <div ref={productsGridRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div ref={productsGridRef} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
               {products.map((product, index) => {
                 const isHighlighted = highlightedProductId === product.id;
                 // Vary animation directions: 0=up, 1=left, 2=right, 3=down
@@ -922,7 +922,7 @@ const Products = () => {
                       ADVERTISED PRODUCT
                     </div>
                   )}
-                  <div className="relative h-48">
+                  <div className="relative h-36 md:h-40">
                     <img 
                       src={(() => {
                         // Handle both old single image_url and new image_urls array
@@ -945,96 +945,70 @@ const Products = () => {
                       alt={product.name}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-2 right-2 bg-accent text-black px-2 py-1 rounded-full text-sm font-medium">
+                    <div className="absolute top-1 right-1 bg-accent text-black px-1.5 py-0.5 rounded text-xs font-medium">
                       KSH {product.price.toLocaleString()}
                     </div>
                   </div>
                   
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold text-lg text-primary mb-2">{product.name}</h3>
-                    <div className="mb-3">
-                      <div className={`text-gray-600 text-sm ${needsTruncation(product.description) ? 'line-clamp-2' : ''}`}>
+                  <CardContent className="p-2 md:p-3">
+                    <h3 className="font-semibold text-sm md:text-base text-primary mb-1 line-clamp-2">{product.name}</h3>
+                    <div className="mb-2 hidden md:block">
+                      <div className="text-gray-600 text-xs line-clamp-1">
                         {product.description}
                       </div>
-                      {needsTruncation(product.description) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent card click
-                            handleViewDescription(product);
-                          }}
-                          className="text-primary hover:text-primary/80 text-sm font-semibold mt-2 focus:outline-none focus:underline transition-colors inline-flex items-center"
-                        >
-                          View More
-                          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      )}
                     </div>
                     
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center text-sm text-gray-500">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {product.vendor_profiles.location}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center text-xs text-gray-500">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        <span className="truncate">{product.vendor_profiles.location}</span>
                       </div>
                       {product.average_rating && product.average_rating > 0 ? (
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                          <span className="text-sm font-medium text-gray-900">
+                        <div className="flex items-center gap-0.5">
+                          <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                          <span className="text-xs font-medium">
                             {product.average_rating.toFixed(1)}
                           </span>
-                          {product.total_ratings && product.total_ratings > 0 && (
-                            <span className="text-xs text-gray-500">
-                              ({product.total_ratings})
-                            </span>
-                          )}
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 text-gray-300" />
-                          <span className="text-xs text-gray-400">No ratings</span>
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                     
-                    <div className="flex items-center justify-between">
+                    <div className="space-y-2">
                       <div>
-                        <p className="text-sm text-gray-500">by {product.vendor_profiles.farm_name}</p>
-                        <p className="text-lg font-bold text-primary">
-                          KSH {product.price.toLocaleString()} / {product.unit}
+                        <p className="text-xs text-gray-500 truncate">by {product.vendor_profiles.farm_name}</p>
+                        <p className="text-sm md:text-base font-bold text-primary">
+                          KSH {product.price.toLocaleString()}
                         </p>
-                        <p className="text-xs text-gray-500">Stock: {product.stock_quantity} {product.unit}s</p>
+                        <p className="text-xs text-gray-500">Stock: {product.stock_quantity}</p>
                       </div>
-                      <div className="flex flex-col gap-3 w-44">
-                        {/* Purchase actions grouped together */}
-                        <div className="flex flex-col gap-2">
-                          <Button
-                            className="bg-primary text-white hover:bg-primary/95 flex items-center justify-center w-full h-10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddToCart(product.id);
-                            }}
-                            disabled={cartLoading || product.stock_quantity <= 0}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add to Cart
-                          </Button>
+                      <div className="flex flex-col gap-1.5">
+                        <Button
+                          size="sm"
+                          className="bg-primary text-white hover:bg-primary/95 flex items-center justify-center w-full h-8 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddToCart(product.id);
+                          }}
+                          disabled={cartLoading || product.stock_quantity <= 0}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add to Cart
+                        </Button>
 
-                          <Button
-                            variant="outline"
-                            className="flex items-center justify-center w-full h-10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOrderNow(product);
-                            }}
-                          >
-                            <ShoppingCart className="h-4 w-4 mr-2" />
-                            Order Now
-                          </Button>
-                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex items-center justify-center w-full h-8 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOrderNow(product);
+                          }}
+                        >
+                          <ShoppingCart className="h-3 w-3 mr-1" />
+                          Order Now
+                        </Button>
 
-                        {/* Chat placed separately with visual separation to reduce mis-clicks */}
-                        <div className="pt-1 border-t -mx-2 px-2">
+                        <div className="hidden md:block">
                           <ChatButton
                             productId={product.id}
                             vendorId={product.vendor_id}

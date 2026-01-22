@@ -150,8 +150,8 @@ const Chatbot: React.FC = () => {
           // Reload welcome message with new language
           if (messages.length === 1 && messages[0].id === 'welcome') {
             const welcomeMessages = {
-              en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
-              sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+              en: "Hello! 👋 Welcome to KukuSoko. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+              sw: "Hujambo! 👋 Karibu KukuSoko. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
             };
             const quickReplies = {
               en: [
@@ -242,8 +242,8 @@ const Chatbot: React.FC = () => {
           loadConversations();
           // Show welcome message for new conversation (language-aware)
           const welcomeMessages = {
-            en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
-            sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+            en: "Hello! 👋 Welcome to KukuSoko. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+            sw: "Hujambo! 👋 Karibu KukuSoko. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
           };
           const quickReplies = {
             en: [
@@ -403,8 +403,8 @@ const Chatbot: React.FC = () => {
     setShowConversations(false);
     // Show welcome message for fresh chat (language-aware)
     const welcomeMessages = {
-      en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
-      sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+      en: "Hello! 👋 Welcome to KukuSoko. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+      sw: "Hujambo! 👋 Karibu KukuSoko. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
     };
     const quickReplies = {
       en: [
@@ -771,8 +771,8 @@ const Chatbot: React.FC = () => {
       // Always show welcome message when opening chat (fresh start)
       // Previous conversations are available via the conversations button
       const welcomeMessages = {
-        en: "Hello! 👋 Welcome to PoultryHubKenya. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
-        sw: "Hujambo! 👋 Karibu PoultryHubKenya. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
+        en: "Hello! 👋 Welcome to KukuSoko. I'm here to help you with:\n\n• Product information\n• Order status\n• Account help\n• General questions\n\nHow can I assist you today?",
+        sw: "Hujambo! 👋 Karibu KukuSoko. Nipo hapa kukusaidia kuhusu:\n\n• Taarifa za bidhaa\n• Hali ya maagizo\n• Msaada wa akaunti\n• Maswali ya jumla\n\nNisaidieje leo?"
       };
       const quickReplies = {
         en: [
@@ -848,7 +848,7 @@ const Chatbot: React.FC = () => {
           <div className="flex-1">
             <h4 className="font-semibold text-sm text-gray-900 mb-1">Hello! 👋</h4>
             <p className="text-xs text-gray-600 leading-relaxed mb-2">
-              Welcome to PoultryHubKenya! I'm here to help you with products, orders, and any questions you have.
+              Welcome to KukuSoko! I'm here to help you with products, orders, and any questions you have.
             </p>
             <button
               onClick={() => {
@@ -945,7 +945,7 @@ const Chatbot: React.FC = () => {
                   <h3 className="font-semibold text-sm sm:text-base truncate">
                     {currentConversationId ? 'AI Assistant' : 'New Chat'}
                   </h3>
-                  <p className="text-xs text-white/80 hidden sm:block truncate">PoultryHubKenya</p>
+                  <p className="text-xs text-white/80 hidden sm:block truncate">KukuSoko</p>
                 </div>
               </div>
             </div>

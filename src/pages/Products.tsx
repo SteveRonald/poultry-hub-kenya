@@ -980,6 +980,9 @@ const Products = () => {
                           KSH {product.price.toLocaleString()}
                         </p>
                         <p className="text-xs text-gray-500">Stock: {product.stock_quantity}</p>
+                        <p className="text-xs text-orange-600 font-medium">
+                          Min Order: {product.minimum_order_quantity || 1}
+                        </p>
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <Button

@@ -8,7 +8,7 @@ import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import AdvertisementBanner from '../components/AdvertisementBanner';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getImageUrl } from '../config/api';
 
 // Hero images for carousel - Balanced poultry-related images: Eggs, Live Chicken, Chicken Meat, Chicks, Poultry Farm, Poultry Feed
 const heroImages = [
@@ -48,11 +48,10 @@ const Index = () => {
   const { user } = useAuth();
   const [advertisements, setAdvertisements] = useState<any[]>([]);
   const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
-  const [isAutoScrolling, setIsAutoScrolling] = useState(true);
-  const categoryScrollRef = useRef<HTMLDivElement>(null);
-  const autoScrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   
   // Hero image carousel state
   const [currentHeroImageIndex, setCurrentHeroImageIndex] = useState(0);
@@ -68,6 +67,7 @@ const Index = () => {
   useEffect(() => {
     setupScrollAnimations();
     fetchAdvertisements();
+    fetchFeaturedProducts();
     
     // Hero image carousel - rotate every 5 seconds
     heroImageIntervalRef.current = setInterval(() => {
@@ -81,38 +81,24 @@ const Index = () => {
       if (heroImageIntervalRef.current) {
         clearInterval(heroImageIntervalRef.current);
       }
-      if (autoScrollIntervalRef.current) {
-        clearInterval(autoScrollIntervalRef.current);
-      }
     };
   }, []);
 
-  // Auto-scroll categories
-  useEffect(() => {
-    if (!isAutoScrolling) return;
-
-    autoScrollIntervalRef.current = setInterval(() => {
-      if (categoryScrollRef.current) {
-        const container = categoryScrollRef.current;
-        const scrollAmount = 400;
-        
-        // Check if we've reached the end
-        if (container.scrollLeft + container.clientWidth >= container.scrollWidth - 10) {
-          // Reset to start
-          container.scrollTo({ left: 0, behavior: 'smooth' });
-        } else {
-          // Scroll right
-          container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-        }
+  const fetchFeaturedProducts = async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/products?limit=50&is_active=1'));
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        console.log('Fetched products for carousel:', data.length);
+        setFeaturedProducts(data);
+      } else {
+        console.log('Products response is not an array:', data);
       }
-    }, 3000); // Auto-scroll every 3 seconds
+    } catch (error) {
+      console.error('Failed to fetch featured products:', error);
+    }
+  };
 
-    return () => {
-      if (autoScrollIntervalRef.current) {
-        clearInterval(autoScrollIntervalRef.current);
-      }
-    };
-  }, [isAutoScrolling]);
   
   const setupScrollAnimations = () => {
     const observerOptions = {
@@ -506,86 +492,129 @@ const Index = () => {
             </p>
           </div>
           
-          {/* Scrollable Categories Container */}
-          <div className="relative group">
-            {/* Left Arrow */}
-            <button
-              onClick={() => {
-                if (categoryScrollRef.current) {
-                  categoryScrollRef.current.scrollBy({ left: -400, behavior: 'smooth' });
-                  setIsAutoScrolling(false);
-                  setTimeout(() => setIsAutoScrolling(true), 5000);
-                }
-              }}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full p-3 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0"
-              aria-label="Scroll left"
+          {/* Auto-Scrolling Categories Container */}
+          <div className="relative overflow-hidden">
+            {/* Gradient Fade Edges */}
+            <div className="absolute left-0 top-0 w-16 h-full bg-gradient-to-r from-beige dark:from-gray-800 to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 w-16 h-full bg-gradient-to-l from-beige dark:from-gray-800 to-transparent z-10 pointer-events-none" />
+            
+            {/* Scrolling Track */}
+            <div 
+              className={`flex gap-4 md:gap-8 pb-4 ${
+                isPaused ? 'pause-animation' : 'animate-scroll'
+              }`}
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+              onTouchStart={() => setIsPaused(true)}
+              onTouchEnd={() => setIsPaused(false)}
             >
-              <ChevronRight className="h-6 w-6 text-primary rotate-180" />
-            </button>
-
-            {/* Scrollable Container */}
-            <div
-              ref={categoryScrollRef}
-              className="flex gap-8 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              onMouseEnter={() => setIsAutoScrolling(false)}
-              onMouseLeave={() => setIsAutoScrolling(true)}
-            >
-              {categories.map((category, index) => (
+              {/* Merge categories and featured products, then duplicate for infinite scroll */}
+              {[
+                ...categories.map(cat => ({ type: 'category', data: cat })),
+                ...featuredProducts.map(prod => ({ type: 'product', data: prod })),
+                ...categories.map(cat => ({ type: 'category', data: cat })),
+                ...featuredProducts.map(prod => ({ type: 'product', data: prod }))
+              ].map((item, index) => (
                 <Card 
-                  key={index} 
-                  className="card-hover overflow-hidden flex-shrink-0 w-80 md:w-96 opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out transform hover:scale-105"
-                  style={{ transitionDelay: `${index * 150}ms` }}
+                  key={`item-${index}`}
+                  className="card-hover overflow-hidden flex-shrink-0 w-64 sm:w-72 md:w-80 lg:w-96 transform hover:scale-105 transition-transform duration-300"
                 >
-                  <div className="relative h-48 overflow-hidden">
-                    <img 
-                      src={category.image} 
-                      alt={category.name}
-                      className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-                      <h3 className="text-2xl font-bold text-white">{category.name}</h3>
-                    </div>
-                  </div>
-                  <CardContent className="p-6">
-                    <p className="text-gray-600 dark:text-gray-300 mb-4">{category.description}</p>
-                    <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
-                      Shop Now
-                      <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-                  </CardContent>
+                  {item.type === 'category' ? (
+                    <>
+                      <div className="relative h-48 overflow-hidden">
+                        <img 
+                          src={item.data.image} 
+                          alt={item.data.name}
+                          className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+                          <h3 className="text-2xl font-bold text-white">{item.data.name}</h3>
+                        </div>
+                      </div>
+                      <CardContent className="p-6">
+                        <p className="text-gray-600 dark:text-gray-300 mb-4">{item.data.description}</p>
+                        <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
+                          Shop Now
+                          <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        </Link>
+                      </CardContent>
+                    </>
+                  ) : (
+                    <>
+                      <div className="relative h-48 overflow-hidden">
+                        <img 
+                          src={(() => {
+                            const imgs: any = item.data.image_urls;
+                            if (imgs && Array.isArray(imgs) && imgs.length > 0) {
+                              return getImageUrl(String(imgs[0]).replace(/\\/g, '/'));
+                            }
+                            if (typeof imgs === 'string') {
+                              try {
+                                const parsed = JSON.parse(imgs);
+                                if (Array.isArray(parsed) && parsed.length > 0) return getImageUrl(String(parsed[0]).replace(/\\/g, '/'));
+                              } catch (e) {
+                                // fallthrough
+                              }
+                            }
+                            const fallback = item.data.image_url || 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=400&h=300&fit=crop';
+                            return getImageUrl(String(fallback));
+                          })()} 
+                          alt={item.data.name}
+                          className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                        />
+                        <div className="absolute top-2 right-2 bg-primary text-white px-3 py-1 rounded-full text-sm font-semibold">
+                          KSH {item.data.price}
+                        </div>
+                      </div>
+                      <CardContent className="p-6">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{item.data.name}</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">{item.data.description}</p>
+                        <Link to={`/products/${item.data.id}`} className="text-primary font-semibold flex items-center hover:text-primary/80 group">
+                          View Product
+                          <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        </Link>
+                      </CardContent>
+                    </>
+                  )}
                 </Card>
               ))}
             </div>
-
-            {/* Right Arrow */}
-            <button
-              onClick={() => {
-                if (categoryScrollRef.current) {
-                  categoryScrollRef.current.scrollBy({ left: 400, behavior: 'smooth' });
-                  setIsAutoScrolling(false);
-                  setTimeout(() => setIsAutoScrolling(true), 5000);
-                }
-              }}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-gray-800 rounded-full p-3 shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0"
-              aria-label="Scroll right"
-            >
-              <ChevronRight className="h-6 w-6 text-primary" />
-            </button>
           </div>
 
           {/* Auto-scroll Indicator */}
           <div className="flex items-center justify-center mt-6 gap-2">
+            <div className={`h-2 w-2 rounded-full transition-colors ${
+              isPaused ? 'bg-gray-400' : 'bg-primary animate-pulse'
+            }`}></div>
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isAutoScrolling ? 'Auto-scrolling' : 'Paused'}
+              {isPaused ? 'Paused - Hover to pause' : 'Auto-scrolling'}
             </span>
           </div>
         </div>
 
-        {/* Hide scrollbar */}
+        {/* CSS Animations */}
         <style>{`
-          .scrollbar-hide::-webkit-scrollbar {
-            display: none;
+          @keyframes scroll {
+            from {
+              transform: translateX(0);
+            }
+            to {
+              transform: translateX(-50%);
+            }
+          }
+          
+          .animate-scroll {
+            animation: scroll ${Math.max(60, (categories.length + featuredProducts.length) * 5)}s linear infinite;
+          }
+          
+          .pause-animation {
+            animation-play-state: paused;
+          }
+          
+          @media (max-width: 768px) {
+            .animate-scroll {
+              animation: scroll ${Math.max(40, (categories.length + featuredProducts.length) * 4)}s linear infinite;
+            }
           }
         `}</style>
       </section>

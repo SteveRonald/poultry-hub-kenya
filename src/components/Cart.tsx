@@ -19,6 +19,36 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const [localCartItems, setLocalCartItems] = useState<any[]>([]);
   const [localCartTotal, setLocalCartTotal] = useState(0);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(5000);
+
+  // Fetch delivery settings
+  useEffect(() => {
+    const fetchDeliverySettings = async () => {
+      try {
+        const [feeRes, thresholdRes] = await Promise.all([
+          fetch(getApiUrl('/api/settings?key=delivery_fee')),
+          fetch(getApiUrl('/api/settings?key=free_delivery_threshold'))
+        ]);
+        
+        const feeData = await feeRes.json();
+        const thresholdData = await thresholdRes.json();
+        
+        if (feeData.success) {
+          setDeliveryFee(Number(feeData.value) || 0);
+        }
+        if (thresholdData.success) {
+          setFreeDeliveryThreshold(Number(thresholdData.value) || 5000);
+        }
+      } catch (error) {
+        console.error('Failed to fetch delivery settings:', error);
+      }
+    };
+    
+    if (isOpen) {
+      fetchDeliverySettings();
+    }
+  }, [isOpen]);
 
   // Update local cart items when not logged in
   useEffect(() => {
@@ -47,7 +77,10 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const currentItems = user ? cartItems : localCartItems;
-  const currentTotal = user ? cartSummary.total_amount : localCartTotal;
+  const subtotal = user ? cartSummary.total_amount : localCartTotal;
+  const isFreeDelivery = subtotal >= freeDeliveryThreshold;
+  const actualDeliveryFee = isFreeDelivery ? 0 : deliveryFee;
+  const currentTotal = subtotal + actualDeliveryFee;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -152,12 +185,21 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>Subtotal</span>
-                        <span>KSH {Number(currentTotal).toFixed(2)}</span>
+                        <span>KSH {Number(subtotal).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span>Delivery</span>
-                        <span className="text-green-600">FREE</span>
+                        {isFreeDelivery ? (
+                          <span className="text-green-600">FREE</span>
+                        ) : (
+                          <span>KSH {deliveryFee.toFixed(2)}</span>
+                        )}
                       </div>
+                      {!isFreeDelivery && freeDeliveryThreshold > 0 && (
+                        <p className="text-xs text-gray-500">
+                          Add KSH {(freeDeliveryThreshold - subtotal).toFixed(0)} more for free delivery
+                        </p>
+                      )}
                       <div className="flex justify-between items-center mb-6">
                         <span className="text-xl font-bold text-gray-900 dark:text-gray-100">Total Amount:</span>
                         <span className="text-2xl font-bold text-primary">

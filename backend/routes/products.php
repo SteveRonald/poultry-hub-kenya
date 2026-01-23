@@ -47,8 +47,10 @@ function handleGetProducts() {
                 'category' => $product['category'],
                 'price' => floatval($product['price']),
                 'stock_quantity' => intval($product['stock_quantity']),
+                'minimum_order_quantity' => isset($product['minimum_order_quantity']) ? intval($product['minimum_order_quantity']) : 1,
                 'unit' => $product['unit'],
                 'image_url' => $product['image_urls'] ? json_decode($product['image_urls'], true)[0] : null,
+                'image_urls' => $product['image_urls'],
                 'average_rating' => isset($product['average_rating']) ? floatval($product['average_rating']) : 0.00,
                 'total_ratings' => isset($product['total_ratings']) ? intval($product['total_ratings']) : 0,
                 'vendor_profiles' => [
@@ -132,6 +134,7 @@ function handleGetProduct($productId = null) {
             'category' => $product['category'] ?? '',
             'price' => floatval($product['price'] ?? 0),
             'stock_quantity' => intval($product['stock_quantity'] ?? 0),
+            'minimum_order_quantity' => isset($product['minimum_order_quantity']) ? intval($product['minimum_order_quantity']) : 1,
             'unit' => $product['unit'] ?? '',
             'image_urls' => $imageUrls,
             'average_rating' => isset($product['average_rating']) && $product['average_rating'] !== null ? floatval($product['average_rating']) : 0.00,

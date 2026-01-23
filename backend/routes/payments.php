@@ -466,14 +466,25 @@ function handleManualPaymentVerification() {
                 error_log("No product_id found in item: " . print_r($item, true));
             }
             
+            // Calculate item subtotal and delivery fee (split proportionally across items)
+            $itemSubtotal = $item['price'] * ($item['quantity'] ?? 1);
+            $orderDeliveryFee = $checkoutData['delivery_fee'] ?? 0;
+            $itemCount = count($checkoutData['items']);
+            // Split delivery fee across items (first item gets any remainder)
+            $itemDeliveryFee = ($itemCount > 0) ? floor($orderDeliveryFee / $itemCount) : 0;
+            if ($item === $checkoutData['items'][0]) {
+                $itemDeliveryFee = $orderDeliveryFee - ($itemDeliveryFee * ($itemCount - 1));
+            }
+            $itemTotalWithDelivery = $itemSubtotal + $itemDeliveryFee;
+            
             $stmt = $pdo->prepare("
                 INSERT INTO orders (
                     user_id, product_id, quantity, status, 
-                    total_amount, payment_status, payment_transaction_id, 
+                    subtotal, delivery_fee, total_amount, payment_status, payment_transaction_id, 
                     payment_reference, payment_completed_at, payment_method,
                     payment_account_number, shipping_address, contact_phone, notes, order_type,
                     order_number, vendor_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
             ");
             
             $stmt->execute([
@@ -481,7 +492,9 @@ function handleManualPaymentVerification() {
                 $item['product_id'] ?? 'sample_product',
                 $item['quantity'] ?? 1,
                 'confirmed', // Auto-confirm on successful payment
-                $item['price'] * ($item['quantity'] ?? 1),
+                $itemSubtotal,
+                $itemDeliveryFee,
+                $itemTotalWithDelivery,
                 'paid',
                 $transaction['paystack_transaction_id'],
                 $reference,

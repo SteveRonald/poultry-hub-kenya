@@ -18,7 +18,8 @@ import {
   MessageSquare,
   Database,
   Shield,
-  FileText
+  FileText,
+  Settings
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -292,6 +293,15 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       items: [
         { id: 'analytics', label: 'Analytics', icon: BarChart3 },
         { id: 'backup', label: 'Backup', icon: Database }
+      ]
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      collapsible: true,
+      items: [
+        { id: 'system-settings', label: 'System Settings', icon: Settings }
       ]
     },
     {

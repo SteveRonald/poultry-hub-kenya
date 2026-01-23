@@ -834,6 +834,11 @@ switch ($path) {
             handleGoogleDriveFolderInfo();
         }
         break;
+    
+    // System Settings routes
+    case 'api/settings':
+        include 'routes/settings.php';
+        break;
         
     // Advertisement routes
     case 'api/advertisements':

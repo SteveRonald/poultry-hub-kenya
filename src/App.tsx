@@ -22,6 +22,7 @@ import VendorDashboard from "./pages/VendorDashboard";
 import VendorInbox from "./pages/VendorInbox";
 import CustomerInbox from "./pages/CustomerInbox";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminSettings from "./pages/AdminSettings";
 import Training from "./pages/Training";
 import Blog from "./pages/Blog";
 import Contact from "./pages/Contact";
@@ -96,6 +97,11 @@ const App = () => (
                       <Route path="/admin-dashboard" element={
                         <AdminProtectedRoute>
                           <AdminDashboard />
+                        </AdminProtectedRoute>
+                      } />
+                      <Route path="/admin-settings" element={
+                        <AdminProtectedRoute>
+                          <AdminSettings />
                         </AdminProtectedRoute>
                       } />
                       <Route path="/control_90E-panel" element={<AdminLogin />} />

@@ -19,6 +19,7 @@ interface ProductDetails {
   category: string;
   price: number;
   stock_quantity: number;
+  minimum_order_quantity?: number;
   unit: string;
   image_urls: string | string[];
   vendor_profiles: {
@@ -83,6 +84,13 @@ const ProductDetails = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
+
+  // Update quantity when product loads to respect minimum order quantity
+  useEffect(() => {
+    if (product && product.minimum_order_quantity && product.minimum_order_quantity > 1) {
+      setQuantity(product.minimum_order_quantity);
+    }
+  }, [product]);
 
   useEffect(() => {
     if (id) {
@@ -361,6 +369,9 @@ const ProductDetails = () => {
               <p className="text-sm text-gray-600 mt-1">
                 Stock: {product.stock_quantity} {product.unit}(s) available
               </p>
+              <p className="text-sm text-orange-600 font-medium mt-1">
+                Minimum Order: {product.minimum_order_quantity || 1} {product.unit}(s)
+              </p>
             </div>
 
             {/* Description */}
@@ -389,8 +400,8 @@ const ProductDetails = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={quantity <= 1}
+                  onClick={() => setQuantity(Math.max(product.minimum_order_quantity || 1, quantity - 1))}
+                  disabled={quantity <= (product.minimum_order_quantity || 1)}
                   className="h-9 w-9"
                 >
                   <Minus className="h-3.5 w-3.5" />

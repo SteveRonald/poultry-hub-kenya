@@ -115,13 +115,24 @@ function handleAddToCart() {
     
     try {
         // Check if product exists and is active
-        $stmt = $pdo->prepare("SELECT id, name, price, stock_quantity FROM products WHERE id = ? AND is_active = 1");
+        $stmt = $pdo->prepare("SELECT id, name, price, stock_quantity, minimum_order_quantity FROM products WHERE id = ? AND is_active = 1");
         $stmt->execute([$productId]);
         $product = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$product) {
             http_response_code(404);
             echo json_encode(['error' => 'Product not found or not available']);
+            return;
+        }
+        
+        // Check minimum order quantity
+        $minOrderQty = $product['minimum_order_quantity'] ?? 1;
+        if ($quantity < $minOrderQty) {
+            http_response_code(400);
+            echo json_encode([
+                'error' => "Minimum order quantity for this product is {$minOrderQty}",
+                'minimum_quantity' => $minOrderQty
+            ]);
             return;
         }
         
@@ -211,7 +222,7 @@ function handleUpdateCartItem() {
     try {
         // Check if cart item exists and belongs to user
         $stmt = $pdo->prepare("
-            SELECT c.id, c.product_id, p.stock_quantity 
+            SELECT c.id, c.product_id, p.stock_quantity, p.minimum_order_quantity 
             FROM cart c 
             JOIN products p ON c.product_id = p.id 
             WHERE c.id = ? AND c.user_id = ?
@@ -222,6 +233,17 @@ function handleUpdateCartItem() {
         if (!$cartItem) {
             http_response_code(404);
             echo json_encode(['error' => 'Cart item not found']);
+            return;
+        }
+        
+        // Check minimum order quantity
+        $minOrderQty = $cartItem['minimum_order_quantity'] ?? 1;
+        if ($quantity < $minOrderQty) {
+            http_response_code(400);
+            echo json_encode([
+                'error' => "Minimum order quantity for this product is {$minOrderQty}",
+                'minimum_quantity' => $minOrderQty
+            ]);
             return;
         }
         

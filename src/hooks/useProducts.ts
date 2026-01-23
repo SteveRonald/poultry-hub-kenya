@@ -10,6 +10,7 @@ export interface Product {
   category: string;
   price: number;
   stock_quantity: number;
+  minimum_order_quantity?: number;
   unit: string;
   // primary image (may be a URL or null). Some API responses also include `image_urls` (array or JSON-stringified array).
   image_url?: string | null;

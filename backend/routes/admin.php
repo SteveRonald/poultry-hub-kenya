@@ -29,8 +29,24 @@ function handleAdminLogin() {
             return;
         }
         
-        // Check password - only allow bcrypt hashed passwords
-        $passwordValid = password_verify($password, $admin['password']);
+        // Check password - support both bcrypt hashed passwords and plain text (for migration)
+        $passwordValid = false;
+        $storedPassword = $admin['password'] ?? '';
+        
+        // First try bcrypt verification (check if it looks like a bcrypt hash)
+        if (!empty($storedPassword) && strlen($storedPassword) >= 60 && substr($storedPassword, 0, 4) === '$2y$') {
+            $passwordValid = password_verify($password, $storedPassword);
+        }
+        
+        // Fallback: check if password matches plain text (legacy) and rehash
+        if (!$passwordValid && !empty($storedPassword) && $password === $storedPassword) {
+            $passwordValid = true;
+            // Rehash the password with bcrypt for security
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            $updateStmt = $pdo->prepare("UPDATE user_profiles SET password = ? WHERE id = ?");
+            $updateStmt->execute([$hashedPassword, $admin['id']]);
+            error_log("Admin password rehashed for user ID: " . $admin['id']);
+        }
         
         if (!$passwordValid) {
             http_response_code(401);
@@ -1454,18 +1470,7 @@ function handleUpdateAdminProfile() {
     }
 }
 
-function validateAdminSession($token) {
-    global $pdo;
-    
-    try {
-        $stmt = $pdo->prepare("SELECT * FROM admin_sessions WHERE session_token = ? AND expires_at > NOW()");
-        $stmt->execute([$token]);
-        return $stmt->fetch() !== false;
-    } catch (PDOException $e) {
-        error_log("Error validating admin session: " . $e->getMessage());
-        return false;
-    }
-}
+// validateAdminSession is now defined in utils/auth.php - removed duplicate
 
 function handleDeleteContactMessage() {
     global $pdo;

@@ -132,7 +132,16 @@ const PaystackSuccess = () => {
 
       if (data.success) {
         setPaymentStatus('success');
-        setOrderDetails(data); // Use data directly, not data.data
+        // Store the complete data including amount and payment method
+        const completeOrderDetails = {
+          ...data,
+          amount: data.amount || 0,
+          payment_method: data.payment_method || data.selected_method || data.channel || 'Paystack',
+          selected_method: data.selected_method || data.payment_method || data.channel || 'Paystack',
+          channel: data.channel || 'card'
+        };
+        console.log('=== COMPLETE ORDER DETAILS ===', completeOrderDetails);
+        setOrderDetails(completeOrderDetails);
         // Clear payment details from session
         sessionStorage.removeItem('payment_details');
       } else {
@@ -224,18 +233,6 @@ const PaystackSuccess = () => {
                       <div className="flex justify-between">
                         <span className="font-medium text-gray-600">Payment ID:</span>
                         <span className="font-bold text-green-700">{orderDetails.reference || orderDetails.payment_reference}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Amount Paid:</span>
-                        <span className="font-bold text-green-700">
-                          {orderDetails.amount ? `KSH ${orderDetails.amount.toLocaleString()}` : 'KSH 0'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Payment Method:</span>
-                        <span className="font-bold text-green-700 capitalize">
-                          {orderDetails.selected_method || orderDetails.channel || 'Paystack'}
-                        </span>
                       </div>
                       {orderDetails.order_ids && orderDetails.order_ids.length > 0 && (
                         <div className="mt-4 p-3 bg-green-100 rounded">

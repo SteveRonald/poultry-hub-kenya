@@ -191,9 +191,9 @@ function handleCreateProduct() {
         $stmt = $pdo->prepare("
             INSERT INTO products (
                 id, vendor_id, name, description, price, category, stock_quantity, 
-                image_urls, is_active, ai_verified, ai_confidence, ai_analysis_data, ai_verified_at
+                minimum_order_quantity, image_urls, is_active, ai_verified, ai_confidence, ai_analysis_data, ai_verified_at
             ) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $productId,
@@ -203,6 +203,7 @@ function handleCreateProduct() {
             $input['price'],
             $normalizedCategory,
             $input['stock_quantity'] ?? 0,
+            $input['minimum_order_quantity'] ?? 1,
             json_encode($input['image_urls'] ?? []),
             $aiVerified,
             $aiConfidence,
@@ -294,7 +295,7 @@ function handleUpdateProduct() {
         // Update the product
         $stmt = $pdo->prepare("
             UPDATE products 
-            SET name = ?, description = ?, price = ?, category = ?, stock_quantity = ?, image_urls = ?, updated_at = NOW()
+            SET name = ?, description = ?, price = ?, category = ?, stock_quantity = ?, minimum_order_quantity = ?, image_urls = ?, updated_at = NOW()
             WHERE id = ?
         ");
         $stmt->execute([
@@ -303,6 +304,7 @@ function handleUpdateProduct() {
             $input['price'],
             $input['category'],
             $input['stock_quantity'] ?? 0,
+            $input['minimum_order_quantity'] ?? 1,
             json_encode($input['image_urls'] ?? []),
             $productId
         ]);

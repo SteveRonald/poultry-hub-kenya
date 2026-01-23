@@ -44,6 +44,7 @@ const VendorDashboard = () => {
     price: '', 
     category: '', 
     stock_quantity: '',
+    minimum_order_quantity: '1',
     image_urls: [] 
   });
   const [uploading, setUploading] = useState(false);
@@ -594,6 +595,7 @@ const VendorDashboard = () => {
       price: product.price,
       category: product.category,
       stock_quantity: product.stock_quantity,
+      minimum_order_quantity: product.minimum_order_quantity || 1,
       image_urls: product.image_urls ? JSON.parse(product.image_urls) : []
     });
     setShowEditProductModal(true);
@@ -618,6 +620,7 @@ const VendorDashboard = () => {
           price: parseFloat(productForm.price),
           category: productForm.category,
           stock_quantity: parseInt(productForm.stock_quantity),
+          minimum_order_quantity: parseInt(productForm.minimum_order_quantity) || 1,
           image_urls: productForm.image_urls
         }),
       });
@@ -630,7 +633,7 @@ const VendorDashboard = () => {
         });
         setShowEditProductModal(false);
         setEditingProduct(null);
-        setProductForm({ name: '', description: '', price: '', category: '', stock_quantity: '', image_urls: [] });
+        setProductForm({ name: '', description: '', price: '', category: '', stock_quantity: '', minimum_order_quantity: '1', image_urls: [] });
         fetchProducts();
       } else {
         const error = await response.json();
@@ -1350,6 +1353,7 @@ const VendorDashboard = () => {
           price: parseFloat(productForm.price),
           category: productForm.category,
           stock_quantity: parseInt(productForm.stock_quantity),
+          minimum_order_quantity: parseInt(productForm.minimum_order_quantity) || 1,
           image_urls: productForm.image_urls,
           ai_analysis: aiAnalysis // Include AI verification data for database storage
         })
@@ -2343,6 +2347,22 @@ const VendorDashboard = () => {
                       placeholder="0"
                     />
                   </div>
+
+                  <div>
+                    <label htmlFor="minimum-order-quantity" className="block text-sm font-medium text-gray-700 mb-2">Minimum Order Quantity *</label>
+                    <input
+                      id="minimum-order-quantity"
+                      type="number"
+                      name="minimum_order_quantity"
+                      value={productForm.minimum_order_quantity}
+                      onChange={handleProductFormChange}
+                      required
+                      min="1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="1"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Minimum quantity customers must order</p>
+                  </div>
                 </div>
 
                 <div>
@@ -2688,6 +2708,22 @@ const VendorDashboard = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="0"
                     />
+                  </div>
+
+                  <div>
+                    <label htmlFor="edit-minimum-order-quantity" className="block text-sm font-medium text-gray-700 mb-2">Minimum Order Quantity *</label>
+                    <input
+                      id="edit-minimum-order-quantity"
+                      type="number"
+                      name="minimum_order_quantity"
+                      value={productForm.minimum_order_quantity}
+                      onChange={handleProductFormChange}
+                      required
+                      min="1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="1"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Minimum quantity customers must order</p>
                   </div>
                 </div>
 

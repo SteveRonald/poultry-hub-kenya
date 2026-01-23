@@ -386,8 +386,18 @@ function getOrderConfirmationTemplate($data, $baseUrl) {
         </div>
         
         <div class='total-section'>
-            <div>Total Amount </div>
-            <div class='total-amount'>KSH " . number_format($order['total_amount'], 2) . "</div>
+            <div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>
+                <span>Subtotal:</span>
+                <span>KSH " . number_format($order['subtotal'] ?? $order['total_amount'], 2) . "</span>
+            </div>
+            <div style='display: flex; justify-content: space-between; margin-bottom: 8px;'>
+                <span>Delivery Fee:</span>
+                <span>" . (isset($order['delivery_fee']) && $order['delivery_fee'] > 0 ? 'KSH ' . number_format($order['delivery_fee'], 2) : 'FREE') . "</span>
+            </div>
+            <div style='display: flex; justify-content: space-between; border-top: 1px solid #ddd; padding-top: 8px; margin-top: 8px;'>
+                <span style='font-weight: bold;'>Total Amount:</span>
+                <span class='total-amount'>KSH " . number_format($order['total_amount'], 2) . "</span>
+            </div>
         </div>
         
         <div class='highlight'>

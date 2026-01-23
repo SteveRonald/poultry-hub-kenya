@@ -49,6 +49,10 @@ const AdminDashboard = () => {
   const [smsLoading, setSmsLoading] = useState(false);
   const [systemLogs, setSystemLogs] = useState<any[]>([]);
   const [systemLogsLoading, setSystemLogsLoading] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<any[]>([]);
+  const [systemSettingsLoading, setSystemSettingsLoading] = useState(false);
+  const [settingsFormData, setSettingsFormData] = useState<{ [key: string]: string }>({});
+  const [savingSettings, setSavingSettings] = useState(false);
   const [systemLogsFilter, setSystemLogsFilter] = useState({
     userType: 'all' as 'all' | 'vendor' | 'customer' | 'admin' | 'system',
     search: '',
@@ -1112,7 +1116,11 @@ const AdminDashboard = () => {
       fetchSystemLogs();
       fetchAvailableActions();
     }
-  }, [activeTab]);
+
+    if (activeTab === 'system-settings') {
+      fetchSystemSettings();
+    }
+  }, [activeTab, navigate]);
   
   // Refetch logs when filters or page change
   useEffect(() => {
@@ -1258,6 +1266,76 @@ const AdminDashboard = () => {
       }
     } finally {
       setSmsLoading(false);
+    }
+  };
+
+  const fetchSystemSettings = async () => {
+    setSystemSettingsLoading(true);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      if (!token) {
+        toast.error('Please login as admin');
+        return;
+      }
+      
+      const response = await fetch(getApiUrl('/api/settings'), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSystemSettings(data.settings || []);
+          const initialData: { [key: string]: string } = {};
+          (data.settings || []).forEach((setting: any) => {
+            initialData[setting.setting_key] = setting.setting_value;
+          });
+          setSettingsFormData(initialData);
+        } else {
+          toast.error(data.error || 'Failed to fetch settings');
+        }
+      } else {
+        toast.error('Failed to fetch settings');
+      }
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+      toast.error('Failed to load settings');
+    } finally {
+      setSystemSettingsLoading(false);
+    }
+  };
+
+  const handleSettingChange = (key: string, value: string) => {
+    setSettingsFormData(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveSetting = async (key: string) => {
+    setSavingSettings(true);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/settings'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          setting_key: key,
+          setting_value: settingsFormData[key]
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Setting updated successfully');
+        fetchSystemSettings();
+      } else {
+        toast.error(data.error || 'Failed to update setting');
+      }
+    } catch (error) {
+      toast.error('Failed to update setting');
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -2637,6 +2715,79 @@ const AdminDashboard = () => {
                           </table>
                         </div>
                       )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* System Settings Tab */}
+              {activeTab === 'system-settings' && (
+                <div id="tab-section-system-settings" className="space-y-6 scroll-mt-24">
+                  <div className="flex justify-between items-center flex-wrap gap-4">
+                    <h2 className="text-xl font-semibold text-primary">System Settings</h2>
+                    <Button
+                      onClick={fetchSystemSettings}
+                      disabled={systemSettingsLoading}
+                    >
+                      {systemSettingsLoading ? 'Loading...' : 'Refresh'}
+                    </Button>
+                  </div>
+
+                  {systemSettingsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      {systemSettings.map((setting: any) => (
+                        <Card key={setting.id}>
+                          <CardContent className="p-4">
+                            <div className="flex flex-col md:flex-row md:items-center gap-4">
+                              <div className="flex-1">
+                                <Label className="text-sm font-medium capitalize">
+                                  {setting.setting_key.replace(/_/g, ' ')}
+                                </Label>
+                                <p className="text-xs text-gray-500 mt-1">{setting.description}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type={setting.setting_type === 'number' ? 'number' : 'text'}
+                                  value={settingsFormData[setting.setting_key] || ''}
+                                  onChange={(e) => handleSettingChange(setting.setting_key, e.target.value)}
+                                  className="w-32"
+                                />
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSaveSetting(setting.setting_key)}
+                                  disabled={savingSettings}
+                                >
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      
+                      {systemSettings.length === 0 && (
+                        <Card>
+                          <CardContent className="p-8 text-center text-gray-500">
+                            No settings found. Settings will be created when the system is first configured.
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  )}
+
+                  <Card className="bg-green-50 border-green-200">
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-green-800 mb-2">Important Notes</h3>
+                      <ul className="text-sm text-green-700 list-disc list-inside space-y-1">
+                        <li>Changes take effect immediately for new transactions</li>
+                        <li>Delivery fee is added to all orders at checkout</li>
+                        <li>Set free delivery threshold to 0 to disable free delivery</li>
+                        <li>Platform commission is deducted from vendor earnings</li>
+                      </ul>
                     </CardContent>
                   </Card>
                 </div>

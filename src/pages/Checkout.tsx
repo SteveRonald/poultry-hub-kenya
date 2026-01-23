@@ -23,6 +23,8 @@ const Checkout = () => {
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [orderNumber, setOrderNumber] = useState<string | undefined>(undefined);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [loadingDeliveryFee, setLoadingDeliveryFee] = useState(true);
   const [formData, setFormData] = useState({
     shipping_address: '',
     contact_phone: user?.phone || '',
@@ -96,7 +98,39 @@ const Checkout = () => {
   };
 
   const checkoutItems = getCheckoutItems();
-  const totalAmount = checkoutItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const subtotal = checkoutItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(5000);
+  const isFreeDelivery = subtotal >= freeDeliveryThreshold;
+  const actualDeliveryFee = isFreeDelivery ? 0 : deliveryFee;
+  const totalAmount = subtotal + actualDeliveryFee;
+
+  // Fetch delivery fee from settings
+  useEffect(() => {
+    const fetchDeliverySettings = async () => {
+      try {
+        const [feeRes, thresholdRes] = await Promise.all([
+          fetch(getApiUrl('/api/settings?key=delivery_fee')),
+          fetch(getApiUrl('/api/settings?key=free_delivery_threshold'))
+        ]);
+        
+        const feeData = await feeRes.json();
+        const thresholdData = await thresholdRes.json();
+        
+        if (feeData.success) {
+          setDeliveryFee(Number(feeData.value) || 0);
+        }
+        if (thresholdData.success) {
+          setFreeDeliveryThreshold(Number(thresholdData.value) || 5000);
+        }
+      } catch (error) {
+        console.error('Failed to fetch delivery settings:', error);
+        setDeliveryFee(100); // Default fallback
+      } finally {
+        setLoadingDeliveryFee(false);
+      }
+    };
+    fetchDeliverySettings();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +221,8 @@ const Checkout = () => {
         body: JSON.stringify({
           order_id: 0, // Temporary ID for payment initialization
           amount: totalAmount,
+          subtotal: subtotal,
+          delivery_fee: actualDeliveryFee,
           email: user?.email || 'customer@poultryhubkenya.com',
           callback_url: `${window.location.origin}/checkout/success`,
           // Include checkout data for webhook processing
@@ -230,7 +266,10 @@ const Checkout = () => {
         shipping_address: formData.shipping_address.trim(),
         contact_phone: formData.contact_phone.trim(),
         notes: formData.notes.trim() || 'Order from checkout',
-        payment_reference: paymentData.reference
+        payment_reference: paymentData.reference,
+        subtotal: subtotal,
+        delivery_fee: actualDeliveryFee,
+        total_amount: totalAmount
       }));
 
       // Navigate to payment page instead of opening popup
@@ -534,12 +573,23 @@ const Checkout = () => {
                     <div className="space-y-2 pt-4 border-t">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Subtotal</span>
-                        <span>KSH {totalAmount.toLocaleString()}</span>
+                        <span>KSH {subtotal.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Delivery</span>
-                        <span className="text-green-600">FREE</span>
+                        <span className="text-gray-600">Delivery Fee</span>
+                        {loadingDeliveryFee ? (
+                          <span className="text-gray-400">Loading...</span>
+                        ) : isFreeDelivery ? (
+                          <span className="text-green-600">FREE</span>
+                        ) : (
+                          <span>KSH {deliveryFee.toLocaleString()}</span>
+                        )}
                       </div>
+                      {!isFreeDelivery && freeDeliveryThreshold > 0 && !loadingDeliveryFee && (
+                        <p className="text-xs text-gray-500">
+                          Add KSH {(freeDeliveryThreshold - subtotal).toLocaleString()} more for free delivery
+                        </p>
+                      )}
                       <div className="flex justify-between font-bold text-lg pt-2 border-t">
                         <span>Total</span>
                         <span className="text-primary">KSH {totalAmount.toLocaleString()}</span>

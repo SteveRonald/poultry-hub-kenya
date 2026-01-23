@@ -412,25 +412,35 @@ function queueOrderConfirmationEmail($orderId) {
         $stmt->execute([$paymentReference]);
         $allOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Calculate aggregated total
+        // Calculate aggregated totals including delivery fee
+        $subtotal = 0;
+        $totalDeliveryFee = 0;
         $totalAmount = 0;
         $orderItems = [];
         foreach ($allOrders as $orderItem) {
+            $itemSubtotal = $orderItem['subtotal'] ?? $orderItem['total_amount'];
+            $itemDeliveryFee = $orderItem['delivery_fee'] ?? 0;
+            $subtotal += $itemSubtotal;
+            $totalDeliveryFee += $itemDeliveryFee;
             $totalAmount += $orderItem['total_amount'];
+            // Calculate unit price from subtotal and quantity
+            $unitPrice = $orderItem['unit_price'] ?? ($itemSubtotal / max($orderItem['quantity'], 1));
             $orderItems[] = [
                 'product_name' => $orderItem['product_name'],
                 'quantity' => $orderItem['quantity'],
-                'unit_price' => $orderItem['price'],
-                'total_amount' => $orderItem['total_amount']
+                'unit_price' => floatval($unitPrice),
+                'total_amount' => $itemSubtotal // Show item subtotal without delivery fee
             ];
         }
 
-        error_log("Customer email will include " . count($orderItems) . " items with total: KSH " . $totalAmount);
+        error_log("Customer email will include " . count($orderItems) . " items with subtotal: KSH $subtotal, delivery: KSH $totalDeliveryFee, total: KSH $totalAmount");
 
         $templateData = [
             'order' => [
                 'order_number' => $order['order_number'],
                 'payment_reference' => $paymentReference,
+                'subtotal' => $subtotal,
+                'delivery_fee' => $totalDeliveryFee,
                 'total_amount' => $totalAmount,
                 'payment_method' => $order['payment_method'],
                 'payment_status' => $order['payment_status'],
@@ -510,9 +520,9 @@ function queueVendorEmailsForPayment($paymentReference, $customerOrder) {
 
             error_log("Processing vendor: {$vendor['farm_name']} ({$vendor['email']})");
 
-            // Get all order items for this vendor
+            // Get all order items for this vendor with product price
             $stmt = $pdo->prepare("
-                SELECT o.*, p.name as product_name
+                SELECT o.*, p.name as product_name, p.price as product_price
                 FROM orders o
                 LEFT JOIN products p ON o.product_id = p.id
                 WHERE o.payment_reference = ? AND o.vendor_id = ?
@@ -531,12 +541,15 @@ function queueVendorEmailsForPayment($paymentReference, $customerOrder) {
             $items = [];
             foreach ($orderItems as $item) {
                 $vendorTotal += $item['total_amount'];
+                // Use product_price from products table, fallback to total_amount/quantity
+                $unitPrice = $item['product_price'] ?? ($item['total_amount'] / max($item['quantity'], 1));
                 $items[] = [
                     'product_name' => $item['product_name'],
                     'quantity' => $item['quantity'],
-                    'unit_price' => $item['price'],
+                    'unit_price' => floatval($unitPrice),
                     'total_amount' => $item['total_amount']
                 ];
+                error_log("Vendor email item: {$item['product_name']}, Unit Price: {$unitPrice}, Quantity: {$item['quantity']}, Total: {$item['total_amount']}");
             }
 
             error_log("Vendor {$vendor['farm_name']} has " . count($items) . " items totaling KSH " . $vendorTotal);

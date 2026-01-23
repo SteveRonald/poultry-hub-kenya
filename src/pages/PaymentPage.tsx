@@ -20,6 +20,34 @@ const PaymentPage: React.FC = () => {
   const [paymentData, setPaymentData] = useState<any>(null);
   const [error, setError] = useState<string>('');
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'initializing' | 'verifying' | 'success' | 'failed'>('pending');
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(5000);
+
+  // Fetch delivery settings
+  useEffect(() => {
+    const fetchDeliverySettings = async () => {
+      try {
+        const [feeRes, thresholdRes] = await Promise.all([
+          fetch(getApiUrl('/api/settings?key=delivery_fee')),
+          fetch(getApiUrl('/api/settings?key=free_delivery_threshold'))
+        ]);
+        
+        const feeData = await feeRes.json();
+        const thresholdData = await thresholdRes.json();
+        
+        if (feeData.success) {
+          setDeliveryFee(Number(feeData.value) || 0);
+        }
+        if (thresholdData.success) {
+          setFreeDeliveryThreshold(Number(thresholdData.value) || 5000);
+        }
+      } catch (error) {
+        console.error('Failed to fetch delivery settings:', error);
+      }
+    };
+    
+    fetchDeliverySettings();
+  }, []);
 
   useEffect(() => {
     // Get payment data from session storage
@@ -56,6 +84,12 @@ const PaymentPage: React.FC = () => {
       const apiUrl = getApiUrl('/api/payments/paystack/initialize');
       console.log('API URL:', apiUrl);
 
+      // Use total_amount from checkout (includes delivery fee) or calculate from items
+      const subtotal = checkoutData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+      const paymentAmount = checkoutData.total_amount || subtotal;
+      
+      console.log('Initializing payment with amount:', paymentAmount, '(subtotal:', subtotal, ', delivery:', checkoutData.delivery_fee || 0, ')');
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -64,7 +98,9 @@ const PaymentPage: React.FC = () => {
         },
         body: JSON.stringify({
           order_id: 0,
-          amount: checkoutData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0),
+          amount: paymentAmount, // Total amount including delivery fee
+          subtotal: subtotal,
+          delivery_fee: checkoutData.delivery_fee || 0,
           email: user?.email || 'customer@poultryhubkenya.com',
           callback_url: `${window.location.origin}/api/payments/paystack/webhook` // Use proper webhook URL
         })
@@ -110,8 +146,11 @@ const PaymentPage: React.FC = () => {
     const selectedPaymentMethod = checkoutData?.payment_method || 'card';
     console.log('Selected payment method:', selectedPaymentMethod);
     
-    // Calculate amount from passed data
-    const totalAmount = checkoutData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+    // Calculate amount from passed data - use total_amount if available (includes delivery fee)
+    const subtotal = checkoutData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+    const totalAmount = checkoutData.total_amount || subtotal;
+    
+    console.log('Payment amount calculation:', { subtotal, totalAmount, checkoutDeliveryFee: checkoutData.delivery_fee });
     
     const script = document.createElement('script');
     script.src = 'https://js.paystack.co/v1/inline.js';
@@ -120,7 +159,7 @@ const PaymentPage: React.FC = () => {
       const handler = (window as any).PaystackPop.setup({
         key: paymentResult.public_key,
         email: user?.email || 'customer@poultryhubkenya.com',
-        amount: totalAmount * 100, // Convert to kobo/cents
+        amount: totalAmount * 100, // Convert to kobo/cents - includes delivery fee
         ref: paymentResult.reference,
         currency: 'KES', // Specify Kenyan Shillings
         callback: function(response: any) {
@@ -136,7 +175,9 @@ const PaymentPage: React.FC = () => {
             transaction: response.transaction, // Payment method details
             channel: response.channel || selectedPaymentMethod, // Use selected method as primary
             selected_method: selectedPaymentMethod, // Store user's selection from checkout
-            amount: totalAmount, // Include the total amount
+            amount: totalAmount, // Include the total amount with delivery fee
+            subtotal: subtotal,
+            delivery_fee: checkoutData.delivery_fee || 0,
             customer: response.customer,
             paid_at: new Date().toISOString()
           };
@@ -301,7 +342,12 @@ const PaymentPage: React.FC = () => {
     );
   }
 
-  const totalAmount = paymentData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+  // Use delivery fee from checkout data if available, otherwise calculate
+  const subtotal = paymentData.subtotal || paymentData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+  const checkoutDeliveryFee = paymentData.delivery_fee;
+  const isFreeDelivery = checkoutDeliveryFee !== undefined ? checkoutDeliveryFee === 0 : subtotal >= freeDeliveryThreshold;
+  const actualDeliveryFee = checkoutDeliveryFee !== undefined ? checkoutDeliveryFee : (isFreeDelivery ? 0 : deliveryFee);
+  const totalAmount = paymentData.total_amount || (subtotal + actualDeliveryFee);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -368,12 +414,21 @@ const PaymentPage: React.FC = () => {
                   <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Subtotal</span>
-                      <span>KSH {totalAmount.toLocaleString()}</span>
+                      <span>KSH {subtotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Delivery</span>
-                      <span className="text-green-600">FREE</span>
+                      {isFreeDelivery ? (
+                        <span className="text-green-600">FREE</span>
+                      ) : (
+                        <span>KSH {deliveryFee.toLocaleString()}</span>
+                      )}
                     </div>
+                    {!isFreeDelivery && freeDeliveryThreshold > 0 && (
+                      <p className="text-xs text-gray-500">
+                        Add KSH {(freeDeliveryThreshold - subtotal).toLocaleString()} more for free delivery
+                      </p>
+                    )}
                     <div className="flex justify-between items-center pt-2 border-t">
                       <span className="text-lg font-bold text-gray-900">Total Amount:</span>
                       <span className="text-2xl font-bold text-primary">

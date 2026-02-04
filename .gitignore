@@ -30,6 +30,7 @@ backend/.env.*
 # Security: Test files that may expose configuration
 backend/test_*.php
 backend/*_test.php
+**/migration/
 
 # Security sensitive files
 backend/config/database.php.backup
@@ -71,27 +72,7 @@ backend/vendor/**/tests/**
 backend/vendor/**/Test/**
 backend/vendor/**/Tests/**
 
-# Documentation README files (keep main README.md)
-# Ignore README.md files in subdirectories (but not root README.md)
-**/README.md
-!/README.md
 
-# Database documentation prompts
-DATABASE_ER_DIAGRAM_PROMPT.md
-
-# Railway deployment specific (keep the guide, exclude sensitive configs)
-!RAILWAY_DEPLOYMENT_GUIDE.md
-!railway.toml
-railway.toml.example
-
-# Paystack and payment configuration (keep setup guide, exclude sensitive data)
-!PAYSTACK_LOCALHOST_SETUP.md
-PAYSTACK_*_SECRETS.md
-*PAYSTACK*_KEYS.md
-
-# Local development setup guides with sensitive info
-*LOCALHOST*_SECRETS.md
-*SETUP*_SECRETS.md
 
 # Temporary deployment files
 deploy/
@@ -135,9 +116,6 @@ backend/config/*_config.php
 **/monitoring_*
 **/metrics_*
 
-# All .md files (except specific ones we want to keep)
+# All .md files (except README.md)
 *.md
 !README.md
-!RAILWAY_DEPLOYMENT_GUIDE.md
-!railway.toml
-!PAYSTACK_LOCALHOST_SETUP.md

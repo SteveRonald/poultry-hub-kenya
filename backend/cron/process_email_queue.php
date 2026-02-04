@@ -1,21 +1,7 @@
 <?php
-#!/usr/bin/env php
-<?php
-/**
- * Email Queue Processor - Background Worker
- *
- * This script processes pending email jobs from the queue.
- * Run this via cron every minute for optimal performance.
- *
- * Cron setup:
- * * * * * * php /path/to/backend/cron/process_email_queue.php
- *
- * Or for Windows Task Scheduler:
- * Create a batch file with: php "C:\path\to\backend\cron\process_email_queue.php"
- */
-
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../routes/email_queue.php';
+require_once __DIR__ . '/../utils/system_logs.php';
 
 // Set timezone
 date_default_timezone_set('Africa/Nairobi');
@@ -71,8 +57,7 @@ try {
     echo "Stack trace:\n" . $e->getTraceAsString() . "\n";
 
     // Log the error
-    require_once __DIR__ . '/../utils/system_logs.php';
-    logSystemEvent('email_processor_crash', 'Email queue processor crashed', [
+    logActivity(null, 'system', 'email_processor_crash', 'Email queue processor crashed', [
         'error' => $e->getMessage(),
         'trace' => $e->getTraceAsString()
     ]);
@@ -112,5 +97,4 @@ function logEmailQueueBatch($result) {
         error_log("Failed to log email queue batch: " . $e->getMessage());
     }
 }
-?>
 

@@ -454,6 +454,10 @@ function getEmailSubject($templateType, $data) {
             return "New Contact Message: " . ($data['contact']['subject'] ?? 'Contact Form') . " - KukuSoko";
         case 'contact_confirmation':
             return "Thank You for Contacting Us - KukuSoko";
+        case 'vendor_recommendation':
+            return "Weekly Sales Recommendations - KukuSoko";
+        case 'admin_recommendation':
+            return "Daily System Recommendations - KukuSoko";
         default:
             return "Notification - KukuSoko";
     }

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3, DollarSign, Menu } from 'lucide-react';
+import { Users, Package, ShoppingCart, TrendingUp, Check, X, Eye, Edit, Trash2, Bell, BarChart3, DollarSign, Menu, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -51,6 +51,7 @@ const AdminDashboard = () => {
   const [systemLogsLoading, setSystemLogsLoading] = useState(false);
   const [systemSettings, setSystemSettings] = useState<any[]>([]);
   const [systemSettingsLoading, setSystemSettingsLoading] = useState(false);
+  const [adminRecommendation, setAdminRecommendation] = useState<any>(null);
   const [settingsFormData, setSettingsFormData] = useState<{ [key: string]: string }>({});
   const [savingSettings, setSavingSettings] = useState(false);
   const [systemLogsFilter, setSystemLogsFilter] = useState({
@@ -180,13 +181,15 @@ const AdminDashboard = () => {
       fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
-    ]).then(([stats, vendors, products, orders, contactMessages, commissionData]) => {
+      fetch(getApiUrl('/api/admin/recommendations'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
+    ]).then(([stats, vendors, products, orders, contactMessages, commissionData, recommendations]) => {
       setStats(stats);
       setVendors(Array.isArray(vendors) ? vendors : []);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
       setContactMessages(Array.isArray(contactMessages) ? contactMessages : []);
       setCommissionData(commissionData);
+      setAdminRecommendation(recommendations?.recommendation || null);
       setLoading(false);
     }).catch((error) => {
       toast.error('Failed to load dashboard data');
@@ -242,13 +245,15 @@ const AdminDashboard = () => {
         fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
         fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
         fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
-      ]).then(([stats, vendors, products, orders, contactMessages, commissionData]) => {
+        fetch(getApiUrl('/api/admin/recommendations'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
+      ]).then(([stats, vendors, products, orders, contactMessages, commissionData, recommendations]) => {
         setStats(stats);
         setVendors(Array.isArray(vendors) ? vendors : []);
         setProducts(Array.isArray(products) ? products : []);
         setOrders(Array.isArray(orders) ? orders : []);
         setContactMessages(Array.isArray(contactMessages) ? contactMessages : []);
         setCommissionData(commissionData);
+        setAdminRecommendation(recommendations?.recommendation || null);
       }).catch(() => {
         // ignore periodic errors; next cycle will try again
       });
@@ -1702,6 +1707,50 @@ const AdminDashboard = () => {
                       </CardContent>
                     </Card>
                   </div>
+
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center">
+                        <Sparkles className="h-5 w-5 mr-2 text-primary" />
+                        Daily System Recommendations
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!adminRecommendation && (
+                        <p className="text-sm text-gray-600">No recommendations generated yet.</p>
+                      )}
+                      {adminRecommendation && (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                            <div className="p-2 rounded bg-gray-50">
+                              <div className="text-xs text-gray-500">Revenue (24h)</div>
+                              <div className="font-semibold">KSH {Number(adminRecommendation.metrics?.revenue_1d || 0).toLocaleString()}</div>
+                            </div>
+                            <div className="p-2 rounded bg-gray-50">
+                              <div className="text-xs text-gray-500">Orders (24h)</div>
+                              <div className="font-semibold">{adminRecommendation.metrics?.orders_1d || 0}</div>
+                            </div>
+                            <div className="p-2 rounded bg-gray-50">
+                              <div className="text-xs text-gray-500">Growth</div>
+                              <div className="font-semibold">
+                                {adminRecommendation.metrics?.growth_pct !== null && adminRecommendation.metrics?.growth_pct !== undefined
+                                  ? `${adminRecommendation.metrics?.growth_pct}%`
+                                  : 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            {(adminRecommendation.actions || []).slice(0, 4).map((action: any, idx: number) => (
+                              <div key={idx} className="p-2 rounded border border-gray-100">
+                                <div className="text-sm font-semibold">{action.title}</div>
+                                <div className="text-xs text-gray-600">{action.reason}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
               )}
 

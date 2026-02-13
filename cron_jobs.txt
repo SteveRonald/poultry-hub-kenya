@@ -9,3 +9,6 @@
 
 # Alternative: Run backup scheduler every 5 minutes (less frequent)
 # */5 * * * * /usr/bin/php C:\xampp\htdocs\poultry-hub-kenya\backend\cron\backup_scheduler.php schedule >> /var/log/poultry_hub_backup.log 2>&1
+
+# Recommendations (admin daily, vendor weekly)
+0 6 * * * /usr/bin/php C:\xampp\htdocs\poultry-hub-kenya\backend\cron\recommendations.php >> /var/log/poultry_hub_recommendations.log 2>&1

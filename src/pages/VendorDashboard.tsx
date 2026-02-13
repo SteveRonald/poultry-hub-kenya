@@ -38,6 +38,7 @@ const VendorDashboard = () => {
   const [earnings, setEarnings] = useState<any>(null);
   const [advertisements, setAdvertisements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recommendation, setRecommendation] = useState<any>(null);
   const [productForm, setProductForm] = useState<any>({ 
     name: '', 
     description: '', 
@@ -233,7 +234,8 @@ const VendorDashboard = () => {
       safeFetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), 'Orders'),
       safeFetch(getApiUrl('/api/vendor/earnings'), 'Earnings'),
       safeFetch(getApiUrl('/api/vendor/advertisements'), 'Advertisements'),
-    ]).then(async ([statsRes, productsRes, ordersRes, earningsRes, adsRes]) => {
+      safeFetch(getApiUrl('/api/vendor/recommendations'), 'Recommendations'),
+    ]).then(async ([statsRes, productsRes, ordersRes, earningsRes, adsRes, recRes]) => {
       if (import.meta.env.DEV) {
         console.log('API responses received:', {
           stats: statsRes?.status || 'failed',
@@ -286,12 +288,13 @@ const VendorDashboard = () => {
       };
       
       // Parse all responses
-      const [stats, products, orders, earnings, ads] = await Promise.all([
+      const [stats, products, orders, earnings, ads, recs] = await Promise.all([
         parseResponse(statsRes, 'Stats'),
         parseResponse(productsRes, 'Products'),
         parseResponse(ordersRes, 'Orders'),
         parseResponse(earningsRes, 'Earnings'),
         parseResponse(adsRes, 'Advertisements'),
+        parseResponse(recRes, 'Recommendations'),
       ]);
       
       setStats(stats);
@@ -318,6 +321,12 @@ const VendorDashboard = () => {
           console.warn('Advertisements response is not an array:', ads);
         }
         setAdvertisements([]);
+      }
+
+      if (recs && recs.recommendation) {
+        setRecommendation(recs.recommendation);
+      } else {
+        setRecommendation(null);
       }
       setLoading(false);
     }).catch((error) => {
@@ -1648,6 +1657,50 @@ const VendorDashboard = () => {
                             </p>
                           </div>
                         </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="flex flex-col lg:col-span-2">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center">
+                          <Sparkles className="h-5 w-5 mr-2 text-primary" />
+                          Weekly Recommendations
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex-1">
+                        {!recommendation && (
+                          <p className="text-sm text-gray-600">No recommendations yet for this week.</p>
+                        )}
+                        {recommendation && (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                              <div className="p-2 rounded bg-gray-50">
+                                <div className="text-xs text-gray-500">Revenue (7d)</div>
+                                <div className="font-semibold">KSH {Number(recommendation.metrics?.revenue_7d || 0).toLocaleString()}</div>
+                              </div>
+                              <div className="p-2 rounded bg-gray-50">
+                                <div className="text-xs text-gray-500">Orders (7d)</div>
+                                <div className="font-semibold">{recommendation.metrics?.orders_7d || 0}</div>
+                              </div>
+                              <div className="p-2 rounded bg-gray-50">
+                                <div className="text-xs text-gray-500">Growth</div>
+                                <div className="font-semibold">
+                                  {recommendation.metrics?.growth_pct !== null && recommendation.metrics?.growth_pct !== undefined
+                                    ? `${recommendation.metrics?.growth_pct}%`
+                                    : 'N/A'}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              {(recommendation.actions || []).slice(0, 4).map((action: any, idx: number) => (
+                                <div key={idx} className="p-2 rounded border border-gray-100">
+                                  <div className="text-sm font-semibold">{action.title}</div>
+                                  <div className="text-xs text-gray-600">{action.reason}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </div>

@@ -380,6 +380,13 @@ switch ($path) {
             handleAdminAnalytics();
         }
         break;
+
+    case 'api/admin/recommendations':
+        if ($method === 'GET') {
+            include 'routes/recommendations.php';
+            handleGetAdminRecommendations();
+        }
+        break;
         
     case 'api/admin/sms/logs':
         if ($method === 'GET') {
@@ -589,6 +596,13 @@ switch ($path) {
         if ($method === 'GET') {
             include 'routes/vendors.php';
             handleGetVendorEarnings();
+        }
+        break;
+
+    case 'api/vendor/recommendations':
+        if ($method === 'GET') {
+            include 'routes/recommendations.php';
+            handleGetVendorRecommendations();
         }
         break;
         

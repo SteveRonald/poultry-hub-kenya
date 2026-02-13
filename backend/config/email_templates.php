@@ -68,6 +68,10 @@ function getEmailTemplate($type, $data = []) {
             return getContactNotificationTemplate($data, $baseUrl);
         case 'contact_confirmation':
             return getContactConfirmationTemplate($data, $baseUrl);
+        case 'vendor_recommendation':
+            return getVendorRecommendationTemplate($data, $baseUrl);
+        case 'admin_recommendation':
+            return getAdminRecommendationTemplate($data, $baseUrl);
         default:
             return getDefaultTemplate($data, $baseUrl);
     }
@@ -878,6 +882,106 @@ function getContactConfirmationTemplate($data, $baseUrl) {
     ";
     
     return getBaseTemplate('Contact Form Confirmation - KukuSoko', $content, $baseUrl);
+}
+
+function getVendorRecommendationTemplate($data, $baseUrl) {
+    $summary = $data['summary'] ?? [];
+    $actions = $data['actions'] ?? [];
+    $vendorName = htmlspecialchars($data['vendor_name'] ?? 'Vendor');
+    $periodLabel = htmlspecialchars($summary['period_label'] ?? 'Last 7 days');
+
+    $actionsHtml = '';
+    foreach ($actions as $action) {
+        $title = htmlspecialchars($action['title'] ?? '');
+        $reason = htmlspecialchars($action['reason'] ?? '');
+        $priority = htmlspecialchars(ucfirst($action['priority'] ?? 'medium'));
+        if (!$title) continue;
+        $actionsHtml .= "
+            <div class='info-row'>
+                <span class='info-label'>{$priority}:</span>
+                <span class='info-value'><strong>{$title}</strong> - {$reason}</span>
+            </div>
+        ";
+    }
+
+    $content = "
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Weekly Sales Recommendations</h2>
+        <p>Dear {$vendorName},</p>
+        <p>Here is your advisory summary for <strong>{$periodLabel}</strong>.</p>
+
+        <div class='order-details'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Key Metrics</h3>
+            <div class='info-row'>
+                <span class='info-label'>Revenue:</span>
+                <span class='info-value'>KSh " . number_format($summary['revenue'] ?? 0, 2) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Orders:</span>
+                <span class='info-value'>" . intval($summary['orders'] ?? 0) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Growth:</span>
+                <span class='info-value'>" . htmlspecialchars($summary['growth'] ?? 'N/A') . "</span>
+            </div>
+        </div>
+
+        <div class='info-section'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Recommended Actions</h3>
+            {$actionsHtml}
+        </div>
+
+        <p>This advice is based on your recent sales data. Use it as guidance to improve results.</p>
+    ";
+
+    return getBaseTemplate('Weekly Recommendations - KukuSoko', $content, $baseUrl);
+}
+
+function getAdminRecommendationTemplate($data, $baseUrl) {
+    $summary = $data['summary'] ?? [];
+    $actions = $data['actions'] ?? [];
+    $periodLabel = htmlspecialchars($summary['period_label'] ?? 'Last 1 day');
+
+    $actionsHtml = '';
+    foreach ($actions as $action) {
+        $title = htmlspecialchars($action['title'] ?? '');
+        $reason = htmlspecialchars($action['reason'] ?? '');
+        $priority = htmlspecialchars(ucfirst($action['priority'] ?? 'medium'));
+        if (!$title) continue;
+        $actionsHtml .= "
+            <div class='info-row'>
+                <span class='info-label'>{$priority}:</span>
+                <span class='info-value'><strong>{$title}</strong> - {$reason}</span>
+            </div>
+        ";
+    }
+
+    $content = "
+        <h2 style='color: #1a4d2e; margin-top: 0;'>Daily System Recommendations</h2>
+        <p>Here is the advisory summary for <strong>{$periodLabel}</strong>.</p>
+
+        <div class='order-details'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Key Metrics</h3>
+            <div class='info-row'>
+                <span class='info-label'>Revenue:</span>
+                <span class='info-value'>KSh " . number_format($summary['revenue'] ?? 0, 2) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Orders:</span>
+                <span class='info-value'>" . intval($summary['orders'] ?? 0) . "</span>
+            </div>
+            <div class='info-row'>
+                <span class='info-label'>Growth:</span>
+                <span class='info-value'>" . htmlspecialchars($summary['growth'] ?? 'N/A') . "</span>
+            </div>
+        </div>
+
+        <div class='info-section'>
+            <h3 style='color: #1a4d2e; margin-top: 0;'>Recommended Actions</h3>
+            {$actionsHtml}
+        </div>
+    ";
+
+    return getBaseTemplate('Daily Recommendations - KukuSoko', $content, $baseUrl);
 }
 
 ?>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Send, Circle } from 'lucide-react';
+import { X, Send, Circle, Check } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getImageUrl } from '../config/api';
@@ -123,6 +123,25 @@ const ChatDrawer: React.FC<ChatDrawerProps> = ({ isOpen, onClose, productId, ven
     ? Array.from(typingUsers[activeConversation] || []).some(id => id !== user?.id)
     : false;
 
+  const renderMessageStatus = (message: any, isOwn: boolean) => {
+    if (!isOwn) return null;
+
+    const isDelivered = !!message.id && !String(message.id).startsWith('temp-');
+    const isRead = isDelivered && !!message.is_read;
+    const colorClass = isRead ? 'text-sky-300' : 'text-green-100';
+
+    if (!isDelivered) {
+      return <Check className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${colorClass}`} />;
+    }
+
+    return (
+      <span className={`inline-flex items-center ${colorClass}`}>
+        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 -ml-1.5" />
+      </span>
+    );
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -214,13 +233,17 @@ const ChatDrawer: React.FC<ChatDrawerProps> = ({ isOpen, onClose, productId, ven
                       : 'bg-white text-gray-900 border border-gray-200 rounded-tl-sm'
                   }`}>
                     <p className="text-sm sm:text-base break-words leading-relaxed whitespace-pre-wrap">{message.message_text}</p>
-                    <div className={`text-[10px] sm:text-xs mt-1.5 font-medium ${
+                    <div className={`text-[10px] sm:text-xs mt-1.5 font-medium flex items-center gap-1 ${
                       isOwn ? 'text-green-100' : 'text-gray-500'
                     }`}>
                       {new Date(message.created_at).toLocaleTimeString([], { 
                         hour: '2-digit', 
-                        minute: '2-digit' 
+                        minute: '2-digit',
+                        hour12: true
                       })}
+                      <span className="ml-1 inline-flex items-center">
+                        {renderMessageStatus(message, isOwn)}
+                      </span>
                     </div>
                   </div>
                 </div>

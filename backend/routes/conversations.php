@@ -32,6 +32,7 @@ function handleCreateConversation() {
     }
 
     $productId = sanitizeInput($input['product_id']);
+    $forceNew = isset($input['force_new']) && filter_var($input['force_new'], FILTER_VALIDATE_BOOLEAN);
     $customerId = $payload['user_id'];
     $userRole = $payload['role'] ?? 'customer';
 
@@ -71,59 +72,83 @@ function handleCreateConversation() {
         // For vendors messaging other vendors, treat them as "customer" in the conversation
         // The customer_id will be the vendor's user_id, vendor_id will be the product owner
 
-        // Check if conversation already exists
-        $stmt = $pdo->prepare("
-            SELECT id, created_at, updated_at 
-            FROM conversations 
-            WHERE product_id = ? AND customer_id = ?
-        ");
-        $stmt->execute([$productId, $customerId]);
-        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($existing) {
-            // Update updated_at
-            $stmt = $pdo->prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?");
-            $stmt->execute([$existing['id']]);
-
-            // Get product and vendor info
+        if (!$forceNew) {
+            // Check if conversation already exists
             $stmt = $pdo->prepare("
-                SELECT 
-                    p.id as product_id,
-                    p.name as product_name,
-                    p.image_urls,
-                    v.id as vendor_id,
-                    v.farm_name,
-                    u.id as vendor_user_id
-                FROM products p
-                JOIN vendors v ON p.vendor_id = v.id
-                JOIN user_profiles u ON v.user_id = u.id
-                WHERE p.id = ?
+                SELECT id, created_at, updated_at 
+                FROM conversations 
+                WHERE product_id = ? AND customer_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
             ");
-            $stmt->execute([$productId]);
-            $productInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->execute([$productId, $customerId]);
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            echo json_encode([
-                'success' => true,
-                'conversation' => [
-                    'id' => $existing['id'],
-                    'product_id' => $productId,
-                    'vendor_id' => $vendorId,
-                    'customer_id' => $customerId,
-                    'created_at' => $existing['created_at'],
-                    'updated_at' => date('Y-m-d H:i:s'),
-                    'product' => $productInfo
-                ]
-            ]);
-            return;
+            if ($existing) {
+                // Update updated_at
+                $stmt = $pdo->prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$existing['id']]);
+
+                // Get product and vendor info
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        p.id as product_id,
+                        p.name as product_name,
+                        p.image_urls,
+                        v.id as vendor_id,
+                        v.farm_name,
+                        u.id as vendor_user_id
+                    FROM products p
+                    JOIN vendors v ON p.vendor_id = v.id
+                    JOIN user_profiles u ON v.user_id = u.id
+                    WHERE p.id = ?
+                ");
+                $stmt->execute([$productId]);
+                $productInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode([
+                    'success' => true,
+                    'conversation' => [
+                        'id' => $existing['id'],
+                        'product_id' => $productId,
+                        'vendor_id' => $vendorId,
+                        'customer_id' => $customerId,
+                        'created_at' => $existing['created_at'],
+                        'updated_at' => date('Y-m-d H:i:s'),
+                        'product' => $productInfo
+                    ]
+                ]);
+                return;
+            }
         }
 
         // Create new conversation
         $conversationId = bin2hex(random_bytes(16));
-        $stmt = $pdo->prepare("
+        $insertSql = "
             INSERT INTO conversations (id, product_id, vendor_id, customer_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, NOW(), NOW())
-        ");
-        $stmt->execute([$conversationId, $productId, $vendorId, $customerId]);
+        ";
+        $stmt = $pdo->prepare($insertSql);
+
+        try {
+            $stmt->execute([$conversationId, $productId, $vendorId, $customerId]);
+        } catch (PDOException $insertError) {
+            // Backward compatibility: some databases still have UNIQUE(product_id, customer_id)
+            // which blocks creating new threads for the same user+product.
+            $isDuplicate = $insertError->getCode() === '23000' && strpos($insertError->getMessage(), 'unique_product_customer') !== false;
+            if ($forceNew && $isDuplicate) {
+                try {
+                    $pdo->exec("ALTER TABLE conversations DROP INDEX unique_product_customer");
+                    $conversationId = bin2hex(random_bytes(16));
+                    $stmt = $pdo->prepare($insertSql);
+                    $stmt->execute([$conversationId, $productId, $vendorId, $customerId]);
+                } catch (PDOException $schemaError) {
+                    throw new PDOException("Unable to create new thread. Please run migration to remove unique_product_customer index. " . $schemaError->getMessage(), (int)$schemaError->getCode());
+                }
+            } else {
+                throw $insertError;
+            }
+        }
 
         // Get product and vendor info
         $stmt = $pdo->prepare("

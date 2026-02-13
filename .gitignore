@@ -26,6 +26,15 @@ backend/.env.*
 .env.staging
 .env.development
 .env.test
+.envrc
+*.env
+*.env.*
+*.env.local
+*.env.backup
+*.env.bak
+*.env.save
+**/.env
+**/.env.*
 
 # Security: Test files that may expose configuration
 backend/test_*.php
@@ -54,6 +63,10 @@ backups/
 **/*admin_token*
 **/*session_token*
 **/*auth_token*
+**/secrets.json
+**/secret.json
+**/*.secret
+**/*.secrets
 
 # Editor directories and files
 .vscode/*
@@ -86,6 +99,12 @@ temp/
 *.crt
 *.csr
 ssl/
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+id_rsa
+id_rsa.pub
 
 # Database dumps and exports
 *.sql

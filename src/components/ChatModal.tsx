@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Button } from './ui/button';
-import { X, Send } from 'lucide-react';
+import { X, Send, Check } from 'lucide-react';
 import { getApiUrl, getImageUrl } from '../config/api';
 
 type Message = {
@@ -134,6 +134,27 @@ export default function ChatModal({ product, vendorUserId, onClose, isVendorRepl
     return product.vendor_profiles?.farm_name || 'vendor';
   };
 
+  const renderMessageStatus = (message: any, isOwn: boolean, isLightBubble: boolean = false) => {
+    if (!isOwn) return null;
+
+    const isDelivered = !!message.id && !String(message.id).startsWith('temp-');
+    const isRead = isDelivered && !!message.is_read;
+    const colorClass = isRead
+      ? (isLightBubble ? 'text-sky-500' : 'text-sky-300')
+      : (isLightBubble ? 'text-gray-500' : 'text-green-100');
+
+    if (!isDelivered) {
+      return <Check className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${colorClass}`} />;
+    }
+
+    return (
+      <span className={`inline-flex items-center ${colorClass}`}>
+        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 -ml-1.5" />
+      </span>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black bg-opacity-50 p-0 sm:p-2 md:p-4">
       <div className="bg-white rounded-t-lg sm:rounded-lg w-full sm:max-w-2xl max-h-screen sm:max-h-[90vh] overflow-hidden flex flex-col">
@@ -206,7 +227,12 @@ export default function ChatModal({ product, vendorUserId, onClose, isVendorRepl
 
                   <div className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-3xl shadow-sm ${isCustomerMessage ? 'bg-green-500 text-white rounded-tr-sm' : 'bg-white text-gray-900 border border-gray-200 rounded-tl-sm'}`}>
                     <p className="text-sm sm:text-base break-words leading-relaxed">{m.message}</p>
-                    <div className={`text-xs mt-1 font-medium ${isCustomerMessage ? 'text-green-100' : 'text-gray-500'}`}>{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    <div className={`text-xs mt-1 font-medium flex items-center gap-1 ${isCustomerMessage ? 'text-green-100' : 'text-gray-500'}`}>
+                      {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      <span className="ml-1 inline-flex items-center">
+                        {renderMessageStatus(m, isOwn, !isCustomerMessage)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

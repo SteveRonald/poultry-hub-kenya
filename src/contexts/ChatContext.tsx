@@ -42,7 +42,7 @@ interface ChatContextType {
   messages: { [conversationId: string]: Message[] };
   typingUsers: { [conversationId: string]: Set<string> };
   onlineUsers: { [conversationId: string]: Set<string> };
-  openChat: (productId: string, vendorId?: number) => Promise<void>;
+  openChat: (productId: string, vendorId?: number, forceNew?: boolean, suppressErrorToast?: boolean) => Promise<void>;
   closeChat: () => void;
   sendMessage: (conversationId: string, messageText: string) => Promise<void>;
   loadConversations: () => Promise<void>;
@@ -68,6 +68,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [onlineUsers, setOnlineUsers] = useState<{ [conversationId: string]: Set<string> }>({});
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
+  const activeConversationRef = useRef<string | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
+
+  useEffect(() => {
+    activeConversationRef.current = activeConversation;
+  }, [activeConversation]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   // Initialize Socket.IO connection
   useEffect(() => {
@@ -136,6 +146,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (conversationMessages.some(m => m.id === message.id)) {
           return prev;
         }
+
+        // Replace optimistic temp message from the same sender with the persisted message
+        const tempIndex = conversationMessages.findIndex(m =>
+          String(m.id).startsWith('temp-') &&
+          String(m.sender_id) === String(message.sender_id) &&
+          m.message_text === message.message_text
+        );
+
+        if (tempIndex !== -1) {
+          const updated = [...conversationMessages];
+          updated[tempIndex] = message;
+          return {
+            ...prev,
+            [message.conversation_id]: updated
+          };
+        }
+
         return {
           ...prev,
           [message.conversation_id]: [...conversationMessages, message]
@@ -143,8 +170,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       // Show toast notification if not the active conversation
-      if (activeConversation !== message.conversation_id) {
-        const conversation = conversations.find(c => c.id === message.conversation_id);
+      if (activeConversationRef.current !== message.conversation_id) {
+        const conversation = conversationsRef.current.find(c => c.id === message.conversation_id);
         if (conversation) {
           toast.info(`New message from ${conversation.product?.vendor_name || 'vendor'}`, {
             description: message.message_text.substring(0, 50) + (message.message_text.length > 50 ? '...' : ''),
@@ -220,7 +247,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         newSocket.disconnect();
       }
     };
-  }, [token, user, activeConversation, conversations]);
+  }, [token, user]);
 
   // Define markAsRead first (used by loadMessages)
   const markAsRead = useCallback(async (conversationId: string) => {
@@ -316,7 +343,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [token]);
 
   // Define openChat last (uses loadMessages and loadConversations)
-  const openChat = useCallback(async (productId: string, vendorId?: number | string) => {
+  const openChat = useCallback(async (productId: string, vendorId?: number | string, forceNew: boolean = false, suppressErrorToast: boolean = false) => {
     // Check both token from context and localStorage as fallback (supports both 'token' and 'session_token' keys)
     const authToken = token || (typeof window !== 'undefined' ? 
       (localStorage.getItem('session_token') || localStorage.getItem('token')) : null);
@@ -328,15 +355,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       // Create or get conversation
+      const requestBody: any = { product_id: productId };
+      if (forceNew) {
+        requestBody.force_new = true;
+      }
+
       const response = await fetch(getApiUrl('/api/conversations/create'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({ product_id: productId })
+        body: JSON.stringify(requestBody)
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to create conversation');
@@ -351,7 +382,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Check online status of the other user
         // If current user is vendor, check customer; if customer, check vendor
-        const currentUserId = user?.id;
         const otherUserId = user?.role === 'vendor' 
           ? newConversation.customer_id 
           : newConversation.product?.vendor_user_id;
@@ -375,12 +405,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await loadConversations();
     } catch (error: any) {
       console.error('Error opening chat:', error);
-      const errorMessage = error.message || 'Failed to open chat';
-      
       // Generic error message - don't expose security details
-      toast.error('Failed to load conversation');
+      if (!suppressErrorToast) {
+        toast.error('Failed to load conversation');
+      }
+      throw error;
     }
-  }, [token, socket, loadMessages, loadConversations]);
+  }, [token, socket, loadMessages, loadConversations, user]);
 
   const closeChat = useCallback(() => {
     if (activeConversation && socket) {
@@ -545,6 +576,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Error setting active conversation:', error);
       toast.error('Failed to load conversation');
+      throw error;
     }
   }, [token, socket, loadMessages, loadConversations]);
 

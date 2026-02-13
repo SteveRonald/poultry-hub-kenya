@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useChat } from '../contexts/ChatContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
-import { X, Send, Circle, Trash2, MoreVertical, MessageCircle, User, Store, Image as ImageIcon, Clock } from 'lucide-react';
+import { X, Send, Circle, Trash2, MessageCircle, User, Store, Clock, Check, Plus } from 'lucide-react';
 import { getImageUrl } from '../config/api';
 import { toast } from 'sonner';
 
@@ -15,18 +15,16 @@ const ChatPage: React.FC = () => {
   const {
     activeConversation,
     messages,
-    isConnected,
+    conversations,
     conversation,
     typingUsers,
     onlineUsers,
     socket,
     openChat,
-    closeChat,
     sendMessage,
     setTyping,
-    loadMessages,
-    loadConversations,
     setActiveConversationById,
+    deleteMessage,
     deleteConversation,
   } = useChat();
   
@@ -38,78 +36,54 @@ const ChatPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showStartNewModal, setShowStartNewModal] = useState(false);
+  const [showDeleteConversationModal, setShowDeleteConversationModal] = useState(false);
+  const [deleteConversationTargetId, setDeleteConversationTargetId] = useState<string | null>(null);
+  const [mobileConversationsOpen, setMobileConversationsOpen] = useState(true);
+  const [startingNewConversation, setStartingNewConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isStartingNewConversationRef = useRef(false);
 
   // Get vendorId from location state or product data
   const vendorId = location.state?.vendorId || conversation?.product?.vendor_user_id;
 
-  // Open conversation when component mounts or productId changes
+  // Open conversation on initial load / route changes
   useEffect(() => {
-    // If we have a conversationId from navigation, use it
-    if (conversationIdFromState) {
-      // Check if current active conversation matches the one from state
-      if (activeConversation !== conversationIdFromState) {
-        setLoading(true);
-        // Close previous conversation if different
-        if (activeConversation && activeConversation !== conversationIdFromState) {
-          closeChat();
-        }
-        setActiveConversationById(conversationIdFromState)
-          .then(() => {
-            setLoading(false);
-          })
-          .catch((error: any) => {
-            console.error('Error loading conversation:', error);
-            setLoading(false);
-            toast.error('Failed to load conversation');
-          });
-      } else {
-        setLoading(false);
-      }
-      return;
-    }
+    if (isStartingNewConversationRef.current) return;
 
-    // If we have a productId but no conversationId from state
-    if (productId) {
-      // Check if current conversation is for a different product
-      const currentProductId = conversation?.product_id || conversation?.product?.product_id;
-      if (activeConversation && currentProductId && currentProductId !== productId) {
-        // Product changed - close old conversation
-        closeChat();
-        setLoading(true);
-        openChat(productId, vendorId)
-          .then(() => {
-            setLoading(false);
-          })
-          .catch((error: any) => {
-            console.error('Error opening chat:', error);
-            setLoading(false);
-            toast.error('Failed to load conversation');
-            setTimeout(() => navigate(-1), 2000);
-          });
-      } else if (!activeConversation) {
-        // No active conversation - open new one
-        setLoading(true);
-        openChat(productId, vendorId)
-          .then(() => {
-            setLoading(false);
-          })
-          .catch((error: any) => {
-            console.error('Error opening chat:', error);
-            setLoading(false);
-            toast.error('Failed to load conversation');
-            setTimeout(() => navigate(-1), 2000);
-          });
-      } else {
-        // Same product, conversation already active
+    let cancelled = false;
+    const initConversation = async () => {
+      const shouldOpenById = !!(conversationIdFromState && activeConversation !== conversationIdFromState);
+      const shouldOpenByProduct = !!(productId && !activeConversation);
+      if (!shouldOpenById && !shouldOpenByProduct) {
         setLoading(false);
+        return;
       }
-    } else {
-      setLoading(false);
-    }
-  }, [productId, vendorId, activeConversation, conversation, openChat, closeChat, navigate, conversationIdFromState, setActiveConversationById]);
+
+      const shouldBlockUI = !activeConversation;
+      if (shouldBlockUI) {
+        setLoading(true);
+      }
+      try {
+        if (shouldOpenById) {
+          await setActiveConversationById(String(conversationIdFromState));
+        } else if (shouldOpenByProduct) {
+          await openChat(String(productId), vendorId);
+        }
+      } catch (error) {
+        // openChat / setActiveConversationById already handle user-facing error toasts
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    initConversation();
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, conversationIdFromState, setActiveConversationById, openChat, vendorId, activeConversation]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -210,11 +184,100 @@ const ChatPage: React.FC = () => {
     }
   };
 
+  const handleDeleteSingleMessage = async (messageId: string) => {
+    if (!activeConversation || !messageId || String(messageId).startsWith('temp-')) return;
+    try {
+      await deleteMessage(messageId, activeConversation);
+      setShowDeleteConfirm(null);
+      toast.success('Message deleted');
+    } catch (error) {
+      toast.error('Failed to delete message');
+    }
+  };
+
+  const handleStartNewConversation = async () => {
+    const targetProductId = productId || conversation?.product_id || conversation?.product?.product_id;
+    if (!targetProductId) {
+      toast.error('Product not found');
+      return;
+    }
+
+    try {
+      isStartingNewConversationRef.current = true;
+      setStartingNewConversation(true);
+      setShowDeleteConfirm(null);
+      await openChat(targetProductId, vendorId, true, true);
+      setShowStartNewModal(false);
+      toast.success('New conversation started');
+    } catch (error) {
+      toast.error('Failed to start new conversation');
+    } finally {
+      isStartingNewConversationRef.current = false;
+      setStartingNewConversation(false);
+    }
+  };
+
+  const openConversationFromList = (conv: any) => {
+    navigate(`/chat/${conv.product_id}`, {
+      state: { conversationId: conv.id, returnTo: location.state?.returnTo || window.location.pathname },
+      replace: true,
+    });
+  };
+
+  const requestDeleteConversation = (conversationId: string | null) => {
+    if (!conversationId) return;
+    setDeleteConversationTargetId(conversationId);
+    setShowDeleteConversationModal(true);
+  };
+
+  const handleDeleteConversationById = async () => {
+    const targetId = deleteConversationTargetId || activeConversation;
+    if (!targetId) return;
+
+    try {
+      await deleteConversation(targetId);
+      setShowDeleteConversationModal(false);
+      setDeleteConversationTargetId(null);
+
+      if (targetId === activeConversation) {
+        const remaining = conversations.filter((c) => c.id !== targetId);
+        if (remaining.length > 0) {
+          openConversationFromList(remaining[0]);
+        } else {
+          navigate(user?.role === 'vendor' ? '/vendor/inbox' : '/inbox');
+        }
+      } else {
+        toast.success('Conversation deleted');
+      }
+    } catch {
+      toast.error('Failed to delete conversation');
+    }
+  };
+
   const isTyping = activeConversation
     ? Array.from(typingUsers[activeConversation] || []).some(id => id !== user?.id)
     : false;
 
-  if (loading) {
+  const renderMessageStatus = (message: any, isOwn: boolean) => {
+    if (!isOwn) return null;
+
+    const isDelivered = !!message.id && !String(message.id).startsWith('temp-');
+    const isRead = isDelivered && !!message.is_read;
+    const colorClass = isRead ? 'text-sky-300' : 'text-white/85';
+
+    if (!isDelivered) {
+      return <Check className={`h-3.5 w-3.5 ${colorClass}`} />;
+    }
+
+    return (
+      <span className={`inline-flex items-center ${colorClass}`}>
+        <Check className="h-3.5 w-3.5" />
+        <Check className="h-3.5 w-3.5 -ml-1.5" />
+      </span>
+    );
+  };
+
+  if (loading && !activeConversation) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
         <div className="text-center space-y-4">
@@ -229,7 +292,7 @@ const ChatPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 shadow-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
               <Button
@@ -297,21 +360,26 @@ const ChatPage: React.FC = () => {
                 </div>
               </div>
               {activeConversation && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (window.confirm('Delete entire conversation? This cannot be undone.')) {
-                      deleteConversation(activeConversation).then(() => {
-                        navigate(user?.role === 'vendor' ? '/vendor/inbox' : '/inbox');
-                      }).catch(() => {});
-                    }
-                  }}
-                  className="flex-shrink-0 p-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  title="Delete conversation"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowStartNewModal(true)}
+                    className="flex-shrink-0 p-2 text-primary hover:text-primary/90 hover:bg-primary/10"
+                    title="Start new conversation"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => requestDeleteConversation(activeConversation)}
+                    className="flex-shrink-0 p-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    title="Delete conversation"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -319,8 +387,123 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 px-2 sm:px-4 py-4 sm:py-6">
-        <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4">
+      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 px-2 sm:px-4 py-4 sm:py-6 xl:py-8">
+        <div className="max-w-6xl mx-auto lg:flex lg:gap-4">
+          <div className="lg:hidden mb-3">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
+              <button
+                type="button"
+                className="w-full px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between"
+                onClick={() => setMobileConversationsOpen((v) => !v)}
+              >
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Conversations</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {mobileConversationsOpen ? 'Hide' : 'Show'}
+                </span>
+              </button>
+              {mobileConversationsOpen && (
+                <div className="max-h-56 overflow-y-auto">
+                  {conversations.length === 0 && (
+                    <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">No conversations yet.</div>
+                  )}
+                  {conversations.map((conv) => {
+                    const isActive = activeConversation === conv.id;
+                    const preview = conv.last_message || 'No messages yet';
+                    return (
+                      <div
+                        key={`mobile-${conv.id}`}
+                        className={`px-4 py-3 border-b border-gray-100 dark:border-gray-700 ${
+                          isActive ? 'bg-primary/10 dark:bg-primary/20' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <button
+                            type="button"
+                            className="flex-1 text-left min-w-0"
+                            onClick={() => openConversationFromList(conv)}
+                          >
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                              {user?.role === 'vendor'
+                                ? ((conv as any).customer_name || (conv.product as any)?.customer_name || 'Customer')
+                                : ((conv as any).vendor_name || conv.product?.vendor_name || 'Vendor')}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                              {conv.product?.product_name || (conv as any).product_name || 'Product'}
+                            </p>
+                            <p className="text-xs text-gray-600 dark:text-gray-300 truncate mt-1">{preview}</p>
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Delete conversation"
+                            onClick={() => requestDeleteConversation(conv.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+          <aside className="hidden lg:block lg:w-80 xl:w-96 flex-shrink-0">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Conversations</h3>
+              </div>
+              <div className="max-h-[65vh] overflow-y-auto">
+                {conversations.length === 0 && (
+                  <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">No conversations yet.</div>
+                )}
+                {conversations.map((conv) => {
+                  const isActive = activeConversation === conv.id;
+                  const preview = conv.last_message || 'No messages yet';
+                  return (
+                    <div
+                      key={conv.id}
+                      className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors ${
+                        isActive ? 'bg-primary/10 dark:bg-primary/20' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          className="flex-1 text-left min-w-0"
+                          onClick={() => openConversationFromList(conv)}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                              {user?.role === 'vendor'
+                                ? ((conv as any).customer_name || (conv.product as any)?.customer_name || 'Customer')
+                                : ((conv as any).vendor_name || conv.product?.vendor_name || 'Vendor')}
+                            </p>
+                            {conv.unread_count ? (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary text-white">{conv.unread_count}</span>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                            {conv.product?.product_name || (conv as any).product_name || 'Product'}
+                          </p>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 truncate mt-1">{preview}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title="Delete conversation"
+                          onClick={() => requestDeleteConversation(conv.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+          <div className="flex-1 min-w-0 space-y-3 sm:space-y-4">
           {conversationMessages.length === 0 && (
             <div className="text-center text-gray-500 dark:text-gray-400 py-8 sm:py-12">
               <div className="space-y-4 max-w-sm mx-auto">
@@ -343,6 +526,8 @@ const ChatPage: React.FC = () => {
               <div
                 key={message.id || idx}
                 className={`flex gap-2 sm:gap-3 ${isOwn ? 'justify-end' : 'justify-start'} items-end mb-2`}
+                onMouseEnter={() => setHoveredMessageId(message.id || null)}
+                onMouseLeave={() => setHoveredMessageId(null)}
               >
                 {!isOwn && !sameSenderAsPrev && (
                   <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-primary to-primary/80 flex-shrink-0 flex items-center justify-center shadow-md border-2 border-white dark:border-gray-800">
@@ -355,7 +540,7 @@ const ChatPage: React.FC = () => {
                 )}
                 {!isOwn && sameSenderAsPrev && <div className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0" />}
 
-                <div className={`max-w-[75%] sm:max-w-[70%] ${isOwn ? 'order-first' : 'order-last'}`}>
+                <div className={`relative group max-w-[78%] sm:max-w-[70%] xl:max-w-[58%] ${isOwn ? 'order-first' : 'order-last'}`}>
                   <div
                     className={`px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-md ${
                       isOwn
@@ -378,8 +563,54 @@ const ChatPage: React.FC = () => {
                           minute: '2-digit',
                         })}
                       </span>
+                      <span className="ml-1 inline-flex items-center">
+                        {renderMessageStatus(message, isOwn)}
+                      </span>
                     </div>
                   </div>
+                  {isOwn && !String(message.id || '').startsWith('temp-') && (
+                    <button
+                      type="button"
+                      className={`absolute -top-2 ${isOwn ? '-left-2' : '-right-2'} p-1.5 rounded-full bg-white/95 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-600 hover:text-red-600 shadow transition-opacity ${
+                        hoveredMessageId === message.id ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+                      }`}
+                      title="Delete message"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeleteConfirm(showDeleteConfirm === message.id ? null : (message.id || null));
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {isOwn && showDeleteConfirm === message.id && (
+                    <div className={`absolute ${isOwn ? '-left-2' : '-right-2'} top-8 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 w-44`}>
+                      <p className="text-xs text-gray-700 dark:text-gray-300 mb-2">Delete this message?</p>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDeleteConfirm(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 px-2 text-xs bg-red-600 hover:bg-red-700 text-white"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSingleMessage(message.id);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {isOwn && !sameSenderAsPrev && (
@@ -408,12 +639,15 @@ const ChatPage: React.FC = () => {
           )}
 
           <div ref={messagesEndRef} />
+          </div>
         </div>
       </div>
 
       {/* Input Area */}
       <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 sm:p-5 relative z-[10000] shadow-lg">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto lg:flex lg:gap-4">
+          <div className="hidden lg:block lg:w-80 xl:w-96 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
           <div className="flex gap-3 items-end bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-2 border border-gray-200 dark:border-gray-700">
             <input
               ref={inputRef}
@@ -438,8 +672,51 @@ const ChatPage: React.FC = () => {
               )}
             </Button>
           </div>
+          </div>
         </div>
       </div>
+
+      {showStartNewModal && (
+        <div className="fixed inset-0 z-[13000] flex items-end sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Start New Conversation</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
+              This will create a fresh thread. Your current messages will remain in the old conversation.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowStartNewModal(false)} disabled={startingNewConversation}>Cancel</Button>
+              <Button onClick={handleStartNewConversation} disabled={startingNewConversation} className="bg-primary hover:bg-primary/90 text-white">
+                {startingNewConversation ? 'Starting...' : 'Start New'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConversationModal && (
+        <div className="fixed inset-0 z-[13000] flex items-end sm:items-center justify-center bg-black/55 p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Delete Conversation</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
+              This removes all messages in this thread and cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setShowDeleteConversationModal(false);
+                  setDeleteConversationTargetId(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleDeleteConversationById} className="bg-red-600 hover:bg-red-700 text-white">
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

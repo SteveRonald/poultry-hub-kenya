@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Star, MapPin, Check, ChevronDown, ChevronUp, X, MessageSquare } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Star, MapPin, Check, ChevronDown, ChevronUp, X, Share2, ExternalLink } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
@@ -30,6 +31,28 @@ interface ProductDetails {
   };
   average_rating?: number;
   total_ratings?: number;
+}
+
+interface RelatedProduct {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  stock_quantity: number;
+  minimum_order_quantity?: number;
+  unit: string;
+  image_url?: string | null;
+  image_urls?: string | string[];
+  average_rating?: number;
+  total_ratings?: number;
+  vendor_profiles?: {
+    farm_name?: string;
+    location?: string;
+    user_id?: number | string;
+  };
+  vendor_id?: string;
+  vendor_user_id?: string;
 }
 
 // Component for truncated description with View More/Less
@@ -84,6 +107,9 @@ const ProductDetails = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const ratingsRef = useRef<HTMLDivElement | null>(null);
 
   // Update quantity when product loads to respect minimum order quantity
   useEffect(() => {
@@ -97,6 +123,11 @@ const ProductDetails = () => {
       fetchProduct(id);
     }
   }, [id]);
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return window.location.href;
+  }, [id, adId]);
 
   const fetchProduct = async (productId: string) => {
     try {
@@ -132,6 +163,47 @@ const ProductDetails = () => {
       toast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const scrollToRatings = () => {
+    if (!ratingsRef.current) return;
+    ratingsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleShare = async () => {
+    if (!product) return;
+
+    const url = shareUrl || window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} on KukuSoko`,
+          url
+        });
+        return;
+      }
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard');
+        return;
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (success) toast.success('Link copied to clipboard');
+      else toast.error('Failed to copy link');
+    } catch (e) {
+      toast.error('Failed to share link');
     }
   };
 
@@ -229,6 +301,40 @@ const ProductDetails = () => {
 
   const images = getProductImages();
   const mainImage = images[selectedImageIndex] || images[0];
+  const mapsUrl = useMemo(() => {
+    const location = product?.vendor_profiles?.location || '';
+    if (!location) return '';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+  }, [product?.vendor_profiles?.location]);
+
+  useEffect(() => {
+    if (!product?.category) {
+      setRelatedProducts([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadRelated = async () => {
+      setRelatedLoading(true);
+      try {
+        const response = await fetch(getApiUrl(`/api/products?category=${encodeURIComponent(product.category)}`), {
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error('Failed to load related products');
+        const data = await response.json();
+        const items: RelatedProduct[] = Array.isArray(data) ? data : [];
+        const filtered = items.filter(p => String(p.id) !== String(product.id)).slice(0, 8);
+        setRelatedProducts(filtered);
+      } catch (e) {
+        if ((e as any)?.name !== 'AbortError') setRelatedProducts([]);
+      } finally {
+        setRelatedLoading(false);
+      }
+    };
+
+    loadRelated();
+    return () => controller.abort();
+  }, [product?.category, product?.id]);
 
   if (loading) {
     return (
@@ -273,7 +379,7 @@ const ProductDetails = () => {
       {/* Highlight badge if coming from ad */}
       {adId && (
         <div className="bg-yellow-400 text-black text-center py-2 px-4 font-semibold">
-          🎯 Viewing Product from Advertisement
+          Viewing Product from Advertisement
         </div>
       )}
 
@@ -332,29 +438,70 @@ const ProductDetails = () => {
               <h1 className="text-2xl sm:text-3xl font-bold text-primary mb-2">
                 {product.name}
               </h1>
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center">
-                  <MapPin className="h-3.5 w-3.5 mr-1" />
-                  {product.vendor_profiles.location}
-                </div>
-                {product.average_rating && product.average_rating > 0 ? (
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
-                    <span className="font-medium text-gray-900">
-                      {product.average_rating.toFixed(1)}
-                    </span>
-                    {product.total_ratings && product.total_ratings > 0 && (
-                      <span className="text-xs text-gray-500 ml-1">
-                        ({product.total_ratings})
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center">
+                    <MapPin className="h-3.5 w-3.5 mr-1" />
+                    {product.vendor_profiles.location}
+                  </div>
+
+                  {product.average_rating && product.average_rating > 0 ? (
+                    <button
+                      type="button"
+                      onClick={scrollToRatings}
+                      className="flex items-center gap-1 hover:opacity-90"
+                      aria-label="Jump to ratings and reviews"
+                      title="Jump to ratings and reviews"
+                    >
+                      <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+                      <span className="font-medium text-gray-900">
+                        {product.average_rating.toFixed(1)}
                       </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 text-gray-300" />
-                    <span className="text-xs text-gray-500">No ratings yet</span>
-                  </div>
-                )}
+                      {product.total_ratings && product.total_ratings > 0 && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          ({product.total_ratings})
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <Star className="h-3.5 w-3.5 text-gray-300" />
+                      <span className="text-xs text-gray-500">No ratings yet</span>
+                    </div>
+                  )}
+
+                  {product.stock_quantity > 0 ? (
+                    <Badge className={product.stock_quantity < 10 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}>
+                      {product.stock_quantity < 10 ? 'Limited stock' : 'In stock'}
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-red-100 text-red-800">Out of stock</Badge>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {mapsUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
+                      className="h-9"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Maps
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShare}
+                    className="h-9"
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -390,6 +537,11 @@ const ProductDetails = () => {
                 <p className="text-gray-700 text-sm">
                   <span className="font-medium">Location:</span> {product.vendor_profiles.location}
                 </p>
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    Tip: Use chat to confirm availability, delivery options, and pickup details before ordering.
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -477,13 +629,95 @@ const ProductDetails = () => {
         </div>
 
         {/* Ratings Section - Full width on mobile */}
-        <div className="mt-6 sm:mt-8 w-full -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+        <div ref={ratingsRef} className="mt-6 sm:mt-8 w-full -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
           <div className="max-w-6xl mx-auto">
             <ProductRatings 
               productId={product.id} 
               vendorUserId={product.vendor_profiles?.user_id}
             />
           </div>
+        </div>
+
+        {/* Related Products */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-lg font-semibold text-gray-900">
+              More in {product.category || 'this category'}
+            </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/products?category=${encodeURIComponent(product.category || '')}`)}
+            >
+              View category
+            </Button>
+          </div>
+
+          {relatedLoading && (
+            <div className="text-sm text-gray-500 py-4">Loading related products...</div>
+          )}
+
+          {!relatedLoading && relatedProducts.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              {relatedProducts.map((p) => {
+                const imgAny: any = (p as any).image_urls ?? p.image_urls;
+                let img = p.image_url || '';
+                if (imgAny && Array.isArray(imgAny) && imgAny.length > 0) {
+                  img = String(imgAny[0]);
+                } else if (typeof imgAny === 'string') {
+                  try {
+                    const parsed = JSON.parse(imgAny);
+                    if (Array.isArray(parsed) && parsed.length > 0) img = String(parsed[0]);
+                  } catch (e) {
+                    // ignore
+                  }
+                }
+
+                const safeImg = img
+                  ? getImageUrl(String(img).replace(/\\/g, '/'))
+                  : 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp';
+
+                return (
+                  <Card
+                    key={p.id}
+                    className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => {
+                      navigate(`/product/${p.id}`);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  >
+                    <div className="relative aspect-square bg-gray-100">
+                      <img src={safeImg} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                      <div className="absolute top-2 right-2 bg-white/95 px-2 py-1 rounded text-xs font-semibold">
+                        KSH {Number(p.price || 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <CardContent className="p-3 space-y-1">
+                      <div className="font-semibold text-sm line-clamp-2 text-primary">{p.name}</div>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span className="truncate">{p.vendor_profiles?.location || ''}</span>
+                        {(p.average_rating || 0) > 0 ? (
+                          <span className="flex items-center gap-1 text-gray-700">
+                            <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                            {Number(p.average_rating || 0).toFixed(1)}
+                          </span>
+                        ) : (
+                          <span />
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Stock: {Number(p.stock_quantity || 0)}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {!relatedLoading && relatedProducts.length === 0 && (
+            <div className="text-sm text-gray-500 py-4">No related products found.</div>
+          )}
         </div>
       </div>
 
@@ -493,4 +727,3 @@ const ProductDetails = () => {
 };
 
 export default ProductDetails;
-

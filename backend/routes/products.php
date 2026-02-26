@@ -9,8 +9,25 @@ function handleGetProducts() {
     $search = isset($_GET['search']) ? sanitizeInput($_GET['search']) : '';
     $category = isset($_GET['category']) ? sanitizeInput($_GET['category']) : '';
     $location = isset($_GET['location']) ? sanitizeInput($_GET['location']) : '';
+    $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 0;
+    if ($limit <= 0) {
+        $limit = 0;
+    } else {
+        $limit = max(1, min(200, $limit));
+    }
     
     try {
+        // Prefer created_at ordering when available, else fall back to id.
+        $orderBy = 'p.id DESC';
+        try {
+            $colStmt = $pdo->query("SHOW COLUMNS FROM products LIKE 'created_at'");
+            if ($colStmt && $colStmt->rowCount() > 0) {
+                $orderBy = 'p.created_at DESC';
+            }
+        } catch (Exception $e) {
+            // ignore and keep fallback
+        }
+
         $sql = "SELECT p.*, v.farm_name, v.location as vendor_location 
                 FROM products p 
                 JOIN vendors v ON p.vendor_id = v.id 
@@ -32,6 +49,11 @@ function handleGetProducts() {
         if (!empty($location) && $location !== 'all') {
             $sql .= " AND v.location = ?";
             $params[] = $location;
+        }
+
+        $sql .= " ORDER BY {$orderBy}";
+        if ($limit > 0) {
+            $sql .= " LIMIT {$limit}";
         }
         
         $stmt = $pdo->prepare($sql);

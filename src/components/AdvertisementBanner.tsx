@@ -143,7 +143,20 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
     }
   }, [advertisement.tier, displayDuration, isVisible]);
 
+  // Respect dismissals for the current session so ads don't re-appear during rotation.
+  useEffect(() => {
+    const dismissed = sessionStorage.getItem(`dismissed_ad_${advertisement.id}`);
+    if (dismissed === '1') {
+      setIsVisible(false);
+    }
+  }, [advertisement.id]);
+
   const handleClose = () => {
+    try {
+      sessionStorage.setItem(`dismissed_ad_${advertisement.id}`, '1');
+    } catch (e) {
+      // ignore storage errors
+    }
     setIsVisible(false);
     if (onClose) {
       onClose();
@@ -365,11 +378,11 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
   return (
     <div
       ref={adRef}
-      className="fixed bottom-4 right-4 z-50 bg-white rounded-lg shadow-2xl border-2 border-blue-300 overflow-hidden animate-slide-up"
+      className="ad-basic-popup fixed left-4 right-4 sm:left-auto sm:right-4 z-50 bg-white rounded-lg shadow-2xl border-2 border-blue-300 overflow-hidden animate-slide-up"
       style={{ 
-        width: '400px',
+        bottom: 'calc(env(safe-area-inset-bottom) + 1rem)',
+        width: 'min(360px, calc(100vw - 2rem))',
         height: '250px',
-        maxWidth: 'calc(100vw - 2rem)',
         animation: 'slideUp 0.3s ease-out'
       }}
     >
@@ -386,8 +399,8 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
         }
         @media (max-width: 640px) {
           .ad-basic-popup {
-            width: min(300px, calc(100vw - 2rem));
-            height: min(250px, calc((100vw - 2rem) * 1.2));
+            width: auto;
+            height: auto;
             aspect-ratio: 300 / 250;
           }
         }
@@ -526,4 +539,3 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
 };
 
 export default AdvertisementBanner;
-

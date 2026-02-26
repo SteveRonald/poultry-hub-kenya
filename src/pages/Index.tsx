@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Users, ShieldCheck, TrendingUp, Star, ChevronRight } from 'lucide-react';
+import { ArrowRight, Users, ShieldCheck, TrendingUp, Star, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -52,6 +52,8 @@ const Index = () => {
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const featuredCarouselRef = useRef<HTMLDivElement>(null);
+  const featuredAutoScrollRef = useRef<NodeJS.Timeout | null>(null);
   
   // Hero image carousel state
   const [currentHeroImageIndex, setCurrentHeroImageIndex] = useState(0);
@@ -81,23 +83,82 @@ const Index = () => {
       if (heroImageIntervalRef.current) {
         clearInterval(heroImageIntervalRef.current);
       }
+      if (featuredAutoScrollRef.current) {
+        clearInterval(featuredAutoScrollRef.current);
+      }
     };
   }, []);
 
   const fetchFeaturedProducts = async () => {
     try {
-      const response = await fetch(getApiUrl('/api/products?limit=50&is_active=1'));
+      const response = await fetch(getApiUrl('/api/products?limit=24'));
       const data = await response.json();
       if (Array.isArray(data)) {
-        console.log('Fetched products for carousel:', data.length);
         setFeaturedProducts(data);
-      } else {
-        console.log('Products response is not an array:', data);
       }
     } catch (error) {
       console.error('Failed to fetch featured products:', error);
     }
   };
+
+  const getFeaturedImage = (prod: any) => {
+    const imgs: any = prod?.image_urls ?? prod?.image_url;
+    if (imgs && Array.isArray(imgs) && imgs.length > 0) {
+      return getImageUrl(String(imgs[0]).replace(/\\/g, '/'));
+    }
+    if (typeof imgs === 'string') {
+      try {
+        const parsed = JSON.parse(imgs);
+        if (Array.isArray(parsed) && parsed.length > 0) return getImageUrl(String(parsed[0]).replace(/\\/g, '/'));
+      } catch (e) {
+        // fallthrough
+      }
+    }
+    const fallback = prod?.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp';
+    return getImageUrl(String(fallback));
+  };
+
+  const scrollFeatured = (dir: 'left' | 'right') => {
+    const el = featuredCarouselRef.current;
+    if (!el) return;
+
+    const firstItem = el.querySelector('[data-featured-item="1"]') as HTMLElement | null;
+    const itemWidth = firstItem?.offsetWidth || 320;
+    const gap = 16;
+    const delta = (itemWidth + gap) * (dir === 'left' ? -1 : 1);
+    el.scrollBy({ left: delta, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (!featuredProducts.length) return;
+
+    if (featuredAutoScrollRef.current) {
+      clearInterval(featuredAutoScrollRef.current);
+      featuredAutoScrollRef.current = null;
+    }
+
+    const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) return;
+
+    featuredAutoScrollRef.current = setInterval(() => {
+      if (isPaused) return;
+      const el = featuredCarouselRef.current;
+      if (!el) return;
+      const nearEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 8;
+      if (nearEnd) {
+        el.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        scrollFeatured('right');
+      }
+    }, 3500);
+
+    return () => {
+      if (featuredAutoScrollRef.current) {
+        clearInterval(featuredAutoScrollRef.current);
+        featuredAutoScrollRef.current = null;
+      }
+    };
+  }, [featuredProducts.length, isPaused]);
 
   
   const setupScrollAnimations = () => {
@@ -477,7 +538,7 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Categories Section with Auto-Scroll */}
+      {/* Categories + Featured Products */}
       <section 
         ref={categoriesRef}
         className="py-16 bg-beige dark:bg-gray-800"
@@ -491,132 +552,128 @@ const Index = () => {
               Find exactly what you need for your poultry business
             </p>
           </div>
-          
-          {/* Auto-Scrolling Categories Container */}
-          <div className="relative overflow-hidden">
-            {/* Gradient Fade Edges */}
-            <div className="absolute left-0 top-0 w-16 h-full bg-gradient-to-r from-beige dark:from-gray-800 to-transparent z-10 pointer-events-none" />
-            <div className="absolute right-0 top-0 w-16 h-full bg-gradient-to-l from-beige dark:from-gray-800 to-transparent z-10 pointer-events-none" />
-            
-            {/* Scrolling Track */}
-            <div 
-              className={`flex gap-4 md:gap-8 pb-4 ${
-                isPaused ? 'pause-animation' : 'animate-scroll'
-              }`}
+
+          {/* Categories grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-10">
+            {categories.map((cat) => (
+              <Card
+                key={cat.name}
+                className="card-hover overflow-hidden cursor-pointer"
+                onClick={() => {
+                  window.location.href = `/products?category=${encodeURIComponent(cat.name)}`;
+                }}
+              >
+                <div className="relative aspect-[16/9] overflow-hidden">
+                  <img 
+                    src={cat.image} 
+                    alt={cat.name}
+                    className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <h3 className="text-2xl font-bold text-white">{cat.name}</h3>
+                  </div>
+                </div>
+                <CardContent className="p-6">
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">{cat.description}</p>
+                  <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="text-primary font-semibold flex items-center hover:text-primary/80 group">
+                    Shop Now
+                    <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Featured products carousel */}
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <h3 className="text-xl font-bold text-primary">Featured Products</h3>
+            <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
+              View All
+              <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+
+          <div className="relative">
+            <div className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Scroll featured products left"
+                onClick={() => scrollFeatured('left')}
+                onMouseEnter={() => setIsPaused(true)}
+                onMouseLeave={() => setIsPaused(false)}
+                className="bg-white/80 hover:bg-white border-gray-200 shadow"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Scroll featured products right"
+                onClick={() => scrollFeatured('right')}
+                onMouseEnter={() => setIsPaused(true)}
+                onMouseLeave={() => setIsPaused(false)}
+                className="bg-white/80 hover:bg-white border-gray-200 shadow"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div
+              ref={featuredCarouselRef}
+              className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth"
               onMouseEnter={() => setIsPaused(true)}
               onMouseLeave={() => setIsPaused(false)}
               onTouchStart={() => setIsPaused(true)}
               onTouchEnd={() => setIsPaused(false)}
             >
-              {/* Merge categories and featured products, then duplicate for infinite scroll */}
-              {[
-                ...categories.map(cat => ({ type: 'category', data: cat })),
-                ...featuredProducts.map(prod => ({ type: 'product', data: prod })),
-                ...categories.map(cat => ({ type: 'category', data: cat })),
-                ...featuredProducts.map(prod => ({ type: 'product', data: prod }))
-              ].map((item, index) => (
-                <Card 
-                  key={`item-${index}`}
-                  className="card-hover overflow-hidden flex-shrink-0 w-64 sm:w-72 md:w-80 lg:w-96 transform hover:scale-105 transition-transform duration-300"
+              {featuredProducts.map((prod, idx) => (
+                <Card
+                  key={prod.id || idx}
+                  data-featured-item={idx === 0 ? '1' : undefined}
+                  className="card-hover overflow-hidden flex-shrink-0 w-64 sm:w-72 md:w-80 snap-start cursor-pointer"
+                  onClick={() => {
+                    window.location.href = `/product/${prod.id}`;
+                  }}
                 >
-                  {item.type === 'category' ? (
-                    <>
-                      <div className="relative h-48 overflow-hidden">
-                        <img 
-                          src={item.data.image} 
-                          alt={item.data.name}
-                          className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-                          <h3 className="text-2xl font-bold text-white">{item.data.name}</h3>
-                        </div>
+                  <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+                    <img
+                      src={getFeaturedImage(prod)}
+                      alt={prod.name}
+                      className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <div className="absolute top-2 right-2 bg-white/90 text-gray-900 px-2 py-1 rounded-md text-xs font-semibold shadow-sm border border-white/40 backdrop-blur">
+                      KSH {Number(prod.price || 0).toLocaleString()}
+                    </div>
+                    {Number(prod.stock_quantity || 0) <= 0 && (
+                      <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-1 rounded-md text-xs font-semibold shadow-sm">
+                        Out of stock
                       </div>
-                      <CardContent className="p-6">
-                        <p className="text-gray-600 dark:text-gray-300 mb-4">{item.data.description}</p>
-                        <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
-                          Shop Now
-                          <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                        </Link>
-                      </CardContent>
-                    </>
-                  ) : (
-                    <>
-                      <div className="relative h-48 overflow-hidden">
-                        <img 
-                          src={(() => {
-                            const imgs: any = item.data.image_urls;
-                            if (imgs && Array.isArray(imgs) && imgs.length > 0) {
-                              return getImageUrl(String(imgs[0]).replace(/\\/g, '/'));
-                            }
-                            if (typeof imgs === 'string') {
-                              try {
-                                const parsed = JSON.parse(imgs);
-                                if (Array.isArray(parsed) && parsed.length > 0) return getImageUrl(String(parsed[0]).replace(/\\/g, '/'));
-                              } catch (e) {
-                                // fallthrough
-                              }
-                            }
-                            const fallback = item.data.image_url || 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=400&h=300&fit=crop';
-                            return getImageUrl(String(fallback));
-                          })()} 
-                          alt={item.data.name}
-                          className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
-                        />
-                        <div className="absolute top-2 right-2 bg-primary text-white px-3 py-1 rounded-full text-sm font-semibold">
-                          KSH {item.data.price}
-                        </div>
-                      </div>
-                      <CardContent className="p-6">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{item.data.name}</h3>
-                        <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">{item.data.description}</p>
-                        <Link to={`/products/${item.data.id}`} className="text-primary font-semibold flex items-center hover:text-primary/80 group">
-                          View Product
-                          <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                        </Link>
-                      </CardContent>
-                    </>
-                  )}
+                    )}
+                  </div>
+                  <CardContent className="p-6">
+                    <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">{prod.name}</h4>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">{prod.description}</p>
+                    <div className="flex items-center justify-between text-sm text-gray-500">
+                      <span className="truncate">{prod.vendor_profiles?.farm_name || ''}</span>
+                      {Number(prod.average_rating || 0) > 0 && (
+                        <span className="flex items-center gap-1 text-gray-700">
+                          <Star className="h-4 w-4 text-accent fill-current" />
+                          {Number(prod.average_rating || 0).toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
                 </Card>
               ))}
             </div>
           </div>
-
-          {/* Auto-scroll Indicator */}
-          <div className="flex items-center justify-center mt-6 gap-2">
-            <div className={`h-2 w-2 rounded-full transition-colors ${
-              isPaused ? 'bg-gray-400' : 'bg-primary animate-pulse'
-            }`}></div>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isPaused ? 'Paused - Hover to pause' : 'Auto-scrolling'}
-            </span>
-          </div>
         </div>
-
-        {/* CSS Animations */}
-        <style>{`
-          @keyframes scroll {
-            from {
-              transform: translateX(0);
-            }
-            to {
-              transform: translateX(-50%);
-            }
-          }
-          
-          .animate-scroll {
-            animation: scroll ${Math.max(60, (categories.length + featuredProducts.length) * 5)}s linear infinite;
-          }
-          
-          .pause-animation {
-            animation-play-state: paused;
-          }
-          
-          @media (max-width: 768px) {
-            .animate-scroll {
-              animation: scroll ${Math.max(40, (categories.length + featuredProducts.length) * 4)}s linear infinite;
-            }
-          }
-        `}</style>
       </section>
 
       {/* Testimonials Section */}

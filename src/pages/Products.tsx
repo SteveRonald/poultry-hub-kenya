@@ -20,6 +20,7 @@ import ChatButton from '../components/ChatButton';
 
 const Products = () => {
   const navigate = useNavigate();
+  const PLACEHOLDER_IMAGE = 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp';
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightedProductId = searchParams.get('product');
   const productRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -34,9 +35,12 @@ const Products = () => {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState('all');
-  const [expandedSections, setExpandedSections] = useState({
-    quickFilters: true,
-    searchCategory: true
+  const [expandedSections, setExpandedSections] = useState(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    return {
+      quickFilters: !isMobile,
+      searchCategory: !isMobile
+    };
   });
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedDescription, setSelectedDescription] = useState<{ name: string; description: string } | null>(null);
@@ -172,6 +176,25 @@ const Products = () => {
       description: product.description
     });
     setShowDescriptionModal(true);
+  };
+
+  const getProductCardImage = (product: Product) => {
+    // Handle both old single image_url and new image_urls array
+    // Prefer explicit `image_urls` when present, otherwise fall back to `image_url` which may be a URL or JSON-stringified array
+    const imgs: any = (product as any).image_urls ?? product.image_urls;
+    if (imgs && Array.isArray(imgs) && imgs.length > 0) {
+      return getImageUrl(String(imgs[0]).replace(/\\/g, '/'));
+    }
+    if (typeof imgs === 'string') {
+      try {
+        const parsed = JSON.parse(imgs);
+        if (Array.isArray(parsed) && parsed.length > 0) return getImageUrl(String(parsed[0]).replace(/\\/g, '/'));
+      } catch (e) {
+        // fallthrough
+      }
+    }
+    const fallback = product.image_url || PLACEHOLDER_IMAGE;
+    return getImageUrl(String(fallback));
   };
 
   // Handle ESC key to close description modal
@@ -903,7 +926,7 @@ const Products = () => {
                 <Card 
                   key={product.id} 
                   ref={(el) => { productRefs.current[product.id] = el; }}
-                  className={`product-card card-hover overflow-hidden transition-all duration-300 ease-out animate-out cursor-pointer ${directionClasses[direction as keyof typeof directionClasses]} ${
+                  className={`product-card group relative card-hover overflow-hidden transition-all duration-300 ease-out animate-out cursor-pointer ${directionClasses[direction as keyof typeof directionClasses]} ${
                     isHighlighted 
                       ? 'ring-4 ring-yellow-400 ring-offset-4 shadow-2xl scale-105 z-10 border-4 border-yellow-400' 
                       : ''
@@ -922,32 +945,36 @@ const Products = () => {
                       ADVERTISED PRODUCT
                     </div>
                   )}
-                  <div className="relative h-36 md:h-40">
-                    <img 
-                      src={(() => {
-                        // Handle both old single image_url and new image_urls array
-                        // Prefer explicit `image_urls` when present, otherwise fall back to `image_url` which may be a URL or JSON-stringified array
-                        const imgs: any = (product as any).image_urls ?? product.image_urls;
-                        if (imgs && Array.isArray(imgs) && imgs.length > 0) {
-                          return getImageUrl(String(imgs[0]).replace(/\\/g, '/'));
-                        }
-                        if (typeof imgs === 'string') {
-                          try {
-                            const parsed = JSON.parse(imgs);
-                            if (Array.isArray(parsed) && parsed.length > 0) return getImageUrl(String(parsed[0]).replace(/\\/g, '/'));
-                          } catch (e) {
-                            // fallthrough
-                          }
-                        }
-                        const fallback = product.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp?a=1&b=1&s=612x612&w=0&k=20&c=W6Cdm-2XcJOXfmNgYIxYVLQ0DEnDDgsSt1O-EemeYUc?w=800';
-                        return getImageUrl(String(fallback));
-                      })()} 
+                  <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+                    <img
+                      src={getProductCardImage(product)}
                       alt={product.name}
-                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (target.src !== PLACEHOLDER_IMAGE) {
+                          target.src = PLACEHOLDER_IMAGE;
+                        }
+                      }}
                     />
-                    <div className="absolute top-1 right-1 bg-accent text-black px-1.5 py-0.5 rounded text-xs font-medium">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
+
+                    <div className="absolute top-2 right-2 bg-white/90 text-gray-900 px-2 py-1 rounded-md text-xs font-semibold shadow-sm border border-white/40 backdrop-blur">
                       KSH {product.price.toLocaleString()}
                     </div>
+
+                    {product.stock_quantity <= 0 && (
+                      <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-1 rounded-md text-xs font-semibold shadow-sm">
+                        Out of stock
+                      </div>
+                    )}
+                    {product.stock_quantity > 0 && product.stock_quantity < 10 && (
+                      <div className="absolute bottom-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-semibold shadow-sm">
+                        Limited stock
+                      </div>
+                    )}
                   </div>
                   
                   <CardContent className="p-2 md:p-3">
@@ -969,6 +996,11 @@ const Products = () => {
                           <span className="text-xs font-medium">
                             {product.average_rating.toFixed(1)}
                           </span>
+                          {product.total_ratings && product.total_ratings > 0 && (
+                            <span className="text-[10px] text-gray-500 ml-0.5">
+                              ({product.total_ratings})
+                            </span>
+                          )}
                         </div>
                       ) : null}
                     </div>

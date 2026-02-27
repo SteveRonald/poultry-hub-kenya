@@ -215,4 +215,18 @@ function validateAuthToken($token) {
     
     return false;
 }
+
+/**
+ * Check if current user is an admin
+ * Uses the Bearer token from the request
+ */
+function isAdmin() {
+    $token = getBearerToken();
+    if (!$token) {
+        return false;
+    }
+    
+    $payload = validateAuthToken($token);
+    return ($payload && isset($payload['role']) && $payload['role'] === 'admin');
+}
 ?>

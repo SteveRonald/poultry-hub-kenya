@@ -698,24 +698,8 @@ const Chatbot: React.FC = () => {
   
   // Show welcome notification after page load - ALWAYS show on reload
   useEffect(() => {
-    console.log('🔍 Chatbot component mounted, showing welcome notification...');
-    
-    // Always show popup on every page load/reload
-    // Show welcome notification after 1.5 seconds
-    const timer = setTimeout(() => {
-      console.log('✅ Showing welcome notification');
-      setShowWelcomeNotification(true);
-      
-      // Auto-hide after 15 seconds
-      autoHideTimerRef.current = setTimeout(() => {
-        console.log('✅ Auto-hiding welcome notification');
-        setShowWelcomeNotification(false);
-        autoHideTimerRef.current = null;
-      }, 15000);
-    }, 1500);
-    
+    // Disabled as requested: chatbot welcome message removed
     return () => {
-      clearTimeout(timer);
       if (autoHideTimerRef.current) {
         clearTimeout(autoHideTimerRef.current);
         autoHideTimerRef.current = null;
@@ -723,26 +707,9 @@ const Chatbot: React.FC = () => {
     };
   }, []);
   
-  // Expose function to manually show popup for testing
+  // Expose function to manually show popup for testing - REMOVED
   useEffect(() => {
-    // Add to window for easy testing: window.showChatbotWelcome()
-    (window as any).showChatbotWelcome = () => {
-      sessionStorage.removeItem('chatbot_welcome_seen');
-      localStorage.setItem('chatbot_welcome_count', '0');
-      if (autoHideTimerRef.current) {
-        clearTimeout(autoHideTimerRef.current);
-        autoHideTimerRef.current = null;
-      }
-      setShowWelcomeNotification(true);
-      console.log('✅ Welcome notification shown manually');
-      
-      // Auto-hide after 15 seconds
-      autoHideTimerRef.current = setTimeout(() => {
-        setShowWelcomeNotification(false);
-        sessionStorage.setItem('chatbot_welcome_seen', 'true');
-        autoHideTimerRef.current = null;
-      }, 15000);
-    };
+    // Disabled
   }, []);
   
   // Debug: Log state changes

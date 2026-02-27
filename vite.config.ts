@@ -11,7 +11,6 @@ export default defineConfig(({ mode }) => ({
     strictPort: false,
     hmr: {
       protocol: 'ws',
-      host: 'localhost',
       port: 8080,
     },
     allowedHosts: [

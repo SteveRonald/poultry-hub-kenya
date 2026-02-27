@@ -10,6 +10,7 @@ interface CartItem {
   quantity: number;
   total_price: number;
   stock_quantity: number;
+  minimum_order_quantity?: number;
   unit: string;
   image_url: string | null;
   category: string;

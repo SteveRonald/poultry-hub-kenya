@@ -22,12 +22,20 @@ const Toaster = ({ ...props }: ToasterProps) => {
         },
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg group-[.toaster]:rounded-xl",
           description: "group-[.toast]:text-muted-foreground",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
           cancelButton:
             "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+          success: 
+            "!bg-[#1eb32a] !text-white !border-[#1eb32a]",
+          error: 
+            "!bg-[#cc0000] !text-white !border-[#cc0000]",
+          warning:
+            "!bg-amber-500 !text-white !border-amber-500",
+          info:
+            "!bg-blue-600 !text-white !border-blue-600",
         },
       }}
       {...props}

@@ -70,11 +70,11 @@ const Footer = () => {
             <ul className="space-y-2">
               <li className="flex items-center space-x-2">
                 <Phone className="h-4 w-4" />
-                <span className="text-gray-200">+254 799 422 635</span>
+                <a href="tel:+254799422635" className="text-gray-200 hover:text-accent transition-colors">+254 799 422 635</a>
               </li>
               <li className="flex items-center space-x-2">
                 <Mail className="h-4 w-4" />
-                <span className="text-gray-200">support@kukusoko.com</span>
+                <a href="mailto:support@kukusoko.com" className="text-gray-200 hover:text-accent transition-colors">support@kukusoko.com</a>
               </li>
               <li className="flex items-center space-x-2">
                 <MapPin className="h-4 w-4" />

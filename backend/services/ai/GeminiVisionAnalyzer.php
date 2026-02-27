@@ -333,12 +333,10 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
             'detected_objects' => isset($result['detected_objects']) && is_array($result['detected_objects']) 
                 ? $result['detected_objects'] 
                 : [],
-            'suggestions' => isset($result['suggestions']) && is_array($result['suggestions'])
-                ? $result['suggestions']
-                : ['Image analyzed successfully'],
+            'suggestions' => [],
             'inappropriate_content' => false,
-            'category_suggestion' => $aiCategory, // Human-readable category
-            'database_category' => $databaseCategory, // Database-compatible category
+            'category_suggestion' => $aiCategory,
+            'database_category' => $databaseCategory,
             'confidence' => isset($result['confidence']) ? (float)$result['confidence'] : 0.5,
             'is_poultry_related' => isset($result['is_poultry_related']) ? (bool)$result['is_poultry_related'] : false,
             'analysis_method' => 'gemini_vision',
@@ -346,36 +344,45 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
             'rejection_reason' => $result['rejection_reason'] ?? null
         ];
         
-        // Add rejection message if not poultry-related
+        // Add professional messages based on poultry relation
         if (!$analysis['is_poultry_related']) {
-            $rejectionReason = $analysis['rejection_reason'] ?? 'Image does not contain poultry-related content';
-            $analysis['suggestions'][] = '❌ REJECTED: ' . $rejectionReason;
-            $analysis['suggestions'][] = 'Please upload an image showing poultry products (chickens, eggs, feed, equipment, etc.)';
+            $analysis['suggestions'] = ['Not poultry related. Please upload poultry-related images only.'];
+            $analysis['rejection_reason'] = 'Not poultry related. Please upload poultry-related images only.';
+        } else {
+            $analysis['suggestions'] = ['Image verified successfully.'];
         }
         
         return $analysis;
     }
     
     /**
-     * Get error response when API is unavailable
+     * Get error response when API is unavailable or has issues
      */
     private function getErrorResponse($message) {
+        // Log the detailed error for debugging but don't show internal details to vendor
+        error_log("AI verification internal error: " . $message);
+        
+        // Check for specific error types to give better feedback without leaking internals
+        $userFriendlyMessage = 'Image verification service is temporarily unavailable. Please try again later.';
+        
+        if (strpos($message, 'not configured') !== false || strpos($message, 'API key') !== false) {
+            $userFriendlyMessage = 'AI verification is currently being set up. Please try again later.';
+        } elseif (strpos($message, 'quota') !== false || strpos($message, '429') !== false) {
+            $userFriendlyMessage = 'Verification limit reached. Please try again in a moment.';
+        }
+        
         return [
             'quality_score' => 0,
             'detected_objects' => [],
-            'suggestions' => [
-                '⚠️ ' . $message,
-                '❌ Cannot verify if image contains poultry products',
-                'Please configure Gemini API key to enable image verification'
-            ],
+            'suggestions' => [$userFriendlyMessage],
             'inappropriate_content' => false,
-            'category_suggestion' => 'Unknown - Requires AI Verification',
+            'category_suggestion' => 'Pending Verification',
             'confidence' => 0.0,
             'is_poultry_related' => false,
             'analysis_method' => 'error',
             'image_description' => '',
-            'rejection_reason' => $message,
-            'error' => $message
+            'rejection_reason' => $userFriendlyMessage,
+            'error' => $userFriendlyMessage // User-friendly error for the UI
         ];
     }
 }

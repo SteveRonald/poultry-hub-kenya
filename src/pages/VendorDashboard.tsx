@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign, Menu } from 'lucide-react';
+import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign, Menu, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -10,12 +10,14 @@ import { LocationSelect } from '../components/LocationSelect';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { getApiUrl, getImageUrl } from '../config/api';
 import VendorAnalytics from '../components/VendorAnalytics';
 import AIProductAssistant from '../components/AIProductAssistant';
 import AdvertisementManager from '../components/AdvertisementManager';
 import CreateAdvertisementForm from '../components/CreateAdvertisementForm';
-import { useToast } from '../hooks/use-toast';
+import { toast } from 'sonner';
 import VendorInbox from './VendorInbox';
 import {
   AlertDialog,
@@ -30,7 +32,6 @@ import {
 
 const VendorDashboard = () => {
   const { user, fetchUser, isLoading: authLoading } = useAuth();
-  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -38,7 +39,6 @@ const VendorDashboard = () => {
   const [earnings, setEarnings] = useState<any>(null);
   const [advertisements, setAdvertisements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [recommendation, setRecommendation] = useState<any>(null);
   const [productForm, setProductForm] = useState<any>({ 
     name: '', 
     description: '', 
@@ -62,7 +62,45 @@ const VendorDashboard = () => {
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Warehouse selection states
+  const [counties, setCounties] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedCounty, setSelectedCounty] = useState('');
+  const [selectedWarehouse, setSelectedWarehouse] = useState('');
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  
   const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // Fetch counties on mount
+  useEffect(() => {
+    fetch(getApiUrl('/api/location/counties'))
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setCounties(data.data);
+      })
+      .catch(err => console.error('Error fetching counties:', err));
+  }, []);
+
+  // Fetch warehouses when county changes
+  useEffect(() => {
+    if (selectedCounty) {
+      setLoadingLocations(true);
+      fetch(getApiUrl(`/api/public/warehouses/county/${selectedCounty}`))
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setWarehouses(data.data);
+            setSelectedWarehouse(''); // Reset selection
+          }
+        })
+        .catch(err => console.error('Error fetching warehouses:', err))
+        .finally(() => setLoadingLocations(false));
+    } else {
+      setWarehouses([]);
+    }
+  }, [selectedCounty]);
+
   
   // Auto-scroll to section when tab changes
   useEffect(() => {
@@ -234,8 +272,7 @@ const VendorDashboard = () => {
       safeFetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), 'Orders'),
       safeFetch(getApiUrl('/api/vendor/earnings'), 'Earnings'),
       safeFetch(getApiUrl('/api/vendor/advertisements'), 'Advertisements'),
-      safeFetch(getApiUrl('/api/vendor/recommendations'), 'Recommendations'),
-    ]).then(async ([statsRes, productsRes, ordersRes, earningsRes, adsRes, recRes]) => {
+    ]).then(async ([statsRes, productsRes, ordersRes, earningsRes, adsRes]) => {
       if (import.meta.env.DEV) {
         console.log('API responses received:', {
           stats: statsRes?.status || 'failed',
@@ -288,13 +325,12 @@ const VendorDashboard = () => {
       };
       
       // Parse all responses
-      const [stats, products, orders, earnings, ads, recs] = await Promise.all([
+      const [stats, products, orders, earnings, ads] = await Promise.all([
         parseResponse(statsRes, 'Stats'),
         parseResponse(productsRes, 'Products'),
         parseResponse(ordersRes, 'Orders'),
         parseResponse(earningsRes, 'Earnings'),
         parseResponse(adsRes, 'Advertisements'),
-        parseResponse(recRes, 'Recommendations'),
       ]);
       
       setStats(stats);
@@ -323,11 +359,6 @@ const VendorDashboard = () => {
         setAdvertisements([]);
       }
 
-      if (recs && recs.recommendation) {
-        setRecommendation(recs.recommendation);
-      } else {
-        setRecommendation(null);
-      }
       setLoading(false);
     }).catch((error) => {
       if (import.meta.env.DEV) {
@@ -337,11 +368,7 @@ const VendorDashboard = () => {
       setLoading(false);
       // Only show error toast if it's not a 401 (401 is handled by AuthContext)
       if (!error?.message?.includes('401')) {
-        toast({
-          title: "Error",
-          description: "Failed to load some dashboard data. Please refresh the page.",
-          variant: "destructive",
-        });
+        toast.error("Failed to load some dashboard data. Please refresh the page.");
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -432,26 +459,14 @@ const VendorDashboard = () => {
       });
 
       if (response.ok) {
-        toast({
-          title: "Product Deleted",
-          description: "Product has been successfully deleted.",
-          variant: "success",
-        });
+        toast.success("Product has been successfully deleted.");
         fetchProducts();
       } else {
         const error = await response.json();
-        toast({
-          title: "Delete Failed",
-          description: error.error || "Failed to delete product. Please try again.",
-          variant: "destructive",
-        });
+        toast.error(error.error || "Failed to delete product. Please try again.");
       }
     } catch (error) {
-      toast({
-        title: "Delete Failed",
-        description: "Network error. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Network error. Please try again.");
     } finally {
       setShowDeleteConfirm(false);
       setProductToDelete(null);
@@ -472,24 +487,41 @@ const VendorDashboard = () => {
     const token = localStorage.getItem('token');
     setSubmitting(true);
     
+    let finalStatusNotes = statusNotes || '';
+    
+    // If confirming order, include warehouse info
+    if (newStatus === 'confirmed' || newStatus === 'processing') {
+      if (selectedWarehouse) {
+        const warehouse = warehouses.find(w => w.id.toString() === selectedWarehouse);
+        if (warehouse) {
+          const warehouseNote = `Vendor will drop off at: ${warehouse.name} (${warehouse.address || ''})`;
+          finalStatusNotes = finalStatusNotes ? `${finalStatusNotes}. ${warehouseNote}` : warehouseNote;
+        }
+      }
+    }
+    
     // Optimistically update the UI immediately
     const updatedOrders = orders.map(order => 
       order.id === orderId 
-        ? { ...order, status: newStatus, status_notes: statusNotes, updated_at: new Date().toISOString() }
+        ? { ...order, status: newStatus, status_notes: finalStatusNotes, updated_at: new Date().toISOString() }
         : order
     );
     setOrders(updatedOrders);
     
     // Update selected order in modal if it's the same order
     if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder({ ...selectedOrder, status: newStatus, status_notes: statusNotes });
+      setSelectedOrder({ ...selectedOrder, status: newStatus, status_notes: finalStatusNotes });
     }
     
     try {
       const response = await fetch(getApiUrl(`/api/vendor/orders/status?id=${orderId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: newStatus, status_notes: statusNotes }),
+        body: JSON.stringify({ 
+          status: newStatus, 
+          status_notes: finalStatusNotes,
+          warehouse_id: selectedWarehouse ? parseInt(selectedWarehouse) : null
+        }),
       });
       
       // Check if response is OK before parsing JSON
@@ -526,11 +558,7 @@ const VendorDashboard = () => {
           }
         }
         
-        toast({
-          title: "Order Status Updated",
-          description: `Order status has been updated to ${newStatus}.`,
-          variant: "success",
-        });
+        toast.success(`Order status has been updated to ${newStatus}.`);
         
         // Refresh stats to update pending orders count
         const statsRes = await fetch(getApiUrl('/api/vendor/stats'), { headers: { Authorization: `Bearer ${token}` } });
@@ -562,11 +590,7 @@ const VendorDashboard = () => {
         }
         
         const error = await response.json();
-        toast({
-          title: "Update Failed",
-          description: error.error || "Failed to update order status. Please try again.",
-          variant: "destructive",
-        });
+        toast.error(error.error || "Failed to update order status. Please try again.");
         if (import.meta.env.DEV) {
           console.error('Failed to update order status:', error);
         }
@@ -583,11 +607,7 @@ const VendorDashboard = () => {
         setOrders(Array.isArray(data) ? data : []);
       }
       
-      toast({
-        title: "Update Failed",
-        description: "Network error. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Network error. Please try again.");
       if (import.meta.env.DEV) {
         console.error('Network error:', error);
       }
@@ -635,29 +655,17 @@ const VendorDashboard = () => {
       });
 
       if (response.ok) {
-        toast({
-          title: "Product Updated",
-          description: "Product has been successfully updated.",
-          variant: "success",
-        });
+        toast.success("Product has been successfully updated.");
         setShowEditProductModal(false);
         setEditingProduct(null);
         setProductForm({ name: '', description: '', price: '', category: '', stock_quantity: '', minimum_order_quantity: '1', image_urls: [] });
         fetchProducts();
       } else {
         const error = await response.json();
-        toast({
-          title: "Update Failed",
-          description: error.error || "Failed to update product. Please try again.",
-          variant: "destructive",
-        });
+        toast.error(error.error || "Failed to update product. Please try again.");
       }
     } catch (error) {
-      toast({
-        title: "Update Failed",
-        description: "Network error. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -866,11 +874,7 @@ const VendorDashboard = () => {
             }
           }, 100);
           
-          toast({
-            title: "Image Verification Failed",
-            description: errorMessage,
-            variant: "destructive",
-          });
+          toast.error(errorMessage);
         } else {
           setUploadError('Upload failed. Please try again.');
           setIsImageVerified(false);
@@ -890,11 +894,7 @@ const VendorDashboard = () => {
             }
           }, 100);
           
-          toast({
-            title: "Upload Failed",
-            description: 'Upload failed. Please try again.',
-            variant: "destructive",
-          });
+          toast.error('Upload failed. Please try again.');
         }
         setUploading(false);
         // Reset input after error
@@ -1004,10 +1004,7 @@ const VendorDashboard = () => {
                 ? `Image verified. Category set to "${mappedCategory.charAt(0).toUpperCase() + mappedCategory.slice(1)}" based on image analysis.`
                 : "Image successfully verified and uploaded.";
               
-              toast({
-                title: "Image Verified",
-                description: toastMessage,
-              });
+              toast.success(toastMessage);
             } else {
               // Clear analysis if it contains errors
               setAiAnalysis(null);
@@ -1050,11 +1047,7 @@ const VendorDashboard = () => {
             }
           }, 100);
           
-          toast({
-            title: "Image Rejected",
-            description: "The uploaded image did not pass verification. Please upload only poultry-related images.",
-            variant: "destructive",
-          });
+          toast.error("The uploaded image did not pass verification. Please upload only poultry-related images.");
           // Reset input after rejection
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
@@ -1089,11 +1082,7 @@ const VendorDashboard = () => {
         }
       }, 100);
       
-      toast({
-        title: "Upload Failed",
-        description: err.message || 'Upload failed. Please try again.',
-        variant: "destructive",
-      });
+      toast.error(err.message || 'Upload failed. Please try again.');
       // Reset input after error
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -1136,11 +1125,7 @@ const VendorDashboard = () => {
       } else {
         // Clear analysis on error
         setAiAnalysis(null);
-        toast({
-          title: "Analysis Failed",
-          description: data.error || 'Failed to analyze image',
-          variant: "destructive",
-        });
+        toast.error(data.error || 'Failed to analyze image');
       }
     } catch (error: any) {
       // Clear analysis on error
@@ -1148,11 +1133,7 @@ const VendorDashboard = () => {
       if (import.meta.env.DEV) {
         console.error('AI analysis error:', error);
       }
-      toast({
-        title: "Analysis Error",
-        description: error.message || 'Failed to analyze image',
-        variant: "destructive",
-      });
+      toast.error(error.message || 'Failed to analyze image');
     } finally {
       setAiLoading(false);
     }
@@ -1191,10 +1172,7 @@ const VendorDashboard = () => {
             ...prev,
             description: data.description
           }));
-          toast({
-            title: "Description Generated",
-            description: "AI has generated a product description for you.",
-          });
+          toast.success("AI has generated a product description for you.");
         }
         
         // Set name suggestions if available
@@ -1203,11 +1181,7 @@ const VendorDashboard = () => {
           
           // Show warning if there's a mismatch
           if (data.name_suggestions.has_mismatch && data.name_suggestions.suggested_name) {
-            toast({
-              title: "Product Name Mismatch Detected",
-              description: `The product name doesn't match the image. Image shows: ${data.name_suggestions.detected_items.join(', ')}. Click "Use Suggested Name" to update.`,
-              variant: "default",
-            });
+            toast.info(`The product name doesn't match the image. Image shows: ${data.name_suggestions.detected_items.join(', ')}. Click "Use Suggested Name" to update.`);
           }
         }
       } else if (!data.success && data.error) {
@@ -1232,10 +1206,7 @@ const VendorDashboard = () => {
         name: nameSuggestions.suggested_name
       }));
       setNameSuggestions(null); // Clear suggestions after accepting
-      toast({
-        title: "Product Name Updated",
-        description: "Product name has been updated to match the image.",
-      });
+      toast.success("Product name has been updated to match the image.");
     }
   };
 
@@ -1323,10 +1294,7 @@ const VendorDashboard = () => {
         await fetchUser();
         setShowEditProfileModal(false);
         // Show success notification
-        toast({
-          title: "Profile Updated",
-          description: "Your profile has been updated successfully!",
-        });
+        toast.success("Your profile has been updated successfully!");
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update profile');
@@ -1334,11 +1302,7 @@ const VendorDashboard = () => {
     } catch (error) {
       console.error('Error updating profile:', error);
       // Show error notification
-      toast({
-        title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to update profile. Please try again.",
-        variant: "destructive",
-      });
+      toast.error(error instanceof Error ? error.message : "Failed to update profile. Please try again.");
     } finally {
       setProfileSubmitting(false);
     }
@@ -1393,36 +1357,20 @@ const VendorDashboard = () => {
         const data = await res.json();
         setProducts(Array.isArray(data) ? data : []);
         
-        toast({
-          title: "Product Submitted",
-          description: "Product has been submitted successfully! It will be reviewed by admin before going live.",
-          variant: "success",
-        });
+        toast.success("Product has been submitted successfully! It will be reviewed by admin before going live.");
       } else {
         const error = await response.json();
         const errorMessage = error.error || 'Failed to submit product';
         
         // Check if it's a description length error
         if (errorMessage.includes('Description is too short') || errorMessage.includes('Description is too long')) {
-          toast({
-            title: "Description Error",
-            description: errorMessage,
-            variant: "destructive",
-          });
+          toast.error(errorMessage);
         } else {
-          toast({
-            title: "Submission Failed",
-            description: errorMessage,
-            variant: "destructive",
-          });
+          toast.error(errorMessage);
         }
       }
     } catch (error: any) {
-      toast({
-        title: "Submission Failed",
-        description: error.message || "Network error. Please try again.",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -1660,49 +1608,7 @@ const VendorDashboard = () => {
                       </CardContent>
                     </Card>
 
-                    <Card className="flex flex-col lg:col-span-2">
-                      <CardHeader>
-                        <CardTitle className="text-lg flex items-center">
-                          <Sparkles className="h-5 w-5 mr-2 text-primary" />
-                          Weekly Recommendations
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex-1">
-                        {!recommendation && (
-                          <p className="text-sm text-gray-600">No recommendations yet for this week.</p>
-                        )}
-                        {recommendation && (
-                          <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-                              <div className="p-2 rounded bg-gray-50">
-                                <div className="text-xs text-gray-500">Revenue (7d)</div>
-                                <div className="font-semibold">KSH {Number(recommendation.metrics?.revenue_7d || 0).toLocaleString()}</div>
-                              </div>
-                              <div className="p-2 rounded bg-gray-50">
-                                <div className="text-xs text-gray-500">Orders (7d)</div>
-                                <div className="font-semibold">{recommendation.metrics?.orders_7d || 0}</div>
-                              </div>
-                              <div className="p-2 rounded bg-gray-50">
-                                <div className="text-xs text-gray-500">Growth</div>
-                                <div className="font-semibold">
-                                  {recommendation.metrics?.growth_pct !== null && recommendation.metrics?.growth_pct !== undefined
-                                    ? `${recommendation.metrics?.growth_pct}%`
-                                    : 'N/A'}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              {(recommendation.actions || []).slice(0, 4).map((action: any, idx: number) => (
-                                <div key={idx} className="p-2 rounded border border-gray-100">
-                                  <div className="text-sm font-semibold">{action.title}</div>
-                                  <div className="text-xs text-gray-600">{action.reason}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+
                   </div>
                 </div>
               )}
@@ -2472,23 +2378,17 @@ const VendorDashboard = () => {
                     
                     {/* Analyzing Indicator - Inside Upload Box Overlay */}
                     {isAnalyzing && (
-                      <div className="absolute top-0 left-0 right-0 bottom-0 bg-gradient-to-r from-blue-50/95 via-purple-50/95 to-blue-50/95 backdrop-blur-sm border-2 border-blue-300 rounded-lg flex items-center justify-center z-20 animate-analyze-pulse">
-                        <div className="flex flex-col items-center space-y-4">
-                          <div className="relative animate-analyze-zoom">
-                            <div className="absolute inset-0 animate-ping">
-                              <Sparkles className="h-12 w-12 text-purple-500 opacity-75" />
+                      <div className="absolute top-0 left-0 right-0 bottom-0 bg-white/90 backdrop-blur-sm border-2 border-primary/30 rounded-lg flex items-center justify-center z-20">
+                        <div className="flex flex-col items-center space-y-3">
+                          <div className="relative">
+                            <div className="h-16 w-16 rounded-full border-4 border-gray-100 border-t-primary animate-spin"></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <ShieldCheck className="h-6 w-6 text-primary" />
                             </div>
-                            <Sparkles className="h-12 w-12 text-blue-600 relative z-10" />
                           </div>
-                          <div className="flex flex-col items-center">
-                            <h3 className="text-lg font-bold text-blue-800 animate-pulse">🔍 Analyzing Image...</h3>
-                            <p className="text-sm text-blue-600 mt-1 font-medium">AI is verifying your image content</p>
-                          </div>
-                          <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-                          <div className="flex items-center justify-center space-x-2">
-                            <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                            <div className="h-2 w-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                            <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          <div className="text-center">
+                            <h3 className="text-base font-semibold text-primary">Verifying Image...</h3>
+                            <p className="text-xs text-gray-500">Checking for poultry content</p>
                           </div>
                         </div>
                       </div>
@@ -3055,6 +2955,68 @@ const VendorDashboard = () => {
                     <p className="text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded">{selectedOrder.notes}</p>
                   </div>
                 )}
+
+                {/* Delivery/Drop-off Information */}
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                  <h3 className="text-lg font-semibold text-orange-800 mb-3 flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Order Delivery (Drop-off)
+                  </h3>
+                  <p className="text-sm text-orange-700 mb-4">
+                    Once you confirm the order, please select a warehouse where you will bring the product for us to deliver to the customer.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-orange-900">Select County</Label>
+                      <Select 
+                        value={selectedCounty} 
+                        onValueChange={setSelectedCounty}
+                      >
+                        <SelectTrigger className="bg-white border-orange-200">
+                          <SelectValue placeholder="Select County" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {counties.map(c => (
+                            <SelectItem key={c.county_id} value={c.county_id.toString()}>
+                              {c.county_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-orange-900">Select Warehouse</Label>
+                      <Select 
+                        value={selectedWarehouse} 
+                        onValueChange={setSelectedWarehouse}
+                        disabled={!selectedCounty || loadingLocations}
+                      >
+                        <SelectTrigger className="bg-white border-orange-200">
+                          <SelectValue placeholder={
+                            loadingLocations 
+                              ? "Loading..." 
+                              : (selectedCounty ? "Select Warehouse" : "Select County first")
+                          } />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {warehouses.length > 0 ? (
+                            warehouses.map(w => (
+                              <SelectItem key={w.id} value={w.id.toString()}>
+                                {w.name} - {w.address || 'N/A'}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="p-2 text-sm text-gray-500">
+                              {selectedCounty ? "No warehouses in this county" : "Select county first"}
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Status Update Section */}
                 <div className="border-t pt-6">

@@ -584,6 +584,7 @@ function handleUpdateVendorOrderStatus() {
     
     $newStatus = $input['status'];
     $statusNotes = $input['status_notes'] ?? null;
+    $warehouseId = $input['warehouse_id'] ?? null;
     
     try {
         $pdo->beginTransaction();
@@ -617,13 +618,13 @@ function handleUpdateVendorOrderStatus() {
             return;
         }
         
-        // Update order status
+        // Update order status and warehouse_id
         $stmt = $pdo->prepare("
             UPDATE orders
-            SET status = ?, status_notes = ?, updated_at = NOW(), last_status_updated = NOW()
+            SET status = ?, status_notes = ?, warehouse_id = ?, updated_at = NOW(), last_status_updated = NOW()
             WHERE id = ?
         ");
-        $result = $stmt->execute([$newStatus, $statusNotes, $orderId]);
+        $result = $stmt->execute([$newStatus, $statusNotes, $warehouseId, $orderId]);
         
         // Check if update was successful
         $rowsAffected = $stmt->rowCount();

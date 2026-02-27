@@ -65,9 +65,33 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
     }
   }, [user, getLocalCart, isOpen]); // Re-check when cart opens
 
-  const handleQuantityChange = async (cartId: number, newQuantity: number) => {
-    if (newQuantity < 1) return;
-    await updateCartItem(cartId, newQuantity);
+  const handleQuantityChange = async (cartId: number | string, newQuantity: number) => {
+    const item = currentItems.find(i => (user ? i.cart_id : `local_${currentItems.indexOf(i)}`) === cartId);
+    if (!item) return;
+
+    const minQty = item.minimum_order_quantity || 1;
+
+    if (newQuantity < minQty) {
+      toast.error(`Minimum order for this product is ${minQty} ${item.unit || 'unit'}(s)`);
+      return;
+    }
+
+    if (user && typeof cartId === 'number') {
+      await updateCartItem(cartId, newQuantity);
+    } else {
+      // Update local cart
+      const localCart = getLocalCart();
+      const itemIndex = typeof cartId === 'string' ? parseInt(cartId.split('_')[1]) : -1;
+      
+      if (itemIndex > -1 && localCart[itemIndex]) {
+        localCart[itemIndex].quantity = newQuantity;
+        localStorage.setItem('local_cart', JSON.stringify(localCart));
+        // Force re-render of local cart items
+        const total = localCart.reduce((sum: number, item: any) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
+        setLocalCartItems([...localCart]);
+        setLocalCartTotal(total);
+      }
+    }
   };
 
   const handleRemoveItem = async (cartId: number) => {
@@ -137,6 +161,11 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                             <p className="text-sm text-gray-500 dark:text-gray-400">
                               {item.unit ? `Per ${item.unit}` : ''}
                             </p>
+                            {item.minimum_order_quantity > 1 && (
+                              <p className="text-xs text-orange-600 font-medium mt-0.5">
+                                Min Order: {item.minimum_order_quantity}
+                              </p>
+                            )}
                             <div className="flex items-center justify-between mt-2">
                               <span className="text-lg font-bold text-primary">
                                 KSH {item.price.toLocaleString()}

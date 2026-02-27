@@ -182,6 +182,33 @@ const AdminAdvertisementManager: React.FC = () => {
     }
   };
 
+  const handleDisableAd = async (adId: string) => {
+    setProcessing(adId);
+    try {
+      const token = localStorage.getItem('admin_session_token');
+      const response = await fetch(getApiUrl('/api/admin/advertisements/disable'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ advertisement_id: adId })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('Advertisement disabled');
+        fetchAdvertisements();
+      } else {
+        toast.error(data.error || 'Failed to disable advertisement');
+      }
+    } catch (error) {
+      toast.error('Failed to disable advertisement');
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const handleReject = async () => {
     if (!selectedAd || !rejectionReason.trim()) {
       toast.error('Please provide a rejection reason');
@@ -640,21 +667,33 @@ const AdminAdvertisementManager: React.FC = () => {
                   </div>
 
                   {ad.status === 'active' && (
-                    <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-green-50 rounded">
-                      <div>
-                        <p className="text-xs text-gray-600">Views</p>
-                        <p className="font-semibold">{ad.views_count || 0}</p>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4 p-3 bg-green-50 rounded">
+                        <div>
+                          <p className="text-xs text-gray-600">Views</p>
+                          <p className="font-semibold">{ad.views_count || 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Clicks</p>
+                          <p className="font-semibold">{ad.clicks_count || 0}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600">Revenue</p>
+                            <p className="font-semibold text-green-600">
+                              KSh {(Number((ad as any).revenue_generated) || 0).toLocaleString()}
+                            </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-600">Clicks</p>
-                        <p className="font-semibold">{ad.clicks_count || 0}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-600">Revenue</p>
-                          <p className="font-semibold text-green-600">
-                            KSh {(Number((ad as any).revenue_generated) || 0).toLocaleString()}
-                          </p>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDisableAd(ad.id)}
+                        disabled={processing === ad.id}
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        {processing === ad.id ? 'Disabling...' : 'Disable Advertisement'}
+                      </Button>
                     </div>
                   )}
 

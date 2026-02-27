@@ -73,6 +73,12 @@ try {
     }
     
     echo "\n✓ Default settings inserted successfully\n\n";
+
+    // Migration 4: Create warehouses and pickup_locations tables
+    echo "Migration 4: Creating warehouses and pickup_locations tables...\n";
+    require_once __DIR__ . '/add_warehouse_pickup_locations_tables.php';
+    migrate_add_warehouse_pickup_locations_tables($pdo);
+    echo "\n✓ Warehouses and pickup locations migration complete\n\n";
     
     echo "=== ALL MIGRATIONS COMPLETED SUCCESSFULLY ===\n";
     

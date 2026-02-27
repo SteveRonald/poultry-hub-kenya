@@ -193,9 +193,24 @@ const Contact = () => {
                             </div>
                             <div>
                               <h3 className="font-semibold text-primary mb-2">{info.title}</h3>
-                              {info.details.map((detail, idx) => (
-                                <p key={idx} className="text-gray-600 text-sm">{detail}</p>
-                              ))}
+                              {info.details.map((detail, idx) => {
+                                const isEmail = detail.includes('@');
+                                const isPhone = detail.startsWith('+');
+                                if (isEmail) {
+                                  return (
+                                    <p key={idx} className="text-gray-600 text-sm">
+                                      <a href={`mailto:${detail}`} className="hover:text-accent transition-colors">{detail}</a>
+                                    </p>
+                                  );
+                                } else if (isPhone) {
+                                  return (
+                                    <p key={idx} className="text-gray-600 text-sm">
+                                      <a href={`tel:${detail.replace(/\s/g, '')}`} className="hover:text-accent transition-colors">{detail}</a>
+                                    </p>
+                                  );
+                                }
+                                return <p key={idx} className="text-gray-600 text-sm">{detail}</p>;
+                              })}
                               <p className="text-gray-500 text-xs mt-1">{info.description}</p>
                             </div>
                           </div>

@@ -261,9 +261,9 @@ const ChatbaseWidget: React.FC = () => {
             <Sparkles className="h-3 w-3 absolute -top-0.5 -right-0.5 text-yellow-400 animate-pulse" />
           </div>
           <div className="flex-1">
-            <h4 className="font-semibold text-sm text-gray-900 mb-1">Hi there! 👋</h4>
+            <h4 className="font-semibold text-sm text-gray-900 mb-1">AI Assistant</h4>
             <p className="text-xs text-gray-600 leading-relaxed mb-2">
-              Questions about KukuSoko? I'm your AI assistant trained on our platform. Ask me anything!
+              How can I help you today?
             </p>
             <button
               onClick={handleOpenChat}

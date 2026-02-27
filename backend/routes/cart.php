@@ -29,6 +29,7 @@ function handleGetCart() {
                 p.name as product_name,
                 p.price,
                 p.stock_quantity,
+                p.minimum_order_quantity,
                 p.unit,
                 p.image_urls,
                 p.category,

@@ -44,6 +44,10 @@
     --sidebar-accent-foreground: 0 0% 20%;
     --sidebar-border: 43 31% 87%;
     --sidebar-ring: 120 61% 34%;
+
+    /* Safaricom Brand Colors */
+    --safaricom-green: 125 71% 41%; /* #1eb32a */
+    --safaricom-red: 0 84% 44%; /* #cc0000 or similar */
   }
 
   .dark {

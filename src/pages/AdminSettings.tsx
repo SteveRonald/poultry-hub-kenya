@@ -51,10 +51,17 @@ const AdminSettings = () => {
       const data = await response.json();
       
       if (data.success) {
-        setSettings(data.settings);
+        const allowedSettings = [
+          'delivery_fee',
+          'free_delivery_threshold',
+          'min_withdrawal_amount',
+          'platform_commission_rate'
+        ];
+        const filteredSettings = data.settings.filter((s: any) => allowedSettings.includes(s.setting_key));
+        setSettings(filteredSettings);
         // Initialize form data
         const initialData: { [key: string]: string } = {};
-        data.settings.forEach((setting: any) => {
+        filteredSettings.forEach((setting: any) => {
           initialData[setting.setting_key] = setting.setting_value;
         });
         setFormData(initialData);

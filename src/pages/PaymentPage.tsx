@@ -60,9 +60,7 @@ const PaymentPage: React.FC = () => {
     try {
       const data = JSON.parse(pendingCheckout);
       setPaymentData(data);
-      
-      // Initialize payment when component mounts
-      initializePayment(data);
+      // No longer auto-initializing payment here
     } catch (error) {
       console.error('Error parsing payment data:', error);
       navigate('/checkout');
@@ -192,12 +190,36 @@ const PaymentPage: React.FC = () => {
         },
         onClose: function() {
           console.log('Payment popup closed');
-          toast.info('Payment window was closed. You can try again.');
+          toast.warning('Payment was cancelled or the window was closed. Your order has not been completed.');
+          
+          // Log the cancellation
+          fetch(getApiUrl('/api/system/log'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'payment_window_closed',
+              details: { 
+                reference: paymentResult.reference,
+                reason: 'user_closed_or_cancelled'
+              }
+            })
+          }).catch(() => {});
+
           setPaymentStatus('pending');
           setLoading(false);
         }
       });
       
+      // Log that the popup is being opened
+      fetch(getApiUrl('/api/system/log'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'payment_window_opened',
+          details: { reference: paymentResult.reference }
+        })
+      }).catch(() => {});
+
       handler.openIframe();
     };
     
@@ -371,104 +393,9 @@ const PaymentPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
-          {/* Order Summary */}
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <ShoppingCart className="h-5 w-5 mr-2" />
-                  Order Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {paymentData.items.map((item: any, index: number) => (
-                    <div key={index} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                      <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
-                        {item.image_url ? (
-                          <img
-                            src={getImageUrl(item.image_url.replace(/\\/g, '/'))}
-                            alt={item.product_name}
-                            className="w-full h-full object-cover rounded-lg"
-                          />
-                        ) : (
-                          <div className="text-gray-400 text-xs">No Image</div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900">{item.product_name}</h4>
-                        <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                        <p className="text-sm font-medium text-primary">
-                          KSH {item.price.toLocaleString()} each
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">
-                          KSH {(item.price * item.quantity).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="border-t pt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Subtotal</span>
-                      <span>KSH {subtotal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Delivery</span>
-                      {isFreeDelivery ? (
-                        <span className="text-green-600">FREE</span>
-                      ) : (
-                        <span>KSH {deliveryFee.toLocaleString()}</span>
-                      )}
-                    </div>
-                    {!isFreeDelivery && freeDeliveryThreshold > 0 && (
-                      <p className="text-xs text-gray-500">
-                        Add KSH {(freeDeliveryThreshold - subtotal).toLocaleString()} more for free delivery
-                      </p>
-                    )}
-                    <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="text-lg font-bold text-gray-900">Total Amount:</span>
-                      <span className="text-2xl font-bold text-primary">
-                        KSH {totalAmount.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Delivery Information */}
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Truck className="h-5 w-5 mr-2" />
-                  Delivery Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Shipping Address</p>
-                    <p className="text-gray-600">{paymentData.shipping_address}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Contact Phone</p>
-                    <p className="text-gray-600">{paymentData.contact_phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Contact Email</p>
-                    <p className="text-gray-600">{user?.email || 'customer@poultryhubkenya.com'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Payment Section */}
-          <div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+          {/* Payment Section - Priority 1 on Mobile */}
+          <div className="order-1 lg:order-2 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -498,7 +425,7 @@ const PaymentPage: React.FC = () => {
                     <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Payment Failed</h3>
                     <p className="text-red-600 mb-4">{error}</p>
-                    <div className="space-x-3">
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
                       <Button onClick={handleRetryPayment} className="btn-primary">
                         Retry Payment
                       </Button>
@@ -512,63 +439,80 @@ const PaymentPage: React.FC = () => {
                 {paymentStatus === 'pending' && (
                   <div className="space-y-6">
                     {/* Security Badges */}
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div className="p-3 bg-green-50 rounded-lg">
-                        <Shield className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                        <p className="text-xs font-medium text-green-800">Secure Payment</p>
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
+                      <div className="p-2 sm:p-3 bg-green-50 rounded-lg">
+                        <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-green-600 mx-auto mb-1 sm:mb-2" />
+                        <p className="text-[10px] sm:text-xs font-medium text-green-800">Secure</p>
                       </div>
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <Lock className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                        <p className="text-xs font-medium text-blue-800">SSL Encrypted</p>
+                      <div className="p-2 sm:p-3 bg-blue-50 rounded-lg">
+                        <Lock className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 mx-auto mb-1 sm:mb-2" />
+                        <p className="text-[10px] sm:text-xs font-medium text-blue-800">Encrypted</p>
                       </div>
-                      <div className="p-3 bg-purple-50 rounded-lg">
-                        <CheckCircle className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                        <p className="text-xs font-medium text-purple-800">Paystack Protected</p>
+                      <div className="p-2 sm:p-3 bg-purple-50 rounded-lg">
+                        <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600 mx-auto mb-1 sm:mb-2" />
+                        <p className="text-[10px] sm:text-xs font-medium text-purple-800">Protected</p>
                       </div>
                     </div>
 
                     {/* Payment Methods */}
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3">Accepted Payment Methods</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 border rounded-lg text-center">
-                          <CreditCard className="h-6 w-6 mx-auto mb-2 text-gray-600" />
-                          <p className="text-sm font-medium">Card Payment</p>
+                      <h4 className="font-semibold text-gray-900 mb-3">Accepted Methods</h4>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="p-2 border rounded-lg text-center flex flex-col items-center justify-center bg-white shadow-sm">
+                          <div className="font-bold text-[#1A1F71] text-xs italic italic mb-1">VISA</div>
+                          <div className="flex gap-0.5 items-center mb-1">
+                            <div className="w-2.5 h-2.5 bg-[#EB001B] rounded-full"></div>
+                            <div className="w-2.5 h-2.5 bg-[#FF5F00] rounded-full -ml-1.5"></div>
+                          </div>
+                          <p className="text-[10px] font-medium text-gray-600">Card</p>
                         </div>
-                        <div className="p-3 border rounded-lg text-center">
-                          <div className="h-6 w-6 mx-auto mb-2 text-green-600 font-bold text-sm">M-PESA</div>
-                          <p className="text-sm font-medium">Mobile Money</p>
+                        <div className="p-2 border rounded-lg text-center flex flex-col items-center justify-center bg-white shadow-sm">
+                          <div className="text-[#1eb32a] font-black text-xs mb-1">M-PESA</div>
+                          <p className="text-[10px] font-medium text-gray-600">Safaricom</p>
+                        </div>
+                        <div className="p-2 border rounded-lg text-center flex flex-col items-center justify-center bg-white shadow-sm">
+                          <div className="flex items-center mb-1">
+                            <div className="bg-[#E11900] text-white px-1 py-0.5 rounded font-bold text-[8px] tracking-tighter">airtel</div>
+                          </div>
+                          <p className="text-[10px] font-medium text-gray-600">Airtel</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="space-y-3">
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3 shadow-sm">
+                        <Shield className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-blue-800 leading-snug">
+                          Clicking <span className="font-bold">"Pay KSH {totalAmount.toLocaleString()}"</span> will open a secure Paystack window to complete your <span className="font-bold text-primary">KSH {totalAmount.toLocaleString()}</span> payment.
+                        </p>
+                      </div>
+
                       <Button 
                         onClick={() => initializePayment(paymentData)}
-                        className="w-full btn-primary"
+                        className="w-full btn-primary h-14 text-xl font-bold shadow-lg shadow-primary/20"
                         disabled={loading}
                       >
                         {loading ? (
                           <span className="flex items-center">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Processing...
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                            Connecting to Secure Gateway...
                           </span>
                         ) : (
                           <span className="flex items-center">
-                            <CreditCard className="h-4 w-4 mr-2" />
-                            Proceed to Payment - KSH {totalAmount.toLocaleString()}
+                            <Lock className="h-5 w-5 mr-2" />
+                            Pay KSH {totalAmount.toLocaleString()}
                           </span>
                         )}
                       </Button>
                       
                       <Button 
-                        variant="outline" 
+                        variant="ghost" 
                         onClick={handleCancel}
-                        className="w-full"
+                        className="w-full h-10 text-gray-500 hover:text-red-600"
                         disabled={loading}
                       >
-                        Cancel Payment
+                        Cancel and return to checkout
                       </Button>
                     </div>
                   </div>
@@ -576,21 +520,109 @@ const PaymentPage: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Trust Indicators */}
-            <Card className="mt-6">
+            {/* Mobile Trust Indicators */}
+            <Card className="lg:hidden">
               <CardContent className="p-4">
-                <div className="flex items-center justify-center space-x-6 text-sm text-gray-600">
+                <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wider">
                   <div className="flex items-center">
-                    <Clock className="h-4 w-4 mr-1" />
+                    <Clock className="h-3 w-3 mr-1 text-primary" />
                     <span>24/7 Support</span>
                   </div>
                   <div className="flex items-center">
-                    <Shield className="h-4 w-4 mr-1" />
+                    <Shield className="h-3 w-3 mr-1 text-primary" />
                     <span>100% Secure</span>
                   </div>
                   <div className="flex items-center">
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    <span>Instant Confirmation</span>
+                    <CheckCircle className="h-3 w-3 mr-1 text-primary" />
+                    <span>Verified</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Order Summary & Delivery - Priority 2 on Mobile */}
+          <div className="order-2 lg:order-1 space-y-6">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center text-lg">
+                  <ShoppingCart className="h-5 w-5 mr-2 text-primary" />
+                  Order Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {paymentData.items.map((item: any, index: number) => (
+                    <div key={index} className="flex items-center space-x-3 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {item.image_url ? (
+                          <img
+                            src={getImageUrl(item.image_url.replace(/\\/g, '/'))}
+                            alt={item.product_name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="text-gray-400 text-[10px]">No Image</div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 text-sm truncate">{item.product_name}</h4>
+                        <p className="text-xs text-gray-500">Qty: {item.quantity} × KSH {item.price.toLocaleString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-900 text-sm">
+                          KSH {(item.price * item.quantity).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="border-t border-dashed pt-3 space-y-2">
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Subtotal</span>
+                      <span className="font-medium">KSH {subtotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Delivery</span>
+                      {isFreeDelivery ? (
+                        <span className="text-green-600 font-bold">FREE</span>
+                      ) : (
+                        <span className="font-medium">KSH {deliveryFee.toLocaleString()}</span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                      <span className="text-base font-bold text-gray-900">Total:</span>
+                      <span className="text-xl font-bold text-primary">
+                        KSH {totalAmount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center text-lg">
+                  <Truck className="h-5 w-5 mr-2 text-primary" />
+                  Delivery Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="bg-primary/5 p-3 rounded-md border border-primary/10">
+                    <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">Pickup Location</p>
+                    <p className="text-sm text-gray-700 font-medium leading-snug">{paymentData.shipping_address}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Contact Phone</p>
+                      <p className="text-sm text-gray-700">{paymentData.contact_phone}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Email</p>
+                      <p className="text-sm text-gray-700 truncate">{user?.email || 'N/A'}</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>

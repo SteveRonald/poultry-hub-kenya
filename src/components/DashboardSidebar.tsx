@@ -19,7 +19,8 @@ import {
   Database,
   Shield,
   FileText,
-  Settings
+  Settings,
+  MapPin
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -257,7 +258,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       items: [
         { id: 'orders', label: 'All Orders', icon: ShoppingCart },
         { id: 'users', label: 'User Management', icon: Users },
-        { id: 'advertisements', label: 'Advertisements', icon: Megaphone }
+        { id: 'advertisements', label: 'Advertisements', icon: Megaphone },
+        { id: 'locations', label: 'Locations', icon: MapPin }
       ]
     },
     {

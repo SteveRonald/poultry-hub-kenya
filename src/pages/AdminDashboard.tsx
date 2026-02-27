@@ -51,7 +51,6 @@ const AdminDashboard = () => {
   const [systemLogsLoading, setSystemLogsLoading] = useState(false);
   const [systemSettings, setSystemSettings] = useState<any[]>([]);
   const [systemSettingsLoading, setSystemSettingsLoading] = useState(false);
-  const [adminRecommendation, setAdminRecommendation] = useState<any>(null);
   const [settingsFormData, setSettingsFormData] = useState<{ [key: string]: string }>({});
   const [savingSettings, setSavingSettings] = useState(false);
   const [systemLogsFilter, setSystemLogsFilter] = useState({
@@ -78,6 +77,7 @@ const AdminDashboard = () => {
   // Vendor details modal state
   const [selectedVendor, setSelectedVendor] = useState<any | null>(null);
   const [showVendorModal, setShowVendorModal] = useState(false);
+  const [showAllOrders, setShowAllOrders] = useState(false);
   
   // Profile update states
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -101,6 +101,19 @@ const AdminDashboard = () => {
   
   // Account status toggle states
   const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
+  
+  // Locations Management states
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [pickupLocations, setPickupLocations] = useState<any[]>([]);
+  const [counties, setCounties] = useState<any[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [showWarehouseModal, setShowWarehouseModal] = useState(false);
+  const [showPickupModal, setShowPickupModal] = useState(false);
+  const [editingWarehouse, setEditingWarehouse] = useState<any>(null);
+  const [editingPickup, setEditingPickup] = useState<any>(null);
+  const [warehouseForm, setWarehouseForm] = useState({ name: '', address: '', county_id: '' });
+  const [pickupForm, setPickupForm] = useState({ name: '', address: '', warehouse_id: '', county_id: '' });
+  
   const mainContentRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to section when tab changes
@@ -180,16 +193,14 @@ const AdminDashboard = () => {
       fetch(getApiUrl('/api/admin/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
-      fetch(getApiUrl('/api/admin/recommendations'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
-    ]).then(([stats, vendors, products, orders, contactMessages, commissionData, recommendations]) => {
+      fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null)
+    ]).then(([stats, vendors, products, orders, contactMessages, commissionData]) => {
       setStats(stats);
       setVendors(Array.isArray(vendors) ? vendors : []);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
       setContactMessages(Array.isArray(contactMessages) ? contactMessages : []);
       setCommissionData(commissionData);
-      setAdminRecommendation(recommendations?.recommendation || null);
       setLoading(false);
     }).catch((error) => {
       toast.error('Failed to load dashboard data');
@@ -244,16 +255,14 @@ const AdminDashboard = () => {
         fetch(getApiUrl('/api/admin/products'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
         fetch(getApiUrl('/api/admin/orders') + '?t=' + Date.now(), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
         fetch(getApiUrl('/api/contact'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
-        fetch(getApiUrl('/api/admin/recommendations'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null),
-      ]).then(([stats, vendors, products, orders, contactMessages, commissionData, recommendations]) => {
+        fetch(getApiUrl('/api/admin/commission-data'), { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => null)
+      ]).then(([stats, vendors, products, orders, contactMessages, commissionData]) => {
         setStats(stats);
         setVendors(Array.isArray(vendors) ? vendors : []);
         setProducts(Array.isArray(products) ? products : []);
         setOrders(Array.isArray(orders) ? orders : []);
         setContactMessages(Array.isArray(contactMessages) ? contactMessages : []);
         setCommissionData(commissionData);
-        setAdminRecommendation(recommendations?.recommendation || null);
       }).catch(() => {
         // ignore periodic errors; next cycle will try again
       });
@@ -1125,6 +1134,10 @@ const AdminDashboard = () => {
     if (activeTab === 'system-settings') {
       fetchSystemSettings();
     }
+
+    if (activeTab === 'locations') {
+      fetchLocations();
+    }
   }, [activeTab, navigate]);
   
   // Refetch logs when filters or page change
@@ -1290,9 +1303,16 @@ const AdminDashboard = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          setSystemSettings(data.settings || []);
+          const allowedSettings = [
+            'delivery_fee',
+            'free_delivery_threshold',
+            'min_withdrawal_amount',
+            'platform_commission_rate'
+          ];
+          const filteredSettings = (data.settings || []).filter((s: any) => allowedSettings.includes(s.setting_key));
+          setSystemSettings(filteredSettings);
           const initialData: { [key: string]: string } = {};
-          (data.settings || []).forEach((setting: any) => {
+          filteredSettings.forEach((setting: any) => {
             initialData[setting.setting_key] = setting.setting_value;
           });
           setSettingsFormData(initialData);
@@ -1342,6 +1362,178 @@ const AdminDashboard = () => {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  // Location Management Functions
+  const fetchLocations = async () => {
+    setLocationsLoading(true);
+    const token = localStorage.getItem('admin_session_token');
+    if (import.meta.env.DEV) {
+      console.log('Fetching locations with token:', token ? 'exists' : 'missing');
+    }
+    
+    try {
+      // Fetch counties (public endpoint)
+      try {
+        const countiesRes = await fetch(getApiUrl('/api/location/counties'));
+        const countiesData = await countiesRes.json();
+        if (import.meta.env.DEV) console.log('Counties data:', countiesData);
+        if (countiesData.success) {
+          setCounties(countiesData.data);
+        } else {
+          console.error('Failed to fetch counties:', countiesData.error);
+        }
+      } catch (e) {
+        console.error('Error fetching counties:', e);
+      }
+
+      // Fetch warehouses (admin endpoint)
+      try {
+        const warehousesRes = await fetch(getApiUrl('/api/admin/warehouses'), { 
+          headers: { Authorization: `Bearer ${token}` } 
+        });
+        const warehousesData = await warehousesRes.json();
+        if (import.meta.env.DEV) console.log('Warehouses data:', warehousesData);
+        if (warehousesData.success) {
+          setWarehouses(warehousesData.data);
+        } else {
+          console.error('Failed to fetch warehouses:', warehousesData.error);
+        }
+      } catch (e) {
+        console.error('Error fetching warehouses:', e);
+      }
+
+      // Fetch pickup locations (admin endpoint)
+      try {
+        const pickupRes = await fetch(getApiUrl('/api/admin/pickup-locations'), { 
+          headers: { Authorization: `Bearer ${token}` } 
+        });
+        const pickupData = await pickupRes.json();
+        if (import.meta.env.DEV) console.log('Pickup locations data:', pickupData);
+        if (pickupData.success) {
+          setPickupLocations(pickupData.data);
+        } else {
+          console.error('Failed to fetch pickup locations:', pickupData.error);
+        }
+      } catch (e) {
+        console.error('Error fetching pickup locations:', e);
+      }
+    } catch (error) {
+      console.error('General error in fetchLocations:', error);
+      toast.error('Failed to load some location data');
+    } finally {
+      setLocationsLoading(false);
+    }
+  };
+
+  const handleSaveWarehouse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem('admin_session_token');
+    const method = editingWarehouse ? 'PUT' : 'POST';
+    const url = editingWarehouse 
+      ? getApiUrl(`/api/admin/warehouses/${editingWarehouse.id}`)
+      : getApiUrl('/api/admin/warehouses');
+      
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(warehouseForm)
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(editingWarehouse ? 'Warehouse updated' : 'Warehouse created');
+        setShowWarehouseModal(false);
+        fetchLocations();
+      } else {
+        toast.error(data.error || 'Failed to save warehouse');
+      }
+    } catch (error) {
+      toast.error('Error saving warehouse');
+    }
+  };
+
+  const handleDeleteWarehouse = (id: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Delete Warehouse',
+      message: 'Are you sure? This will also delete all associated pickup locations.',
+      type: 'danger',
+      onConfirm: async () => {
+        const token = localStorage.getItem('admin_session_token');
+        try {
+          const response = await fetch(getApiUrl(`/api/admin/warehouses/${id}`), {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await response.json();
+          if (data.success) {
+            toast.success('Warehouse deleted');
+            fetchLocations();
+          } else {
+            toast.error(data.error || 'Failed to delete warehouse');
+          }
+        } catch (error) {
+          toast.error('Error deleting warehouse');
+        }
+        setConfirmDialog({ ...confirmDialog, show: false });
+      }
+    });
+  };
+
+  const handleSavePickup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem('admin_session_token');
+    const method = editingPickup ? 'PUT' : 'POST';
+    const url = editingPickup 
+      ? getApiUrl(`/api/admin/pickup-locations/${editingPickup.id}`)
+      : getApiUrl('/api/admin/pickup-locations');
+      
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(pickupForm)
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(editingPickup ? 'Pickup location updated' : 'Pickup location created');
+        setShowPickupModal(false);
+        fetchLocations();
+      } else {
+        toast.error(data.error || 'Failed to save pickup location');
+      }
+    } catch (error) {
+      toast.error('Error saving pickup location');
+    }
+  };
+
+  const handleDeletePickup = (id: number) => {
+    setConfirmDialog({
+      show: true,
+      title: 'Delete Pickup Location',
+      message: 'Are you sure you want to delete this pickup location?',
+      type: 'danger',
+      onConfirm: async () => {
+        const token = localStorage.getItem('admin_session_token');
+        try {
+          const response = await fetch(getApiUrl(`/api/admin/pickup-locations/${id}`), {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await response.json();
+          if (data.success) {
+            toast.success('Pickup location deleted');
+            fetchLocations();
+          } else {
+            toast.error(data.error || 'Failed to delete pickup location');
+          }
+        } catch (error) {
+          toast.error('Error deleting pickup location');
+        }
+        setConfirmDialog({ ...confirmDialog, show: false });
+      }
+    });
   };
 
   const fetchSystemLogs = async () => {
@@ -1611,7 +1803,7 @@ const AdminDashboard = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {Array.isArray(orders) && orders.map(order => (
+                          {Array.isArray(orders) && (showAllOrders ? orders : orders.slice(0, 8)).map(order => (
                             <div key={order.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <div>
                                 <p className="font-medium text-sm">{order.customer}</p>
@@ -1626,6 +1818,13 @@ const AdminDashboard = () => {
                             </div>
                           ))}
                         </div>
+                        {Array.isArray(orders) && orders.length > 8 && (
+                          <div className="text-center mt-4">
+                            <Button variant="outline" size="sm" onClick={() => setShowAllOrders(!showAllOrders)}>
+                              {showAllOrders ? 'Show Less' : 'View More/All'}
+                            </Button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
 
@@ -1708,49 +1907,7 @@ const AdminDashboard = () => {
                     </Card>
                   </div>
 
-                  <Card className="mt-6">
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center">
-                        <Sparkles className="h-5 w-5 mr-2 text-primary" />
-                        Daily System Recommendations
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {!adminRecommendation && (
-                        <p className="text-sm text-gray-600">No recommendations generated yet.</p>
-                      )}
-                      {adminRecommendation && (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-                            <div className="p-2 rounded bg-gray-50">
-                              <div className="text-xs text-gray-500">Revenue (24h)</div>
-                              <div className="font-semibold">KSH {Number(adminRecommendation.metrics?.revenue_1d || 0).toLocaleString()}</div>
-                            </div>
-                            <div className="p-2 rounded bg-gray-50">
-                              <div className="text-xs text-gray-500">Orders (24h)</div>
-                              <div className="font-semibold">{adminRecommendation.metrics?.orders_1d || 0}</div>
-                            </div>
-                            <div className="p-2 rounded bg-gray-50">
-                              <div className="text-xs text-gray-500">Growth</div>
-                              <div className="font-semibold">
-                                {adminRecommendation.metrics?.growth_pct !== null && adminRecommendation.metrics?.growth_pct !== undefined
-                                  ? `${adminRecommendation.metrics?.growth_pct}%`
-                                  : 'N/A'}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            {(adminRecommendation.actions || []).slice(0, 4).map((action: any, idx: number) => (
-                              <div key={idx} className="p-2 rounded border border-gray-100">
-                                <div className="text-sm font-semibold">{action.title}</div>
-                                <div className="text-xs text-gray-600">{action.reason}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+
                 </div>
               )}
 
@@ -2769,6 +2926,128 @@ const AdminDashboard = () => {
                 </div>
               )}
 
+              {/* Locations Tab */}
+              {activeTab === 'locations' && (
+                <div id="tab-section-locations" className="space-y-6 scroll-mt-24">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold text-primary">Location Management</h2>
+                    <div className="flex gap-2">
+                      <Button onClick={() => {
+                        setEditingWarehouse(null);
+                        setWarehouseForm({ name: '', address: '', county_id: '' });
+                        setShowWarehouseModal(true);
+                      }}>
+                        Add Warehouse
+                      </Button>
+                      <Button onClick={() => {
+                        setEditingPickup(null);
+                        setPickupForm({ name: '', address: '', warehouse_id: '', county_id: '' });
+                        setShowPickupModal(true);
+                      }} variant="outline">
+                        Add Pickup Station
+                      </Button>
+                    </div>
+                  </div>
+
+                  {locationsLoading ? (
+                    <div className="flex justify-center py-12">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Warehouses Table */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Warehouses</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left py-2">Name</th>
+                                  <th className="text-left py-2">County</th>
+                                  <th className="text-right py-2">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {warehouses.map(w => (
+                                  <tr key={w.id} className="border-b">
+                                    <td className="py-2 font-medium">{w.name}</td>
+                                    <td className="py-2">{w.county_name}</td>
+                                    <td className="py-2 text-right">
+                                      <div className="flex justify-end gap-2">
+                                        <Button size="sm" variant="ghost" onClick={() => {
+                                          setEditingWarehouse(w);
+                                          setWarehouseForm({ name: w.name, address: w.address || '', county_id: w.county_id.toString() });
+                                          setShowWarehouseModal(true);
+                                        }}>
+                                          <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button size="sm" variant="ghost" className="text-red-500" onClick={() => handleDeleteWarehouse(w.id)}>
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Pickup Stations Table */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Pickup Stations</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left py-2">Name</th>
+                                  <th className="text-left py-2">County</th>
+                                  <th className="text-right py-2">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pickupLocations.map(p => (
+                                  <tr key={p.id} className="border-b">
+                                    <td className="py-2 font-medium">{p.name}</td>
+                                    <td className="py-2">{p.county_name}</td>
+                                    <td className="py-2 text-right">
+                                      <div className="flex justify-end gap-2">
+                                        <Button size="sm" variant="ghost" onClick={() => {
+                                          setEditingPickup(p);
+                                          setPickupForm({ 
+                                            name: p.name, 
+                                            address: p.address || '', 
+                                            warehouse_id: p.warehouse_id.toString(),
+                                            county_id: p.county_id.toString() 
+                                          });
+                                          setShowPickupModal(true);
+                                        }}>
+                                          <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button size="sm" variant="ghost" className="text-red-500" onClick={() => handleDeletePickup(p.id)}>
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* System Settings Tab */}
               {activeTab === 'system-settings' && (
                 <div id="tab-section-system-settings" className="space-y-6 scroll-mt-24">
@@ -3156,6 +3435,120 @@ const AdminDashboard = () => {
                   Confirm
                 </Button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Warehouse Modal */}
+        {showWarehouseModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">{editingWarehouse ? 'Edit Warehouse' : 'Add Warehouse'}</h3>
+                <button onClick={() => setShowWarehouseModal(false)}><X className="h-5 w-5" /></button>
+              </div>
+              <form onSubmit={handleSaveWarehouse} className="space-y-4">
+                <div>
+                  <Label>Name</Label>
+                  <Input 
+                    value={warehouseForm.name} 
+                    onChange={e => setWarehouseForm({ ...warehouseForm, name: e.target.value })} 
+                    required 
+                  />
+                </div>
+                <div>
+                  <Label>Address</Label>
+                  <Input 
+                    value={warehouseForm.address} 
+                    onChange={e => setWarehouseForm({ ...warehouseForm, address: e.target.value })} 
+                  />
+                </div>
+                <div>
+                  <Label>County</Label>
+                  <Select 
+                    value={warehouseForm.county_id} 
+                    onValueChange={value => setWarehouseForm({ ...warehouseForm, county_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select County" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {counties.map(c => (
+                        <SelectItem key={c.county_id} value={c.county_id.toString()}>{c.county_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setShowWarehouseModal(false)}>Cancel</Button>
+                  <Button type="submit">Save</Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Pickup Station Modal */}
+        {showPickupModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">{editingPickup ? 'Edit Pickup Station' : 'Add Pickup Station'}</h3>
+                <button onClick={() => setShowPickupModal(false)}><X className="h-5 w-5" /></button>
+              </div>
+              <form onSubmit={handleSavePickup} className="space-y-4">
+                <div>
+                  <Label>Name</Label>
+                  <Input 
+                    value={pickupForm.name} 
+                    onChange={e => setPickupForm({ ...pickupForm, name: e.target.value })} 
+                    required 
+                  />
+                </div>
+                <div>
+                  <Label>Address</Label>
+                  <Input 
+                    value={pickupForm.address} 
+                    onChange={e => setPickupForm({ ...pickupForm, address: e.target.value })} 
+                  />
+                </div>
+                <div>
+                  <Label>Warehouse (Drop-off Point)</Label>
+                  <Select 
+                    value={pickupForm.warehouse_id} 
+                    onValueChange={value => setPickupForm({ ...pickupForm, warehouse_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Warehouse" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map(w => (
+                        <SelectItem key={w.id} value={w.id.toString()}>{w.name} ({w.county_name})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>County</Label>
+                  <Select 
+                    value={pickupForm.county_id} 
+                    onValueChange={value => setPickupForm({ ...pickupForm, county_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select County" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {counties.map(c => (
+                        <SelectItem key={c.county_id} value={c.county_id.toString()}>{c.county_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setShowPickupModal(false)}>Cancel</Button>
+                  <Button type="submit">Save</Button>
+                </div>
+              </form>
             </div>
           </div>
         )}

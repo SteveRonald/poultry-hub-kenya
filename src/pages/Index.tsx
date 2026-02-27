@@ -49,8 +49,10 @@ const Index = () => {
   const [advertisements, setAdvertisements] = useState<any[]>([]);
   const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
   const [isPaused, setIsPaused] = useState(false);
-  const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentPremiumIndex, setCurrentPremiumIndex] = useState(0);
+  const [currentBasicIndex, setCurrentBasicIndex] = useState(0);
+  const premiumRotationRef = useRef<NodeJS.Timeout | null>(null);
+  const basicRotationRef = useRef<NodeJS.Timeout | null>(null);
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
   const featuredCarouselRef = useRef<HTMLDivElement>(null);
   const featuredAutoScrollRef = useRef<NodeJS.Timeout | null>(null);
@@ -77,15 +79,10 @@ const Index = () => {
     }, 5000);
 
     return () => {
-      if (adRotationIntervalRef.current) {
-        clearInterval(adRotationIntervalRef.current);
-      }
-      if (heroImageIntervalRef.current) {
-        clearInterval(heroImageIntervalRef.current);
-      }
-      if (featuredAutoScrollRef.current) {
-        clearInterval(featuredAutoScrollRef.current);
-      }
+      if (premiumRotationRef.current) clearTimeout(premiumRotationRef.current);
+      if (basicRotationRef.current) clearTimeout(basicRotationRef.current);
+      if (heroImageIntervalRef.current) clearInterval(heroImageIntervalRef.current);
+      if (featuredAutoScrollRef.current) clearInterval(featuredAutoScrollRef.current);
     };
   }, []);
 
@@ -218,83 +215,67 @@ const Index = () => {
 
   const fetchAdvertisements = async () => {
     try {
-      const response = await fetch(getApiUrl('/api/advertisements?limit=10&page_location=homepage'));
+      const response = await fetch(getApiUrl('/api/advertisements?limit=20&page_location=homepage'));
       const data = await response.json();
       if (Array.isArray(data)) {
         setAdvertisements(data);
-        // Show first premium ad or first ad if no premium
-        const premiumAds = data.filter((ad: any) => ad.tier === 'premium');
-        const firstAd = premiumAds.length > 0 ? premiumAds[0] : data[0];
-        if (firstAd) {
-          setVisibleAds(new Set([firstAd.id]));
-          setCurrentAdIndex(0);
-          
-          // Start rotation if there are multiple ads
-          if (data.length > 1) {
-            startAdRotation(data);
-          }
-        }
+        const premiumAds = data.filter(ad => ad.tier === 'premium');
+        const basicAds = data.filter(ad => ad.tier === 'basic');
+        
+        const initialVisible = new Set<string>();
+        if (premiumAds.length > 0) initialVisible.add(premiumAds[0].id);
+        if (basicAds.length > 0) initialVisible.add(basicAds[0].id);
+        
+        setVisibleAds(initialVisible);
+        
+        if (premiumAds.length > 1) startPremiumRotation(premiumAds);
+        if (basicAds.length > 1) startBasicRotation(basicAds);
       }
     } catch (error) {
       console.error('Failed to fetch advertisements:', error);
     }
   };
 
-  const startAdRotation = (ads: any[]) => {
-    // Clear any existing interval
-    if (adRotationIntervalRef.current) {
-      clearInterval(adRotationIntervalRef.current);
-    }
-
-    // Rotate ads based on their content_duration for fairness
-    // Each ad gets equal time based on its configured duration (default 30 seconds)
-    const rotateToNext = () => {
-      setCurrentAdIndex((prevIndex) => {
-        const currentAd = ads[prevIndex];
-        const duration = currentAd?.content_duration ? currentAd.content_duration * 1000 : 30000; // Convert to ms, default 30s
-        
-        // Schedule next rotation based on current ad's duration
-        if (adRotationIntervalRef.current) {
-          clearInterval(adRotationIntervalRef.current);
-        }
-        
-        adRotationIntervalRef.current = setTimeout(() => {
-          const nextIndex = (prevIndex + 1) % ads.length;
-          const nextAd = ads[nextIndex];
-          setVisibleAds(new Set([nextAd.id]));
-          setCurrentAdIndex(nextIndex);
-          rotateToNext(); // Continue rotation
-        }, duration);
-        
-        return prevIndex;
-      });
+  const startPremiumRotation = (ads: any[]) => {
+    const rotate = (index: number) => {
+      premiumRotationRef.current = setTimeout(() => {
+        const nextIndex = (index + 1) % ads.length;
+        const nextAd = ads[nextIndex];
+        setCurrentPremiumIndex(nextIndex);
+        setVisibleAds(prev => {
+          const next = new Set(prev);
+          ads.forEach(a => next.delete(a.id));
+          next.add(nextAd.id);
+          return next;
+        });
+        rotate(nextIndex);
+      }, (ads[index].content_duration || 30) * 1000);
     };
+    rotate(0);
+  };
 
-    // Start rotation with first ad's duration
-    const firstAd = ads[0];
-    const firstDuration = firstAd?.content_duration ? firstAd.content_duration * 1000 : 30000;
-    adRotationIntervalRef.current = setTimeout(() => {
-      const nextIndex = 1 % ads.length;
-      const nextAd = ads[nextIndex];
-      setVisibleAds(new Set([nextAd.id]));
-      setCurrentAdIndex(nextIndex);
-      rotateToNext();
-    }, firstDuration);
+  const startBasicRotation = (ads: any[]) => {
+    const rotate = (index: number) => {
+      basicRotationRef.current = setTimeout(() => {
+        const nextIndex = (index + 1) % ads.length;
+        const nextAd = ads[nextIndex];
+        setCurrentBasicIndex(nextIndex);
+        setVisibleAds(prev => {
+          const next = new Set(prev);
+          ads.forEach(a => next.delete(a.id));
+          next.add(nextAd.id);
+          return next;
+        });
+        rotate(nextIndex);
+      }, (ads[index].content_duration || 30) * 1000);
+    };
+    rotate(0);
   };
 
   const handleAdClose = (adId: string) => {
     setVisibleAds(prev => {
       const newSet = new Set(prev);
       newSet.delete(adId);
-      
-      // If no ads visible, show next ad
-      if (newSet.size === 0 && advertisements.length > 0) {
-        const nextIndex = (currentAdIndex + 1) % advertisements.length;
-        const nextAd = advertisements[nextIndex];
-        newSet.add(nextAd.id);
-        setCurrentAdIndex(nextIndex);
-      }
-      
       return newSet;
     });
   };

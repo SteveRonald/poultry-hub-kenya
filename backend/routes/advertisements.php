@@ -1715,5 +1715,89 @@ function handleReactivateAdvertisement() {
     }
 }
 
+/**
+ * Handle admin disabling an active advertisement
+ */
+function handleDisableAdvertisement() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!isset($input['advertisement_id'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'advertisement_id is required']);
+        return;
+    }
+    
+    try {
+        $adId = $input['advertisement_id'];
+        
+        // Check if ad exists and is active
+        $stmt = $pdo->prepare("SELECT id, status, ad_title, vendor_id FROM advertisements WHERE id = ?");
+        $stmt->execute([$adId]);
+        $ad = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$ad) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Advertisement not found']);
+            return;
+        }
+        
+        if ($ad['status'] !== 'active') {
+            http_response_code(400);
+            echo json_encode(['error' => 'Only active advertisements can be disabled']);
+            return;
+        }
+        
+        // Update status to expired (effectively disabling it)
+        $stmt = $pdo->prepare("
+            UPDATE advertisements 
+            SET status = 'expired',
+                end_date = NOW(),
+                ad_description = CONCAT(ad_description, '\n\nNote: Disabled by admin on ', NOW())
+            WHERE id = ?
+        ");
+        $stmt->execute([$adId]);
+        
+        // Notify vendor
+        require_once __DIR__ . '/../utils/notifications.php';
+        $vendorMessage = "Your advertisement '{$ad['ad_title']}' has been disabled by an administrator.";
+        notifyVendor($ad['vendor_id'], $vendorMessage, 'advertisement');
+        
+        // Get admin user_id for logging
+        $adminUserId = null;
+        $adminPayload = validateAuthToken($token);
+        if ($adminPayload) {
+            $adminUserId = $adminPayload['user_id'];
+        }
+        
+        // Log admin action
+        logActivity(
+            $adminUserId,
+            'admin',
+            'disable_advertisement',
+            "Disabled advertisement: {$ad['ad_title']}",
+            ['advertisement_id' => $adId, 'vendor_id' => $ad['vendor_id']]
+        );
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Advertisement disabled successfully'
+        ]);
+        
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to disable advertisement: ' . $e->getMessage()]);
+    }
+}
+
+
 ?>
 

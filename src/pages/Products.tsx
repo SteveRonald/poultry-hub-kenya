@@ -365,59 +365,63 @@ const Products = () => {
   }, [highlightedProductId, products, searchParams, navigate]);
 
   const handleAddToCart = async (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    const minQty = product.minimum_order_quantity || 1;
+    
     // Allow adding to cart without login - save to local storage
     if (!user) {
       // Save to local storage cart
       const localCart = JSON.parse(localStorage.getItem('local_cart') || '[]');
-      const product = products.find(p => p.id === productId);
       
-      if (product) {
-        const existingItem = localCart.find((item: any) => item.product_id === productId);
-        
-        // Get first image from image_urls array or use image_url
-        let imageUrl: string | null = null;
-        const imgsAny: any = (product as any).image_urls ?? product.image_urls;
-        if (imgsAny && Array.isArray(imgsAny) && imgsAny.length > 0) {
-          imageUrl = imgsAny[0];
-        } else if (typeof imgsAny === 'string') {
-          try {
-            const parsed = JSON.parse(imgsAny);
-            imageUrl = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
-          } catch (e) {
-            imageUrl = imgsAny;
-          }
-        } else if (product.image_url) {
-          imageUrl = product.image_url as string;
+      const existingItem = localCart.find((item: any) => item.product_id === productId);
+      
+      // Get first image from image_urls array or use image_url
+      let imageUrl: string | null = null;
+      const imgsAny: any = (product as any).image_urls ?? product.image_urls;
+      if (imgsAny && Array.isArray(imgsAny) && imgsAny.length > 0) {
+        imageUrl = imgsAny[0];
+      } else if (typeof imgsAny === 'string') {
+        try {
+          const parsed = JSON.parse(imgsAny);
+          imageUrl = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+        } catch (e) {
+          imageUrl = imgsAny;
         }
-        
-        if (existingItem) {
-          existingItem.quantity += 1;
-        } else {
-          localCart.push({
-            product_id: productId,
-            product_name: product.name,
-            price: product.price,
-            quantity: 1,
-            unit: product.unit,
-            image_url: imageUrl,
-            category: product.category || ''
-          });
-        }
-        
-        localStorage.setItem('local_cart', JSON.stringify(localCart));
-        toast.success(`${product.name} added to cart`);
+      } else if (product.image_url) {
+        imageUrl = product.image_url as string;
       }
+      
+      if (existingItem) {
+        existingItem.quantity += minQty;
+      } else {
+        localCart.push({
+          product_id: productId,
+          product_name: product.name,
+          price: product.price,
+          quantity: minQty,
+          unit: product.unit,
+          image_url: imageUrl,
+          category: product.category || ''
+        });
+      }
+      
+      localStorage.setItem('local_cart', JSON.stringify(localCart));
+      toast.success(`${product.name} added to cart`);
       return;
     }
     
     // User is logged in - add to database cart
-    await addToCart(productId, 1); // Context handles toasts
+    await addToCart(productId, minQty); // Context handles toasts
   };
 
   // Get unique locations from products
   const locations: string[] = ['all', ...Array.from(new Set(products.map(p => p.vendor_profiles.location)))];
 
   const handleOrderNow = async (product: any) => {
+    const minQty = product.minimum_order_quantity || 1;
+    
     // Always add to cart first (whether logged in or not)
     if (!user) {
       // Add to local cart if not logged in
@@ -425,13 +429,13 @@ const Products = () => {
       const existingItem = localCart.find((item: any) => item.product_id === product.id);
       
       if (existingItem) {
-        existingItem.quantity += 1;
+        existingItem.quantity += minQty;
       } else {
         localCart.push({
           product_id: product.id,
           product_name: product.name,
           price: product.price,
-          quantity: 1,
+          quantity: minQty,
           unit: product.unit,
           image_url: product.image_url,
           category: product.category
@@ -442,7 +446,7 @@ const Products = () => {
       toast.success(`${product.name} added to cart`);
     } else {
       // Add to database cart if logged in
-      await addToCart(product.id, 1);
+      await addToCart(product.id, minQty);
     }
     
     // Navigate to checkout page with all cart items

@@ -854,6 +854,25 @@ switch ($path) {
         include 'routes/settings.php';
         break;
         
+    // Location Management routes
+    case 'api/admin/warehouses':
+        include 'routes/locations_admin.php';
+        if ($method === 'GET') {
+            handleGetAdminWarehouses();
+        } elseif ($method === 'POST') {
+            handleCreateWarehouse();
+        }
+        break;
+        
+    case 'api/admin/pickup-locations':
+        include 'routes/locations_admin.php';
+        if ($method === 'GET') {
+            handleGetAdminPickupLocations();
+        } elseif ($method === 'POST') {
+            handleCreatePickupLocation();
+        }
+        break;
+        
     // Advertisement routes
     case 'api/advertisements':
         if ($method === 'GET') {
@@ -915,6 +934,13 @@ switch ($path) {
         if ($method === 'POST') {
             include 'routes/advertisements.php';
             handleRejectAdvertisement();
+        }
+        break;
+        
+    case 'api/admin/advertisements/disable':
+        if ($method === 'POST') {
+            include 'routes/advertisements.php';
+            handleDisableAdvertisement();
         }
         break;
         
@@ -993,6 +1019,28 @@ switch ($path) {
         } elseif (strpos($path, 'api/vendor/products/') === 0 && $method === 'DELETE') {
             include 'routes/vendors.php';
             handleDeleteProduct();
+        } elseif (strpos($path, 'api/admin/warehouses/') === 0 && $method === 'PUT') {
+            include 'routes/locations_admin.php';
+            $id = basename($path);
+            handleUpdateWarehouse($id);
+        } elseif (strpos($path, 'api/admin/warehouses/') === 0 && $method === 'DELETE') {
+            include 'routes/locations_admin.php';
+            $id = basename($path);
+            handleDeleteWarehouse($id);
+        } elseif (strpos($path, 'api/admin/pickup-locations/') === 0 && $method === 'PUT') {
+            include 'routes/locations_admin.php';
+            $id = basename($path);
+            handleUpdatePickupLocation($id);
+        } elseif (strpos($path, 'api/admin/pickup-locations/') === 0 && $method === 'DELETE') {
+            include 'routes/locations_admin.php';
+            $id = basename($path);
+            handleDeletePickupLocation($id);
+        } elseif (preg_match('#^api/public/warehouses/county/([^/]+)$#', $path, $matches)) {
+            include 'routes/locations_admin.php';
+            handleGetPublicWarehousesByCounty($matches[1]);
+        } elseif (preg_match('#^api/public/pickup-locations/county/([^/]+)$#', $path, $matches)) {
+            include 'routes/locations_admin.php';
+            handleGetPublicPickupLocationsByCounty($matches[1]);
         } elseif (strpos($path, 'api/admin/users/') === 0 && $method === 'PUT') {
             include 'routes/admin.php';
             handleUpdateUser();

@@ -210,6 +210,9 @@ const ProductDetails = () => {
   const handleAddToCart = () => {
     if (!product) return;
     
+    const minQty = product.minimum_order_quantity || 1;
+    const finalQuantity = Math.max(quantity, minQty);
+
     // Allow adding to cart without login - save to local storage
     if (!user) {
       const localCart = JSON.parse(localStorage.getItem('local_cart') || '[]');
@@ -219,32 +222,36 @@ const ProductDetails = () => {
       const imageUrl = images && images.length > 0 ? images[0] : '';
       
       if (existingItem) {
-        existingItem.quantity += quantity;
+        existingItem.quantity += finalQuantity;
       } else {
         localCart.push({
           product_id: product.id,
           product_name: product.name,
           price: product.price,
-          quantity: quantity,
+          quantity: finalQuantity,
           unit: product.unit,
           image_url: imageUrl,
+          minimum_order_quantity: minQty,
           category: product.category || ''
         });
       }
       
       localStorage.setItem('local_cart', JSON.stringify(localCart));
-      toast.success(`Added ${quantity} ${product.unit}(s) to cart`);
+      toast.success(`Added ${finalQuantity} ${product.unit}(s) to cart`);
       return;
     }
     
     // User is logged in - add to database cart
-    addToCart(product.id, quantity);
-    toast.success(`Added ${quantity} ${product.unit}(s) to cart`);
+    addToCart(product.id, finalQuantity);
+    toast.success(`Added ${finalQuantity} ${product.unit}(s) to cart`);
   };
 
   const handleOrderNow = async () => {
     if (!product) return;
     
+    const minQty = product.minimum_order_quantity || 1;
+    const finalQuantity = Math.max(quantity, minQty);
+
     // Always add to cart first (whether logged in or not)
     if (!user) {
       // Add to local cart if not logged in
@@ -255,24 +262,25 @@ const ProductDetails = () => {
       const imageUrl = images && images.length > 0 ? images[0] : '';
       
       if (existingItem) {
-        existingItem.quantity += quantity;
+        existingItem.quantity += finalQuantity;
       } else {
         localCart.push({
           product_id: product.id,
           product_name: product.name,
           price: product.price,
-          quantity: quantity,
+          quantity: finalQuantity,
           unit: product.unit,
           image_url: imageUrl,
+          minimum_order_quantity: minQty,
           category: product.category || ''
         });
       }
       
       localStorage.setItem('local_cart', JSON.stringify(localCart));
-      toast.success(`Added ${quantity} ${product.unit}(s) to cart`);
+      toast.success(`Added ${finalQuantity} ${product.unit}(s) to cart`);
     } else {
       // Add to database cart if logged in
-      await addToCart(product.id, quantity);
+      await addToCart(product.id, finalQuantity);
     }
     
     // Navigate to checkout page with all cart items

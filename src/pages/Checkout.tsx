@@ -224,7 +224,7 @@ const Checkout = () => {
       setTimeout(() => {
         navigate('/payment');
         setLoading(false);
-      }, 800);
+      }, 1500);
 
     } catch (error) {
       console.error('Error saving checkout data:', error);

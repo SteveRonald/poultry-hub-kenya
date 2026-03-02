@@ -519,6 +519,13 @@ switch ($path) {
         }
         break;
         
+    case 'api/admin/orders/bulk-delete':
+        if ($method === 'DELETE') {
+            include 'routes/admin.php';
+            handleBulkDeleteOrders();
+        }
+        break;
+        
     case 'api/admin/orders/delete':
         if ($method === 'DELETE') {
             include 'routes/admin.php';
@@ -806,6 +813,21 @@ switch ($path) {
         }
         break;
         
+    // System logs routes
+    case 'api/system/log':
+        if ($method === 'POST') {
+            include 'routes/system_logs.php';
+            handleLogSystemEvent();
+        }
+        break;
+        
+    case 'api/admin/system-logs':
+        if ($method === 'GET') {
+            include 'routes/system_logs.php';
+            handleGetSystemLogs();
+        }
+        break;
+
     // Google Drive backup routes
     case 'api/admin/google-drive/upload':
         if ($method === 'POST') {

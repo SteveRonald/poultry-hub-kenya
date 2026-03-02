@@ -177,12 +177,14 @@ function handleCreateOrder() {
             
             $stmt = $pdo->prepare("
                 INSERT INTO orders (
-                    order_number, user_id, product_id, quantity, vendor_id, total_amount, 
-                    shipping_address, contact_phone, payment_method, payment_account_number, notes, order_type, advertisement_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    order_number, user_id, product_id, quantity, vendor_id, subtotal, total_amount, 
+                    delivery_fee, shipping_address, contact_phone, payment_method, payment_account_number, 
+                    notes, order_type, advertisement_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $orderType = $isDirectOrder ? 'direct' : 'cart';
+            $deliveryFee = 0; // Direct orders from this endpoint don't handle delivery fee (usually for simple orders)
             
             $stmt->execute([
                 $orderNumber,
@@ -190,7 +192,9 @@ function handleCreateOrder() {
                 $item['product_id'],
                 $item['quantity'],
                 $item['vendor_id'],
+                $totalAmount, // Subtotal is same as total if fee is 0
                 $totalAmount,
+                $deliveryFee,
                 $input['shipping_address'],
                 $input['contact_phone'],
                 $input['payment_method'],

@@ -350,13 +350,34 @@ const PaymentPage: React.FC = () => {
 
   if (!paymentData) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center">
-            <AlertCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading Payment...</h2>
-            <p className="text-gray-600">Please wait while we prepare your payment.</p>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="max-w-md w-full text-center space-y-8 animate-pulse">
+            <div className="relative inline-block">
+              <div className="h-24 w-24 rounded-full border-4 border-primary/20 flex items-center justify-center">
+                <Lock className="h-10 w-10 text-primary/40" />
+              </div>
+              <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+            </div>
+            
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold text-gray-900">Preparing Secure Payment</h2>
+              <p className="text-gray-500 max-w-xs mx-auto">
+                Please wait while we set up your secure checkout session...
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 max-w-xs mx-auto">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-primary w-2/3 rounded-full" />
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                <span>Encryption</span>
+                <span>Security Check</span>
+                <span>Gateway</span>
+              </div>
+            </div>
           </div>
         </div>
         <Footer />

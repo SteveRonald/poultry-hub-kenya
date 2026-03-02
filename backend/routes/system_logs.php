@@ -11,6 +11,42 @@ require_once __DIR__ . '/../utils/system_logs.php';
 require_once __DIR__ . '/admin.php'; // For validateAdminSession
 
 /**
+ * Log a system event from the frontend
+ */
+function handleLogSystemEvent() {
+    global $pdo;
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input || !isset($input['action'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Action is required']);
+        return;
+    }
+    
+    $action = sanitizeInput($input['action']);
+    $message = isset($input['message']) ? sanitizeInput($input['message']) : '';
+    $userType = isset($input['user_type']) ? sanitizeInput($input['user_type']) : 'customer';
+    $userId = isset($input['user_id']) ? sanitizeInput($input['user_id']) : null;
+    $metadata = isset($input['metadata']) ? $input['metadata'] : null;
+    
+    try {
+        // Use the utility function from utils/system_logs.php
+        $result = logSystemEvent($userId, $userType, $action, $message, $metadata);
+        
+        echo json_encode([
+            'success' => $result !== false,
+            'message' => 'Event logged successfully'
+        ]);
+        
+    } catch (Exception $e) {
+        error_log("Error logging system event from API: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to log event']);
+    }
+}
+
+/**
  * Get system logs with filtering
  */
 function handleGetSystemLogs() {

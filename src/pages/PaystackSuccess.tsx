@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle, XCircle, Loader2, Sparkles, Receipt, Mail, ArrowRight } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Sparkles, Receipt, Mail, ArrowRight, Truck, Clock, ShoppingCart } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
@@ -185,148 +185,134 @@ const PaystackSuccess = () => {
                 </div>
               </div>
             ) : paymentStatus === 'success' ? (
-              <div className="text-center">
-                {/* Animated Tick Icon - Safaricom Style */}
-                <div className="relative inline-block mb-6">
-                  <div 
-                    className={`w-24 h-24 rounded-full border-4 border-green-500 flex items-center justify-center transition-all duration-500 ${
-                      showAnimation ? 'scale-110' : 'scale-0'
-                    }`}
-                  >
+              <div className="text-center py-12 px-4">
+                {/* Beautifully Animated Checkmark */}
+                <div className="flex justify-center mb-8">
+                  <div className="relative w-24 h-24">
+                    <div className={`absolute inset-0 bg-emerald-100 rounded-full transition-transform duration-1000 ${showAnimation ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`} />
                     <svg 
-                      className={`w-12 h-12 text-green-500 transition-all duration-500 ${
-                        showAnimation ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
-                      }`}
-                      fill="currentColor" 
-                      viewBox="0 0 20 20"
-                      xmlns="http://www.w3.org/2000/svg"
+                      className="absolute inset-0 w-24 h-24 text-emerald-600" 
+                      viewBox="0 0 52 52"
                     >
+                      <circle 
+                        className={`transition-all duration-700 ease-in-out fill-none stroke-current stroke-[2] ${showAnimation ? 'opacity-100' : 'opacity-0'}`}
+                        cx="26" cy="26" r="25" 
+                        style={{ strokeDasharray: 166, strokeDashoffset: showAnimation ? 0 : 166 }}
+                      />
                       <path 
-                        fillRule="evenodd" 
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" 
-                        clipRule="evenodd" 
+                        className={`transition-all duration-700 delay-500 ease-in-out fill-none stroke-current stroke-[3] rounded-sm ${showAnimation ? 'opacity-100' : 'opacity-0'}`}
+                        d="M14.1 27.2l7.1 7.2 16.7-16.8" 
+                        style={{ strokeDasharray: 48, strokeDashoffset: showAnimation ? 0 : 48 }}
                       />
                     </svg>
                   </div>
-                  {/* Animated ring effect */}
-                  <div 
-                    className={`absolute inset-0 rounded-full border-2 border-green-400 transition-all duration-1000 ${
-                      showAnimation ? 'scale-150 opacity-0' : 'scale-100 opacity-100'
-                    }`}
-                  />
                 </div>
                 
-                <h1 className="text-3xl font-bold text-green-600 mb-4">
-                  Payment Successful!
-                </h1>
-                
-                <p className="text-gray-600 mb-6">
-                  Your payment has been processed successfully.
-                </p>
-                
-                {orderDetails && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6 text-left">
-                    <h2 className="text-xl font-semibold text-green-800 mb-4">
-                      Order Details
-                    </h2>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Payment ID:</span>
-                        <span className="font-bold text-green-700">{orderDetails.reference || orderDetails.payment_reference}</span>
+                <div className="space-y-2 mb-10">
+                  <h1 className="text-3xl font-bold text-gray-900">Thank you for your order!</h1>
+                  <p className="text-gray-500">Your payment has been received and your order is being processed.</p>
+                </div>
+
+                {/* Key Order Info - Clean & Professional */}
+                <div className="max-w-md mx-auto bg-gray-50 rounded-2xl p-8 mb-10 space-y-6 border border-gray-100">
+                  <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                    <span className="text-gray-500 font-medium">Order Reference</span>
+                    <span className="font-mono font-bold text-gray-900">#{orderDetails.reference || orderDetails.payment_reference}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500 font-medium">Payment Status</span>
+                    <span className="flex items-center gap-2 text-emerald-600 font-black bg-emerald-50 px-4 py-1 rounded-full border border-emerald-100 text-sm uppercase tracking-wider">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                      {orderDetails && orderDetails.payment_status === 'paid' ? 'Paid' : 'Confirmed'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Simplified Next Steps */}
+                <div className="max-w-md mx-auto mb-12">
+                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">What Happens Next</h3>
+                  <div className="grid grid-cols-1 gap-6 text-left">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                        <Mail className="w-5 h-5" />
                       </div>
-                      {orderDetails.order_ids && orderDetails.order_ids.length > 0 && (
-                        <div className="mt-4 p-3 bg-green-100 rounded">
-                          <p className="text-green-800 text-sm">
-                            <strong>{orderDetails.order_ids.length}</strong> order(s) created successfully
-                          </p>
-                        </div>
-                      )}
+                      <div>
+                        <p className="font-bold text-gray-800">Email Confirmation</p>
+                        <p className="text-sm text-gray-500">A receipt has been sent to your registered email address.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
+                        <Truck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800">Fast Delivery</p>
+                        <p className="text-sm text-gray-500">Vendors are preparing your poultry products for immediate dispatch.</p>
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
                 
-                <div className="space-y-4">
-                  <button
+                <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
+                  <Button
                     onClick={() => navigate('/dashboard')}
-                    className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                    className="flex-1 bg-primary text-white h-14 text-lg font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all rounded-xl"
                   >
-                    View My Orders
-                  </button>
-                  <button
+                    View Order Status
+                  </Button>
+                  <Button
                     onClick={() => navigate('/products')}
-                    className="w-full bg-gray-200 text-gray-800 px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                    variant="outline"
+                    className="flex-1 border-gray-200 h-14 text-lg font-bold text-gray-600 hover:bg-gray-50 transition-all rounded-xl"
                   >
                     Continue Shopping
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center space-y-4">
+              <div className="flex flex-col items-center space-y-6 py-8">
                 <div className="relative">
-                  <XCircle className="h-16 w-16 text-red-500" />
+                  <div className="w-24 h-24 rounded-full bg-red-50 flex items-center justify-center">
+                    <XCircle className="h-16 w-16 text-red-500" />
+                  </div>
                   <div className="absolute inset-0 rounded-full border-4 border-red-200 animate-pulse" />
                 </div>
-                <CardTitle className="text-2xl text-red-600">Payment Failed</CardTitle>
-                <p className="text-gray-600">{error || 'Your payment could not be processed'}</p>
-              </div>
-            )}
-          </CardHeader>
-
-          <CardContent className="space-y-6 relative z-10">
-            {paymentStatus === 'success' && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <Mail className="w-6 h-6 text-blue-600" />
-                  <h3 className="font-semibold text-blue-800">Email Confirmation</h3>
+                
+                <div className="text-center space-y-2">
+                  <CardTitle className="text-3xl font-bold text-red-600">Payment Failed</CardTitle>
+                  <p className="text-gray-500 text-lg">{error || 'Your payment could not be processed'}</p>
                 </div>
-                <p className="text-blue-700 text-sm">
-                  You will receive an email confirmation shortly with your complete order details and receipt.
-                </p>
-              </div>
-            )}
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button 
-                onClick={() => navigate('/dashboard')} 
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-6 text-lg"
-              >
-                View Dashboard
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-              <Button 
-                onClick={() => navigate('/orders')} 
-                variant="outline"
-                className="flex-1 py-6 text-lg"
-              >
-                Track Order
-              </Button>
-            </div>
-
-            {paymentStatus === 'failed' && (
-              <div className="space-y-6">
-                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-                  <div className="space-y-3">
-                    <p className="text-red-700">
-                      If you were charged but see this message, please contact our support team
-                      with your payment reference: <strong>{reference}</strong>
-                    </p>
-                    <div className="bg-white rounded-lg p-3 border border-red-100">
-                      <p className="text-xs text-red-600 font-mono">{reference}</p>
-                    </div>
+                <div className="w-full bg-red-50 border border-red-100 rounded-2xl p-6 text-left space-y-4">
+                  <p className="text-red-700 text-sm leading-relaxed">
+                    If you were charged but see this message, please contact our support team with your payment reference:
+                  </p>
+                  <div className="bg-white rounded-xl p-4 border border-red-200 shadow-sm">
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Reference Number</p>
+                    <p className="font-mono text-red-600 font-bold text-lg select-all">{reference || 'N/A'}</p>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button onClick={() => navigate('/checkout')} variant="outline" className="flex-1 py-6">
+                <div className="w-full flex flex-col sm:flex-row gap-4 pt-4">
+                  <Button 
+                    onClick={() => navigate('/checkout')} 
+                    className="flex-1 bg-gray-900 text-white h-14 text-lg font-bold rounded-2xl hover:bg-gray-800"
+                  >
                     Try Again
                   </Button>
-                  <Button onClick={() => navigate('/dashboard')} className="flex-1 py-6">
+                  <Button 
+                    onClick={() => navigate('/dashboard')} 
+                    variant="outline"
+                    className="flex-1 border-gray-200 h-14 text-lg font-bold text-gray-600 rounded-2xl"
+                  >
                     Go to Dashboard
                   </Button>
                 </div>
               </div>
             )}
-          </CardContent>
+          </CardHeader>
         </Card>
       </div>
 

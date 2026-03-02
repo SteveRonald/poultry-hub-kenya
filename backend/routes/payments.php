@@ -460,10 +460,18 @@ function handleManualPaymentVerification() {
                 $vendorStmt = $pdo->prepare("SELECT vendor_id FROM products WHERE id = ?");
                 $vendorStmt->execute([$item['product_id']]);
                 $vendorData = $vendorStmt->fetch(PDO::FETCH_ASSOC);
-                $vendorId = $vendorData['vendor_id'] ?? null;
-                error_log("Product ID: {$item['product_id']}, Vendor ID: $vendorId");
+                
+                if (!$vendorData) {
+                    error_log("❌ ERROR: No product found in database for product_id: {$item['product_id']}");
+                } else {
+                    $vendorId = $vendorData['vendor_id'] ?? null;
+                    if (!$vendorId) {
+                        error_log("⚠️ WARNING: Product {$item['product_id']} has no vendor_assigned (vendor_id is null/empty)");
+                    }
+                }
+                error_log("🛒 Processing Item - Product ID: {$item['product_id']}, Vendor ID: " . ($vendorId ?: 'NULL'));
             } else {
-                error_log("No product_id found in item: " . print_r($item, true));
+                error_log("❌ ERROR: No product_id found in item data: " . print_r($item, true));
             }
             
             // Calculate item subtotal and delivery fee (split proportionally across items)
@@ -723,7 +731,7 @@ function sendVendorNotificationEmail($paymentReference, $order) {
             // Get order items for this vendor
             $stmt = $pdo->prepare("
                 SELECT p.product_name, o.quantity, o.price as unit_price, 
-                       (o.quantity * o.price) as total_amount, o.order_number
+                       o.subtotal as total_amount, o.order_number
                 FROM orders o
                 LEFT JOIN products p ON o.product_id = p.id
                 WHERE o.payment_reference = ? AND o.vendor_id = ?

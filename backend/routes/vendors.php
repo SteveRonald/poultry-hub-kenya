@@ -441,7 +441,7 @@ function handleGetVendorStats() {
         
         // Get total revenue from confirmed orders only
         $stmt = $pdo->prepare("
-            SELECT SUM(o.total_amount) as total 
+            SELECT SUM(o.subtotal) as total 
             FROM orders o 
             JOIN products p ON o.product_id = p.id 
             WHERE p.vendor_id = ? AND o.status IN ('confirmed', 'processing', 'shipped', 'delivered')
@@ -499,6 +499,7 @@ function handleGetVendorOrders() {
         $stmt = $pdo->prepare("
             SELECT 
                 o.*, 
+                o.subtotal as order_subtotal,
                 p.name as product_name, 
                 p.price as product_price,
                 p.image_urls,
@@ -528,7 +529,7 @@ function handleGetVendorOrders() {
                 'product_images' => $order['image_urls'],
                 'quantity' => intval($order['quantity']),
                 'unit_price' => floatval($order['product_price']),
-                'total' => floatval($order['total_amount']),
+                'total' => floatval($order['order_subtotal']),
                 'status' => $order['status'],
                 'status_notes' => $order['status_notes'],
                 'payment_method' => $order['payment_method'],

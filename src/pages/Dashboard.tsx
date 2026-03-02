@@ -749,11 +749,11 @@ const Dashboard = () => {
                   {/* Order Information */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-primary">Shipping Information</h3>
+                      <h3 className="text-lg font-semibold text-primary">Delivery & Pickup Information</h3>
                       <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Shipping Address</label>
-                          <p className="text-gray-900">{selectedOrder.shipping_address}</p>
+                        <div className="bg-primary/5 p-3 rounded-md border border-primary/10">
+                          <label className="block text-[10px] font-bold text-primary uppercase tracking-wider mb-1">Pickup Station / Address</label>
+                          <p className="text-gray-900 font-medium">{selectedOrder.shipping_address}</p>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact Phone</label>

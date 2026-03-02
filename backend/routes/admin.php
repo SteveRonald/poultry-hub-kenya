@@ -402,6 +402,8 @@ function handleAdminOrders() {
                 'product_images' => $order['image_urls'],
                 'quantity' => $order['quantity'],
                 'unit_price' => floatval($order['product_price']),
+                'subtotal' => floatval($order['subtotal']),
+                'delivery_fee' => floatval($order['delivery_fee']),
                 'amount' => floatval($order['total_amount']),
                 'status' => $order['status'],
                 'status_notes' => $order['status_notes'],
@@ -1540,6 +1542,58 @@ function handleDeleteContactMessage() {
         http_response_code(500);
         error_log("Error deleting contact message: " . $e->getMessage());
         echo json_encode(['error' => 'Failed to delete contact message: ' . $e->getMessage()]);
+    }
+}
+
+function handleBulkDeleteOrders() {
+    global $pdo;
+    
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized or invalid session']);
+        return;
+    }
+    
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!$input || !isset($input['ids']) || !is_array($input['ids'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Array of Order IDs is required']);
+        return;
+    }
+    
+    $orderIds = $input['ids'];
+    if (empty($orderIds)) {
+        echo json_encode(['success' => true, 'message' => 'No orders selected for deletion', 'count' => 0]);
+        return;
+    }
+    
+    try {
+        $pdo->beginTransaction();
+        
+        // Create placeholders for the IN clause (?, ?, ?)
+        $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
+        
+        $sql = "DELETE FROM orders WHERE id IN ($placeholders)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($orderIds);
+        
+        $count = $stmt->rowCount();
+        $pdo->commit();
+        
+        echo json_encode([
+            'success' => true, 
+            'message' => "Successfully deleted $count orders",
+            'count' => $count
+        ]);
+        
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to bulk delete orders: ' . $e->getMessage()]);
     }
 }
 

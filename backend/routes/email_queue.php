@@ -403,9 +403,10 @@ function queueOrderConfirmationEmail($orderId) {
 
         // Get ALL orders for this payment reference to show complete order summary
         $stmt = $pdo->prepare("
-            SELECT o.*, p.name as product_name, p.price as product_price
+            SELECT o.*, p.name as product_name, p.price as product_price, v.farm_name as vendor_name
             FROM orders o
             LEFT JOIN products p ON o.product_id = p.id
+            LEFT JOIN vendors v ON o.vendor_id = v.id
             WHERE o.payment_reference = ?
             ORDER BY o.id
         ");
@@ -423,10 +424,13 @@ function queueOrderConfirmationEmail($orderId) {
             $subtotal += $itemSubtotal;
             $totalDeliveryFee += $itemDeliveryFee;
             $totalAmount += $orderItem['total_amount'];
+            
             // Calculate unit price from subtotal and quantity
             $unitPrice = $orderItem['unit_price'] ?? ($itemSubtotal / max($orderItem['quantity'], 1));
+            
             $orderItems[] = [
-                'product_name' => $orderItem['product_name'],
+                'product_name' => $orderItem['product_name'] ?: 'Poultry Product',
+                'vendor_name' => $orderItem['vendor_name'] ?: 'Verified Vendor',
                 'quantity' => $orderItem['quantity'],
                 'unit_price' => floatval($unitPrice),
                 'total_amount' => $itemSubtotal // Show item subtotal without delivery fee
@@ -504,11 +508,11 @@ function queueVendorEmailsForPayment($paymentReference, $customerOrder) {
         $vendors = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($vendors)) {
-            error_log("No vendors found for payment reference: $paymentReference");
+            error_log("❌ ERROR: No vendors found to notify for payment reference: $paymentReference");
             return false;
         }
 
-        error_log("Found " . count($vendors) . " vendor(s) to notify");
+        error_log("✅ Found " . count($vendors) . " vendor(s) to notify for $paymentReference");
 
         $queuedCount = 0;
 
@@ -540,16 +544,16 @@ function queueVendorEmailsForPayment($paymentReference, $customerOrder) {
             $vendorTotal = 0;
             $items = [];
             foreach ($orderItems as $item) {
-                $vendorTotal += $item['total_amount'];
-                // Use product_price from products table, fallback to total_amount/quantity
-                $unitPrice = $item['product_price'] ?? ($item['total_amount'] / max($item['quantity'], 1));
+                $vendorTotal += $item['subtotal'] ?? $item['total_amount'];
+                // Use product_price from products table, fallback to subtotal/quantity
+                $unitPrice = $item['product_price'] ?? (($item['subtotal'] ?? $item['total_amount']) / max($item['quantity'], 1));
                 $items[] = [
                     'product_name' => $item['product_name'],
                     'quantity' => $item['quantity'],
                     'unit_price' => floatval($unitPrice),
-                    'total_amount' => $item['total_amount']
+                    'total_amount' => $item['subtotal'] ?? $item['total_amount']
                 ];
-                error_log("Vendor email item: {$item['product_name']}, Unit Price: {$unitPrice}, Quantity: {$item['quantity']}, Total: {$item['total_amount']}");
+                error_log("Vendor email item: {$item['product_name']}, Unit Price: {$unitPrice}, Quantity: {$item['quantity']}, Total: " . ($item['subtotal'] ?? $item['total_amount']));
             }
 
             error_log("Vendor {$vendor['farm_name']} has " . count($items) . " items totaling KSH " . $vendorTotal);
@@ -643,7 +647,7 @@ function queueVendorOrderNotification($orderId, $vendorId) {
                         'product_name' => $item['product_name'],
                         'quantity' => $item['quantity'],
                         'unit_price' => $item['price'],
-                        'total_amount' => $item['total_amount']
+                        'total_amount' => $item['subtotal'] ?? $item['total_amount']
                     ];
                 }, $orderItems)
             ],

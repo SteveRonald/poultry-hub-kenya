@@ -95,6 +95,7 @@ const AdminDashboard = () => {
   const [showDeleteSMSModal, setShowDeleteSMSModal] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<any>(null);
   const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [smsToDelete, setSmsToDelete] = useState<any>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
@@ -985,6 +986,7 @@ const AdminDashboard = () => {
       if (response.ok) {
         // Remove from local state
         setOrders(prev => prev.filter(order => order.id !== orderToDelete.id));
+        setSelectedOrders(prev => prev.filter(id => id !== orderToDelete.id));
         setShowDeleteOrderModal(false);
         setOrderToDelete(null);
         setDeleteConfirmationText('');
@@ -999,6 +1001,63 @@ const AdminDashboard = () => {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedOrders(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId) 
+        : [...prev, orderId]
+    );
+  };
+
+  const toggleAllOrders = () => {
+    if (selectedOrders.length === orders.length) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(orders.map(o => String(o.id)));
+    }
+  };
+
+  const handleBulkDeleteOrders = async () => {
+    if (selectedOrders.length === 0) return;
+    
+    setConfirmDialog({
+      show: true,
+      title: 'Bulk Delete Orders',
+      message: `Are you sure you want to delete ${selectedOrders.length} orders? This action cannot be undone and will permanently remove all associated order data from the system.`,
+      type: 'danger',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, show: false }));
+        setDeleting(true);
+        try {
+          const token = localStorage.getItem('admin_session_token');
+          const response = await fetch(getApiUrl('/api/admin/orders/bulk-delete'), {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ ids: selectedOrders })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setOrders(prev => prev.filter(order => !selectedOrders.includes(String(order.id))));
+            setSelectedOrders([]);
+            toast.success(data.message || `Successfully deleted ${selectedOrders.length} orders`);
+          } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to bulk delete orders');
+          }
+        } catch (error) {
+          console.error('Error bulk deleting orders:', error);
+          toast.error(error instanceof Error ? error.message : "Failed to bulk delete orders");
+        } finally {
+          setDeleting(false);
+        }
+      }
+    });
   };
 
   // Toggle user account status function
@@ -2100,20 +2159,55 @@ const AdminDashboard = () => {
 
               {activeTab === 'orders' && (
                 <div id="tab-section-orders" className="space-y-6 scroll-mt-24">
-                  <h2 className="text-xl font-semibold text-primary">All Orders</h2>
-
-                  {/* Mobile/Tablet Card View */}
-                  <div className="lg:hidden space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <h2 className="text-xl font-semibold text-primary">All Orders</h2>
+                                    
+                                    {selectedOrders.length > 0 && (
+                                      <div className="flex items-center gap-3 bg-red-50 px-4 py-2 rounded-lg border border-red-100 animate-in fade-in slide-in-from-top-1">
+                                        <span className="text-sm font-medium text-red-700">{selectedOrders.length} selected</span>
+                                        <Button 
+                                          variant="destructive" 
+                                          size="sm"
+                                          onClick={handleBulkDeleteOrders}
+                                          disabled={deleting}
+                                          className="bg-red-600 hover:bg-red-700 h-8 font-bold"
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-2" />
+                                          Delete Bulk
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          onClick={() => setSelectedOrders([])}
+                                          className="h-8 text-gray-500 hover:text-gray-700"
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+              
+                                {/* Mobile/Tablet Card View */}                  <div className="lg:hidden space-y-4">
                     {Array.isArray(orders) && orders.length > 0 ? (
                       orders.map(order => (
-                        <Card key={order.id} className="p-4">
+                        <Card key={order.id} className={`p-4 transition-all ${selectedOrders.includes(String(order.id)) ? 'ring-2 ring-primary bg-primary/5 shadow-md scale-[1.01]' : ''}`}>
                           <div className="space-y-3">
                             <div className="flex items-start justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">Order #{order.id}</p>
-                                <p className="text-xs text-gray-500 mt-1">{order.date}</p>
+                              <div className="flex items-start gap-3">
+                                <div className="pt-1">
+                                  <input 
+                                    type="checkbox" 
+                                    className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary shadow-sm"
+                                    checked={selectedOrders.includes(String(order.id))}
+                                    onChange={() => toggleOrderSelection(String(order.id))}
+                                  />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 leading-tight">Order #{order.id}</p>
+                                  <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider mt-0.5">{order.date}</p>
+                                </div>
                               </div>
-                              <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                              <Badge className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm ${getStatusColor(order.status)}`}>
                                 {order.status}
                               </Badge>
                             </div>
@@ -2132,8 +2226,16 @@ const AdminDashboard = () => {
                                 <span className="text-gray-900 font-medium truncate max-w-[200px]" title={order.product}>{order.product}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">Amount:</span>
-                                <span className="text-gray-900 font-bold text-primary">KSH {order.amount}</span>
+                                <span className="text-gray-600 font-medium">Subtotal:</span>
+                                <span className="text-gray-900">KSH {order.subtotal?.toLocaleString() || order.amount?.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 font-medium italic">Delivery:</span>
+                                <span className="text-gray-600 italic">KSH {order.delivery_fee?.toLocaleString() || '0'}</span>
+                              </div>
+                              <div className="flex justify-between border-t border-dashed border-gray-200 pt-2 mt-1">
+                                <span className="text-gray-900 font-bold">Total:</span>
+                                <span className="text-primary font-bold">KSH {order.amount?.toLocaleString()}</span>
                               </div>
                               {order.last_status_updated && (
                                 <div className="flex justify-between">
@@ -2182,11 +2284,21 @@ const AdminDashboard = () => {
                           <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: '1200px' }}>
                           <thead className="bg-gray-50">
                             <tr>
+                              <th className="px-4 py-3 text-left w-10">
+                                <input 
+                                  type="checkbox" 
+                                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                  checked={orders.length > 0 && selectedOrders.length === orders.length}
+                                  onChange={toggleAllOrders}
+                                />
+                              </th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order ID</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Customer</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Vendor</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Product</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Subtotal</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Delivery Fee</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Total</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Order Date</th>
                               <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap">Last Updated</th>
@@ -2196,12 +2308,22 @@ const AdminDashboard = () => {
                           <tbody className="bg-white divide-y divide-gray-200">
                             {Array.isArray(orders) && orders.length > 0 ? (
                               orders.map(order => (
-                                <tr key={order.id} className="hover:bg-gray-50">
+                                <tr key={order.id} className={`hover:bg-gray-50 transition-colors ${selectedOrders.includes(String(order.id)) ? 'bg-primary/5' : ''}`}>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <input 
+                                      type="checkbox" 
+                                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                      checked={selectedOrders.includes(String(order.id))}
+                                      onChange={() => toggleOrderSelection(String(order.id))}
+                                    />
+                                  </td>
                                   <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
                                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{order.customer}</td>
                                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 max-w-[200px] truncate" title={order.vendor}>{order.vendor}</td>
                                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 max-w-[250px] truncate" title={order.product}>{order.product}</td>
-                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">KSH {order.amount}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-700">KSH {order.subtotal?.toLocaleString() || order.amount?.toLocaleString()}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 italic">KSH {order.delivery_fee?.toLocaleString() || '0'}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-900">KSH {order.amount?.toLocaleString()}</td>
                                   <td className="px-4 py-3 whitespace-nowrap">
                                     <Badge className={`text-xs ${getStatusColor(order.status)}`}>
                                       {order.status}

@@ -128,7 +128,7 @@ class SMSService {
         $raw = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
-        curl_close($ch);
+
 
         if ($curlError) {
             error_log("SMS Service: OpenSMS CURL Error: {$curlError}");
@@ -345,7 +345,7 @@ class SMSService {
         $raw = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
-        curl_close($ch);
+
 
         if ($curlError) {
             error_log("SMS Service: Textwave CURL Error: {$curlError}");
@@ -522,7 +522,7 @@ class SMSService {
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
+
         
         if ($error) {
             error_log("SMS Service: CURL Error: {$error}");

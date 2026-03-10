@@ -141,7 +141,7 @@ function handleInitializePaystackPayment() {
 
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+
 
         $paystack_result = json_decode($response, true);
         error_log("Paystack response: " . print_r($paystack_result, true));
@@ -259,7 +259,7 @@ function handleVerifyPaystackPayment($reference) {
 
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+
 
         $verification_result = json_decode($response, true);
 

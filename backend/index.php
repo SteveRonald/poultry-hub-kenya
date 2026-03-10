@@ -4,6 +4,7 @@ date_default_timezone_set('Africa/Nairobi');
 
 // Load environment variables FIRST before CORS configuration
 require_once __DIR__ . '/config/env_loader.php';
+require_once __DIR__ . '/config/env_parser.php';
 
 header('Content-Type: application/json');
 // Restrict CORS to specific origins for security

@@ -271,10 +271,21 @@ const PaymentPage: React.FC = () => {
       });
 
       console.log('Manual verification response status:', response.status);
-      const result = await response.json();
+      const responseText = await response.text();
+      if (!responseText) {
+        throw new Error('Server returned an empty response during verification. Please try again.');
+      }
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse verification JSON:', parseError);
+        console.error('Verification response was:', responseText);
+        throw new Error('Server returned invalid verification data. Please try again.');
+      }
       console.log('Manual verification result:', result);
       
-      if (result.success) {
+      if (response.ok && result.success) {
         console.log('=== PAYMENT VERIFICATION SUCCESS ===');
         console.log('Setting payment_success in sessionStorage...');
         
@@ -326,7 +337,7 @@ const PaymentPage: React.FC = () => {
         navigate(`/checkout/success?reference=${reference}`);
       } else {
         console.log('=== PAYMENT VERIFICATION FAILED ===');
-        throw new Error(result.error || 'Payment verification failed');
+        throw new Error(result.error || `Payment verification failed (HTTP ${response.status})`);
       }
     } catch (error: any) {
       console.error('=== MANUAL VERIFICATION ERROR ===', error);
@@ -338,9 +349,22 @@ const PaymentPage: React.FC = () => {
   };
 
   const handleRetryPayment = () => {
-    if (paymentData) {
-      initializePayment(paymentData);
+    if (!paymentData) return;
+
+    const paymentDetailsRaw = sessionStorage.getItem('payment_details');
+    if (paymentDetailsRaw) {
+      try {
+        const paymentDetails = JSON.parse(paymentDetailsRaw);
+        if (paymentDetails?.reference) {
+          verifyPaymentManually(paymentDetails.reference);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to parse payment_details for retry:', error);
+      }
     }
+
+    initializePayment(paymentData);
   };
 
   const handleCancel = () => {
@@ -384,6 +408,17 @@ const PaymentPage: React.FC = () => {
       </div>
     );
   }
+
+  const canRetryVerification = (() => {
+    try {
+      const paymentDetailsRaw = sessionStorage.getItem('payment_details');
+      if (!paymentDetailsRaw) return false;
+      const paymentDetails = JSON.parse(paymentDetailsRaw);
+      return !!paymentDetails?.reference;
+    } catch {
+      return false;
+    }
+  })();
 
   // Use delivery fee from checkout data if available, otherwise calculate
   const subtotal = paymentData.subtotal || paymentData.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
@@ -448,7 +483,7 @@ const PaymentPage: React.FC = () => {
                     <p className="text-red-600 mb-4">{error}</p>
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
                       <Button onClick={handleRetryPayment} className="btn-primary">
-                        Retry Payment
+                        {canRetryVerification ? 'Retry Verification' : 'Retry Payment'}
                       </Button>
                       <Button variant="outline" onClick={handleCancel}>
                         Cancel

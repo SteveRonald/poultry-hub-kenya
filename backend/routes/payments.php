@@ -337,6 +337,33 @@ function handleManualPaymentVerification() {
     
     // Set headers to ensure JSON response
     header('Content-Type: application/json');
+
+    // Ensure we never return an empty response on fatal errors
+    ob_start();
+    register_shutdown_function(function () {
+        $error = error_get_last();
+        if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+            // Log the fatal error details
+            error_log(sprintf(
+                "Fatal error during manual verification: Type: %d, Message: %s, File: %s, Line: %d",
+                $error['type'],
+                $error['message'],
+                $error['file'],
+                $error['line']
+            ));
+            
+            if (!headers_sent()) {
+                if (ob_get_length()) {
+                    ob_clean();
+                }
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Verification failed due to a server error. Please try again.'
+                ]);
+            }
+        }
+    });
     
     try {
         // Debug: Log the raw input
@@ -367,19 +394,123 @@ function handleManualPaymentVerification() {
             return;
         }
         
+        $pdo->beginTransaction();
+
         // Get the payment transaction
-        $stmt = $pdo->prepare("SELECT * FROM payment_transactions WHERE paystack_reference = ?");
+        $stmt = $pdo->prepare("SELECT * FROM payment_transactions WHERE paystack_reference = ? FOR UPDATE");
         $stmt->execute([$reference]);
         $transaction = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if (!$transaction) {
+            $pdo->rollBack();
             error_log("Payment transaction not found for reference: $reference");
             http_response_code(404);
             echo json_encode(['success' => false, 'error' => 'Payment transaction not found']);
             return;
         }
+
+        // Idempotency: if orders already exist for this payment reference, return them
+        $stmt = $pdo->prepare("
+            SELECT id, total_amount
+            FROM orders
+            WHERE payment_reference = ? AND user_id = ?
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([$reference, $transaction['user_id']]);
+        $existingOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (!empty($existingOrders)) {
+            $orderIds = array_map(fn($row) => $row['id'], $existingOrders);
+            $totalAmount = array_reduce($existingOrders, function($sum, $row) {
+                return $sum + floatval($row['total_amount'] ?? 0);
+            }, 0);
+
+            if ($transaction['payment_status'] !== 'success') {
+                $stmt = $pdo->prepare("
+                    UPDATE payment_transactions SET 
+                        payment_status = 'success',
+                        paystack_paid_at = COALESCE(paystack_paid_at, NOW()),
+                        updated_at = NOW()
+                    WHERE paystack_reference = ?
+                ");
+                $stmt->execute([$reference]);
+            }
+
+            $pdo->commit();
+
+            // Best-effort notifications (idempotent)
+            try {
+                require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
+
+                $stmt = $pdo->prepare("
+                    SELECT
+                        o.id as order_id,
+                        o.order_number,
+                        o.product_id,
+                        o.quantity,
+                        o.total_amount,
+                        o.delivery_fee,
+                        o.vendor_id,
+                        p.name as product_name,
+                        p.price as unit_price,
+                        vup.full_name as vendor_name,
+                        vup.email as vendor_email,
+                        cup.full_name as customer_name,
+                        cup.phone as customer_phone,
+                        cup.email as customer_email,
+                        o.created_at
+                    FROM orders o
+                    LEFT JOIN products p ON o.product_id = p.id
+                    LEFT JOIN vendors v ON o.vendor_id = v.id
+                    LEFT JOIN user_profiles vup ON v.user_id = vup.id
+                    LEFT JOIN user_profiles cup ON o.user_id = cup.id
+                    WHERE o.payment_reference = ? AND o.user_id = ?
+                    ORDER BY o.created_at ASC
+                ");
+                $stmt->execute([$reference, $transaction['user_id']]);
+                $createdOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $vendorGroups = [];
+                foreach ($createdOrders as $o) {
+                    $vid = $o['vendor_id'] ?? null;
+                    if (!$vid) continue;
+                    if (!isset($vendorGroups[$vid])) {
+                        $vendorGroups[$vid] = [
+                            'orders' => [],
+                            'vendor_name' => $o['vendor_name'] ?? null,
+                            'vendor_email' => $o['vendor_email'] ?? null
+                        ];
+                    }
+                    $vendorGroups[$vid]['orders'][] = $o;
+                }
+
+                OrderNotificationService::orderCreated($pdo, $createdOrders, $vendorGroups, [
+                    'order_number' => $createdOrders[0]['order_number'] ?? null,
+                    'idempotency_group' => $reference,
+                    'customer_id' => $transaction['user_id'],
+                    'checkout_phone' => $createdOrders[0]['contact_phone'] ?? null,
+                    'customer_profile_phone' => $createdOrders[0]['customer_phone'] ?? null
+                ]);
+            } catch (Exception $notifyError) {
+                error_log("Retry verification: notifications failed: " . $notifyError->getMessage());
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Payment already verified and orders exist',
+                'reference' => $reference,
+                'order_ids' => $orderIds,
+                'order_count' => count($orderIds),
+                'amount' => $totalAmount,
+                'payment_method' => $transaction['payment_method'] ?? 'paystack',
+                'channel' => $transaction['payment_method'] ?? 'paystack',
+                'selected_method' => $transaction['payment_method'] ?? 'paystack'
+            ]);
+            return;
+        }
         
         if (!$checkoutData || !isset($checkoutData['items'])) {
+            $pdo->rollBack();
             error_log("Checkout data missing for reference: $reference");
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Checkout data is required']);
@@ -537,14 +668,70 @@ function handleManualPaymentVerification() {
             $reference
         ]);
         
+        $pdo->commit();
+        
         error_log("Payment verification completed for reference: $reference, created " . count($orderIds) . " orders");
         
-        // Queue order confirmation emails (background processing)
-        require_once __DIR__ . '/email_queue.php';
-        error_log("=== QUEUING EMAILS FOR PAYMENT REFERENCE: $reference ===");
-        queueOrderConfirmationEmail($orderIds[0]); // Queue once for first order
-        error_log("Email queued for payment $reference");
-        
+        // Queue/send emails + SMS notifications (best-effort)
+        try {
+            require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
+
+            // Fetch created orders for this payment reference to build a single notification payload
+            $stmt = $pdo->prepare("
+                SELECT
+                    o.id as order_id,
+                    o.order_number,
+                    o.product_id,
+                    o.quantity,
+                    o.total_amount,
+                    o.delivery_fee,
+                    o.vendor_id,
+                    p.name as product_name,
+                    p.price as unit_price,
+                    vup.full_name as vendor_name,
+                    vup.email as vendor_email,
+                    cup.full_name as customer_name,
+                    cup.phone as customer_phone,
+                    cup.email as customer_email,
+                    o.created_at
+                FROM orders o
+                LEFT JOIN products p ON o.product_id = p.id
+                LEFT JOIN vendors v ON o.vendor_id = v.id
+                LEFT JOIN user_profiles vup ON v.user_id = vup.id
+                LEFT JOIN user_profiles cup ON o.user_id = cup.id
+                WHERE o.payment_reference = ? AND o.user_id = ?
+                ORDER BY o.created_at ASC
+            ");
+            $stmt->execute([$reference, $transaction['user_id']]);
+            $createdOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Group per vendor (used for vendor SMS/email)
+            $vendorGroups = [];
+            foreach ($createdOrders as $o) {
+                $vid = $o['vendor_id'] ?? null;
+                if (!$vid) continue;
+                if (!isset($vendorGroups[$vid])) {
+                    $vendorGroups[$vid] = [
+                        'orders' => [],
+                        'vendor_name' => $o['vendor_name'] ?? null,
+                        'vendor_email' => $o['vendor_email'] ?? null
+                    ];
+                }
+                $vendorGroups[$vid]['orders'][] = $o;
+            }
+
+            OrderNotificationService::orderCreated($pdo, $createdOrders, $vendorGroups, [
+                // Use first order_number for display, but payment reference for idempotency grouping
+                'order_number' => $createdOrders[0]['order_number'] ?? null,
+                'idempotency_group' => $reference,
+                'customer_id' => $transaction['user_id'],
+                'checkout_phone' => $checkoutData['contact_phone'] ?? null,
+                'customer_profile_phone' => $createdOrders[0]['customer_phone'] ?? null
+            ]);
+        } catch (Exception $notifyError) {
+            error_log("Payment verified but notifications failed: " . $notifyError->getMessage());
+        }
+
         echo json_encode([
             'success' => true,
             'message' => 'Payment verified and orders created successfully',
@@ -558,11 +745,17 @@ function handleManualPaymentVerification() {
         ]);
         
     } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Manual verification error: " . $e->getMessage());
         error_log("Manual verification trace: " . $e->getTraceAsString());
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Failed to verify payment: ' . $e->getMessage()]);
     } catch (Error $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Manual verification fatal error: " . $e->getMessage());
         error_log("Manual verification fatal trace: " . $e->getTraceAsString());
         http_response_code(500);

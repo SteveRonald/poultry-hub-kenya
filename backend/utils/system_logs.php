@@ -70,6 +70,48 @@ function logActivity($userId, $userType, $action, $description, $metadata = []) 
 }
 
 /**
+ * Log a system event (wrapper).
+ *
+ * Supports two call signatures used across the codebase:
+ * 1) logSystemEvent($action, $message = '', $metadata = [])
+ * 2) logSystemEvent($userId, $userType, $action, $message = '', $metadata = [])
+ *
+ * @return bool
+ */
+function logSystemEvent() {
+    $args = func_get_args();
+    $argc = count($args);
+
+    $userId = null;
+    $userType = 'system';
+    $action = 'event';
+    $message = '';
+    $metadata = [];
+
+    if ($argc <= 3) {
+        $action = isset($args[0]) ? (string)$args[0] : 'event';
+        $message = isset($args[1]) ? (string)$args[1] : '';
+        $metadata = isset($args[2]) ? $args[2] : [];
+    } else {
+        $userId = $args[0] ?? null;
+        $userType = isset($args[1]) ? (string)$args[1] : 'system';
+        $action = isset($args[2]) ? (string)$args[2] : 'event';
+        $message = isset($args[3]) ? (string)$args[3] : '';
+        $metadata = isset($args[4]) ? $args[4] : [];
+    }
+
+    if (!in_array($userType, ['vendor', 'customer', 'admin', 'system'], true)) {
+        $userType = 'system';
+    }
+
+    if (!is_array($metadata)) {
+        $metadata = ['value' => $metadata];
+    }
+
+    return logActivity($userId, $userType, $action, $message, $metadata);
+}
+
+/**
  * Ensure system_logs table exists
  * This is called automatically when logging, but can also be called manually
  */
@@ -169,4 +211,3 @@ function getUserInfoForLog($userId) {
 }
 
 ?>
-

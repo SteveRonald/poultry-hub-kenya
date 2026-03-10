@@ -642,14 +642,10 @@ function handleUpdateOrderStatus() {
             fastcgi_finish_request();
         }
         
-        // Send SMS notifications (best-effort, don't fail status update)
+        // Queue/send SMS notifications via a dedicated service (best-effort, don't fail status update)
         try {
-            require_once __DIR__ . '/../services/sms/SMSService.php';
-            require_once __DIR__ . '/../services/sms/SMSTemplates.php';
-            
-            $smsService = new SMSService();
-            
-            // Get order details for SMS
+            require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
+
             $stmt = $pdo->prepare("
                 SELECT o.*, u.full_name as customer_name, u.phone as customer_phone, u.email as customer_email, p.vendor_id
                 FROM orders o
@@ -659,76 +655,12 @@ function handleUpdateOrderStatus() {
             ");
             $stmt->execute([$orderId]);
             $orderForSMS = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($orderForSMS) {
-                // Send SMS to customer
-                if (!empty($orderForSMS['customer_phone'])) {
-                    $customerSMSMessage = SMSTemplates::getOrderStatusUpdateCustomer([
-                        'id' => $orderForSMS['order_number'],
-                        'customer_name' => $orderForSMS['customer_name'],
-                        'status' => $newStatus
-                    ]);
-                    
-                    $smsService->sendSMS($orderForSMS['customer_phone'], $customerSMSMessage, [
-                        'recipient_type' => 'customer',
-                        'related_order_id' => $orderId,
-                        'related_user_id' => $orderForSMS['user_id']
-                    ]);
-                }
-                
-                // Send SMS to vendor
-                $stmt = $pdo->prepare("SELECT phone FROM vendors WHERE id = ?");
-                $stmt->execute([$orderForSMS['vendor_id']]);
-                $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($vendor && !empty($vendor['phone'])) {
-                    $vendorSMSMessage = SMSTemplates::getOrderStatusUpdateVendor([
-                        'id' => $orderForSMS['order_number'],
-                        'status' => $newStatus
-                    ]);
-                    
-                    $smsService->sendSMS($vendor['phone'], $vendorSMSMessage, [
-                        'recipient_type' => 'vendor',
-                        'related_order_id' => $orderId,
-                        'related_user_id' => $orderForSMS['vendor_id']
-                    ]);
-                }
-                
-                // Send delivery confirmation SMS if status is 'delivered'
-                if ($newStatus === 'delivered') {
-                    // Customer delivery confirmation
-                    if (!empty($orderForSMS['customer_phone'])) {
-                        $deliverySMSMessage = SMSTemplates::getDeliveryConfirmationCustomer([
-                            'id' => $orderForSMS['order_number'],
-                            'customer_name' => $orderForSMS['customer_name'],
-                            'total_amount' => $orderForSMS['total_amount']
-                        ]);
-                        
-                        $smsService->sendSMS($orderForSMS['customer_phone'], $deliverySMSMessage, [
-                            'recipient_type' => 'customer',
-                            'related_order_id' => $orderId,
-                            'related_user_id' => $orderForSMS['user_id']
-                        ]);
-                    }
-                    
-                    // Vendor delivery confirmation
-                    if ($vendor && !empty($vendor['phone'])) {
-                        $vendorDeliverySMSMessage = SMSTemplates::getDeliveryConfirmationVendor([
-                            'id' => $orderForSMS['order_number'],
-                            'total_amount' => $orderForSMS['total_amount']
-                        ]);
-                        
-                        $smsService->sendSMS($vendor['phone'], $vendorDeliverySMSMessage, [
-                            'recipient_type' => 'vendor',
-                            'related_order_id' => $orderId,
-                            'related_user_id' => $orderForSMS['vendor_id']
-                        ]);
-                    }
-                }
+                OrderNotificationService::orderStatusChanged($pdo, $orderForSMS, $newStatus);
             }
         } catch (Exception $smsError) {
-            error_log('Order status updated but SMS sending failed: ' . $smsError->getMessage());
-            // Don't fail the status update if SMS fails
+            error_log('Order status updated but SMS queue/send failed: ' . $smsError->getMessage());
         }
         
         // Update ad revenue AFTER response is sent (for ad orders only)

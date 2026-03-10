@@ -147,8 +147,8 @@ function handleCreateOrder() {
         // Generate order number
         $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
         
-        // Get customer details from database
-        $stmt = $pdo->prepare("SELECT full_name, email FROM user_profiles WHERE id = ?");
+        // Get customer details from database (phone is used as SMS fallback if checkout phone is invalid)
+        $stmt = $pdo->prepare("SELECT full_name, email, phone FROM user_profiles WHERE id = ?");
         $stmt->execute([$payload['user_id']]);
         $customer = $stmt->fetch(PDO::FETCH_ASSOC);
         
@@ -229,6 +229,7 @@ function handleCreateOrder() {
                 'unit_price' => $item['price'],
                 'product_price' => $item['price'], // Add this for email template
                 'total_amount' => $totalAmount,
+                'delivery_fee' => $deliveryFee,
                 'vendor_id' => $item['vendor_id'],
                 'vendor_name' => $item['vendor_name'],
                 'vendor_email' => $item['vendor_email'],
@@ -249,25 +250,61 @@ function handleCreateOrder() {
         
         $pdo->commit();
 
-        // Track email sending status separately
-        $customerEmailSent = false;
-        $vendorEmailsSent = [];
-        $emailErrors = [];
-
-        // Queue notification emails to vendors (background processing, don't fail order)
-        require_once __DIR__ . '/email_queue.php';
-
+        // Group created orders per vendor (used for vendor notifications/SMS)
+        $vendorEmails = [];
         foreach ($createdOrders as $order) {
-            // Queue vendor notification email
-            queueVendorOrderNotification($order['order_id'], $order['vendor_id']);
+            $vendorId = $order['vendor_id'] ?? null;
+            if (!$vendorId) {
+                continue;
+            }
+            if (!isset($vendorEmails[$vendorId])) {
+                $vendorEmails[$vendorId] = [
+                    'orders' => [],
+                    'vendor_name' => $order['vendor_name'] ?? null,
+                    'vendor_email' => $order['vendor_email'] ?? null
+                ];
+            }
+            $vendorEmails[$vendorId]['orders'][] = $order;
         }
 
-        // Queue order confirmation email to customer (background processing)
-        foreach ($createdOrders as $order) {
-            queueOrderConfirmationEmail($order['order_id']);
-            break; // Only queue once for the first order (they share the same order number)
+        // Respond immediately after the order is created.
+        // Notifications (email/SMS/in-app) are best-effort and should never block the user.
+        $ordersCount = count($createdOrders);
+        $ordersText = $ordersCount === 1 ? 'order' : 'orders';
+        $responseMessage = "Orders created successfully! {$ordersCount} {$ordersText} placed.";
+
+        // Allow the script to continue sending notifications even if the client navigates away.
+        // This is important in SPA flows where the browser may close the connection right after
+        // receiving the JSON response.
+        if (function_exists('ignore_user_abort')) {
+            ignore_user_abort(true);
         }
-        $customerEmailSent = true; // Assume success since we're queuing
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(60);
+        }
+
+        http_response_code(200);
+        echo json_encode([
+            'success' => true,
+            'message' => $responseMessage,
+            'order_number' => $orderNumber,
+            'orders' => $createdOrders,
+            'total_items' => $ordersCount,
+            'total_orders' => $ordersCount, // Add this for compatibility
+            'customer_email_sent' => true // email is queued best-effort
+        ]);
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        } else {
+            // Best-effort flush for non-FPM setups (e.g., Apache/mod_php on XAMPP).
+            if (function_exists('ob_get_level') && ob_get_level() > 0) {
+                @ob_end_flush();
+            }
+            if (function_exists('flush')) {
+                @flush();
+            }
+        }
 
         // Create notifications for vendors and admins (best-effort)
         try {
@@ -287,92 +324,22 @@ function handleCreateOrder() {
         } catch (Exception $notificationError) {
             error_log('Order created but notifications failed: ' . $notificationError->getMessage());
         }
-        
-        // Send SMS notifications (best-effort, don't fail order)
+
+        // Queue/send emails + SMS via a dedicated service (best-effort)
         try {
-            require_once __DIR__ . '/../services/sms/SMSService.php';
-            require_once __DIR__ . '/../services/sms/SMSTemplates.php';
-            
-            $smsService = new SMSService();
-            
-            // Send SMS to customer
-            $customerPhone = $input['contact_phone'] ?? null;
-            error_log("SMS Order Creation: Customer phone from input: " . ($customerPhone ?? 'NULL'));
-            
-            if ($customerPhone) {
-                $customerSMSMessage = SMSTemplates::getOrderConfirmationCustomer([
-                    'id' => $orderNumber,
-                    'customer_name' => $createdOrders[0]['customer_name'] ?? 'Customer',
-                    'total_amount' => array_sum(array_column($createdOrders, 'total_amount')),
-                    'product_name' => count($createdOrders) > 1 ? count($createdOrders) . ' items' : $createdOrders[0]['product_name'],
-                    'quantity' => array_sum(array_column($createdOrders, 'quantity'))
-                ]);
-                
-                error_log("SMS Order Creation: Attempting to send SMS to: {$customerPhone}");
-                error_log("SMS Order Creation: Message: " . substr($customerSMSMessage, 0, 100) . "...");
-                
-                $smsResult = $smsService->sendSMS($customerPhone, $customerSMSMessage, [
-                    'recipient_type' => 'customer',
-                    'related_order_id' => $createdOrders[0]['order_id'] ?? null,
-                    'related_user_id' => $payload['user_id']
-                ]);
-                
-                error_log("SMS Order Creation: SMS result: " . json_encode($smsResult));
-            } else {
-                error_log("SMS Order Creation: WARNING - No customer phone number provided in order!");
-            }
-            
-            // Send SMS to each vendor
-            foreach ($vendorEmails as $vendorId => $vendorData) {
-                // Get vendor phone number
-                $stmt = $pdo->prepare("SELECT phone FROM vendors WHERE id = ?");
-                $stmt->execute([$vendorId]);
-                $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($vendor && !empty($vendor['phone'])) {
-                    $vendorOrder = $vendorData['orders'][0];
-                    $vendorSMSMessage = SMSTemplates::getOrderConfirmationVendor([
-                        'id' => $orderNumber,
-                        'customer_name' => $vendorOrder['customer_name'] ?? 'Customer',
-                        'product_name' => count($vendorData['orders']) > 1 ? count($vendorData['orders']) . ' items' : $vendorOrder['product_name'],
-                        'quantity' => array_sum(array_column($vendorData['orders'], 'quantity')),
-                        'total_amount' => array_sum(array_column($vendorData['orders'], 'total_amount'))
-                    ]);
-                    
-                    $smsService->sendSMS($vendor['phone'], $vendorSMSMessage, [
-                        'recipient_type' => 'vendor',
-                        'related_order_id' => $vendorOrder['order_id'] ?? null,
-                        'related_user_id' => $vendorId
-                    ]);
-                }
-            }
-        } catch (Exception $smsError) {
-            error_log('Order created but SMS sending failed: ' . $smsError->getMessage());
-            // Don't fail the order if SMS fails
+            require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
+
+            OrderNotificationService::orderCreated($pdo, $createdOrders, $vendorEmails, [
+                'order_number' => $orderNumber,
+                'customer_id' => $payload['user_id'] ?? null,
+                'checkout_phone' => $input['contact_phone'] ?? null,
+                'customer_profile_phone' => $customer['phone'] ?? null
+            ]);
+        } catch (Exception $notifyError) {
+            error_log('Order created but notifications failed: ' . $notifyError->getMessage());
         }
-        
-        // Determine response message based on email status
-        $ordersCount = count($createdOrders);
-        $ordersText = $ordersCount === 1 ? 'order' : 'orders';
-        
-        if (!$customerEmailSent) {
-            $responseMessage = "Order sent successfully! {$ordersCount} {$ordersText} placed. However, we could not send the confirmation email. Please check your order in your dashboard.";
-        } else {
-            $responseMessage = "Orders created successfully! {$ordersCount} {$ordersText} placed.";
-        }
-        
-        // Always return success if order was created, regardless of email status
-        http_response_code(200);
-        echo json_encode([
-            'success' => true,
-            'message' => $responseMessage,
-            'order_number' => $orderNumber,
-            'orders' => $createdOrders,
-            'total_items' => $ordersCount,
-            'total_orders' => $ordersCount, // Add this for compatibility
-            'customer_email_sent' => $customerEmailSent
-        ]);
-        
+
+        return;
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();

@@ -363,7 +363,7 @@ const Index = () => {
                 <span className="inline-block opacity-0 translate-x-[-20px] transition-all duration-700 delay-500 animate-out"> Marketplace</span>
               </h1>
               <p className="text-base sm:text-lg md:text-xl mb-6 sm:mb-8 text-gray-200 opacity-0 translate-y-4 transition-all duration-700 delay-700 animate-out">
-                Connect with trusted poultry farmers across Kenya. Buy quality chicks, eggs, and meat 
+                Connect with trusted poultry farmers across Kenya. Buy quality chicks, eggs, meat and/or poultry products 
                 directly from verified suppliers.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 opacity-0 translate-y-4 transition-all duration-700 delay-900 animate-out">
@@ -376,7 +376,7 @@ const Index = () => {
                 {!user && (
                   <Link to="/register" className="w-full sm:w-auto">
                     <Button variant="outline" className="w-full sm:w-auto border-white text-black dark:text-white hover:bg-white hover:text-primary dark:hover:bg-white dark:hover:text-primary px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
-                      Become a Vendor
+                      Become a Seller
                     </Button>
                   </Link>
                 )}
@@ -492,7 +492,7 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12 opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out">
             <h2 className="text-3xl md:text-3xl font-bold text-primary mb-4">
-              Why Choose PoultryHubKenya (KE)?
+              Why Choose KukuSoko (KE)?
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
               We're revolutionizing Kenya's poultry industry by connecting farmers directly with customers

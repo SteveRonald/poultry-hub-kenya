@@ -2980,7 +2980,10 @@ const AdminDashboard = () => {
                               {smsLogs.map((log: any) => (
                                 <tr key={log.id} className="border-b">
                                   <td className="py-2 px-4">{log.phone}</td>
-                                  <td className="py-2 px-4 max-w-xs truncate" title={log.message}>
+                                  <td
+                                    className="py-2 px-4 max-w-md whitespace-pre-wrap break-words align-top"
+                                    title={log.message}
+                                  >
                                     {log.message}
                                   </td>
                                   <td className="py-2 px-4">

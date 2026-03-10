@@ -1,7 +1,6 @@
 <?php
 // Email Configuration using PHPMailer
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/email_config.php';
 require_once __DIR__ . '/email_templates.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
@@ -401,7 +400,11 @@ function sendEmail($to, $subject, $message, $from = null) {
 }
 
 function getEmailConfig() {
-    return include __DIR__ . '/email_config.php';
+    static $config = null;
+    if ($config === null) {
+        $config = include __DIR__ . '/email_config.php';
+    }
+    return $config;
 }
 
 function sendContactNotification($contactData) {

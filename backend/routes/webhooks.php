@@ -210,8 +210,77 @@ function handleChargeSuccess($eventData) {
         // Clear cart only after successful order creation
         clearUserCart($payment['user_id']);
 
-        // Queue email notifications (background processing)
-        queueOrderEmails($orderIds);
+        // Queue/send email + SMS notifications (best-effort)
+        try {
+            require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
+
+            $checkoutData = null;
+            if (!empty($payment['metadata'])) {
+                $meta = json_decode($payment['metadata'], true);
+                if (is_array($meta)) {
+                    $checkoutData = $meta;
+                }
+            }
+
+            // Fetch created orders for this payment reference to build a single notification payload
+            $stmt = $pdo->prepare("
+                SELECT
+                    o.id as order_id,
+                    o.order_number,
+                    o.product_id,
+                    o.quantity,
+                    o.total_amount,
+                    o.delivery_fee,
+                    o.vendor_id,
+                    p.name as product_name,
+                    p.price as unit_price,
+                    vup.full_name as vendor_name,
+                    vup.email as vendor_email,
+                    cup.full_name as customer_name,
+                    cup.phone as customer_phone,
+                    cup.email as customer_email,
+                    o.created_at
+                FROM orders o
+                LEFT JOIN products p ON o.product_id = p.id
+                LEFT JOIN vendors v ON o.vendor_id = v.id
+                LEFT JOIN user_profiles vup ON v.user_id = vup.id
+                LEFT JOIN user_profiles cup ON o.user_id = cup.id
+                WHERE o.payment_reference = ? AND o.user_id = ?
+                ORDER BY o.created_at ASC
+            ");
+            $stmt->execute([$reference, $payment['user_id']]);
+            $createdOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $vendorGroups = [];
+            foreach ($createdOrders as $o) {
+                $vid = $o['vendor_id'] ?? null;
+                if (!$vid) continue;
+                if (!isset($vendorGroups[$vid])) {
+                    $vendorGroups[$vid] = [
+                        'orders' => [],
+                        'vendor_name' => $o['vendor_name'] ?? null,
+                        'vendor_email' => $o['vendor_email'] ?? null
+                    ];
+                }
+                $vendorGroups[$vid]['orders'][] = $o;
+            }
+
+            // Only queue; let the worker send (webhooks should be fast and not depend on external SMS APIs)
+            // This also avoids holding DB transactions open while calling OpenSMS.
+            // Note: SMS_SEND_IMMEDIATELY is still respected in the service, but webhook processing may end early.
+            OrderNotificationService::orderCreated($pdo, $createdOrders, $vendorGroups, [
+                'order_number' => $createdOrders[0]['order_number'] ?? null,
+                'idempotency_group' => $reference,
+                'customer_id' => $payment['user_id'],
+                'checkout_phone' => is_array($checkoutData) ? ($checkoutData['contact_phone'] ?? null) : null,
+                'customer_profile_phone' => $createdOrders[0]['customer_phone'] ?? null
+            ]);
+        } catch (Exception $notifyError) {
+            logSystemEvent('webhook_notifications_error', 'Failed to queue notifications', [
+                'reference' => $reference,
+                'error' => $notifyError->getMessage()
+            ]);
+        }
 
         // Update order payment status
         updateOrderPaymentStatus($orderIds, $reference, 'paid');

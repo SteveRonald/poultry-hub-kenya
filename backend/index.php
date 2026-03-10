@@ -401,6 +401,13 @@ switch ($path) {
             handleGetSMSStats();
         }
         break;
+
+    case 'api/admin/sms/balance':
+        if ($method === 'GET') {
+            include 'routes/sms.php';
+            handleGetSMSBalance();
+        }
+        break;
         
     case 'api/vendor/analytics':
         if ($method === 'GET') {
@@ -1075,6 +1082,9 @@ switch ($path) {
         } elseif (strpos($path, 'api/admin/sms-logs/') === 0 && $method === 'DELETE') {
             include 'routes/sms.php';
             handleDeleteSMSLog();
+        } elseif (preg_match('#^api/admin/sms/status/([^/]+)$#', $path, $matches) && $method === 'GET') {
+            include 'routes/sms.php';
+            handleGetSMSDeliveryStatus($matches[1]);
         } elseif (strpos($path, 'api/admin/sms-logs/') === 0 && strpos($path, '/retry') && $method === 'POST') {
             include 'routes/sms.php';
             handleRetrySMS();

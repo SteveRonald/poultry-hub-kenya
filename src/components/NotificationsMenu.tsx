@@ -14,6 +14,7 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const mobileModalRef = useRef<HTMLDivElement>(null);
   const desktopDropdownRef = useRef<HTMLDivElement>(null);
+  const inFlightRef = useRef(false);
 
   const fetchNotifications = async () => {
     const token = isAdmin ? localStorage.getItem('admin_session_token') : localStorage.getItem('token');
@@ -23,8 +24,14 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
       setNotifications([]);
       return;
     }
-    
-    setLoading(true);
+
+    if (inFlightRef.current) {
+      return;
+    }
+    inFlightRef.current = true;
+
+    // Only show loading spinner on first load; don't flicker on background refresh.
+    setLoading((prev) => (notifications.length === 0 ? true : prev));
     try {
       const res = await fetch(getApiUrl('/api/notifications'), {
         headers: { Authorization: `Bearer ${token}` },
@@ -42,7 +49,6 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
       if (!res.ok) {
         // Other errors - log but don't show to user
         console.warn('Failed to fetch notifications:', res.status, res.statusText);
-        setNotifications([]);
         setLoading(false);
         return;
       }
@@ -56,9 +62,9 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
       if (error instanceof Error && !error.message.includes('fetch')) {
         console.error('Failed to fetch notifications:', error);
       }
-      setNotifications([]);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 
@@ -75,9 +81,12 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
     fetchNotifications();
     
     // Only poll if user is authenticated
-    // Poll for new notifications every 30 seconds
+    // Poll for new notifications:
+    // - faster when the menu is open
+    // - slightly faster for admin sessions
+    const intervalMs = open ? 5000 : (isAdmin ? 10000 : 30000);
     const interval = setInterval(() => {
-      const currentToken = localStorage.getItem('token');
+      const currentToken = isAdmin ? localStorage.getItem('admin_session_token') : localStorage.getItem('token');
       if (currentToken) {
         fetchNotifications();
       } else {
@@ -89,7 +98,24 @@ const NotificationsMenu = ({ isAdmin = false }: NotificationsMenuProps) => {
     }, 30000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [isAdmin, open]);
+
+  // Fetch latest notifications when opening the menu or when tab becomes visible again.
+  useEffect(() => {
+    if (open) {
+      fetchNotifications();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [isAdmin]);
 
   // Close dropdown when clicking outside (desktop only)
   useEffect(() => {

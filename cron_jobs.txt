@@ -12,3 +12,6 @@
 
 # Recommendations (admin daily, vendor weekly)
 0 6 * * * /usr/bin/php C:\xampp\htdocs\poultry-hub-kenya\backend\cron\recommendations.php >> /var/log/poultry_hub_recommendations.log 2>&1
+
+# Process SMS queue every minute (optional - only needed if you use queue_only mode)
+* * * * * /usr/bin/php C:\xampp\htdocs\poultry-hub-kenya\backend\cron\process_sms_queue.php >> /var/log/poultry_hub_sms_queue.log 2>&1

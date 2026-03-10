@@ -128,9 +128,20 @@ const PaystackSuccess = () => {
           payment_details: paymentData // Pass payment details from Paystack
         })
       });
-      const data = await response.json();
+      const responseText = await response.text();
+      if (!responseText) {
+        throw new Error('Server returned an empty response during verification.');
+      }
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse verification JSON:', parseError);
+        console.error('Verification response was:', responseText);
+        throw new Error('Server returned invalid verification data.');
+      }
 
-      if (data.success) {
+      if (response.ok && data.success) {
         setPaymentStatus('success');
         // Store the complete data including amount and payment method
         const completeOrderDetails = {
@@ -146,7 +157,7 @@ const PaystackSuccess = () => {
         sessionStorage.removeItem('payment_details');
       } else {
         setPaymentStatus('failed');
-        setError(data.error || 'Payment verification failed');
+        setError(data.error || `Payment verification failed (HTTP ${response.status})`);
       }
     } catch (err) {
       console.error('Payment verification error:', err);
@@ -229,32 +240,6 @@ const PaystackSuccess = () => {
                   </div>
                 </div>
 
-                {/* Simplified Next Steps */}
-                <div className="max-w-md mx-auto mb-12">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">What Happens Next</h3>
-                  <div className="grid grid-cols-1 gap-6 text-left">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
-                        <Mail className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-800">Email Confirmation</p>
-                        <p className="text-sm text-gray-500">A receipt has been sent to your registered email address.</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
-                        <Truck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-800">Fast Delivery</p>
-                        <p className="text-sm text-gray-500">Vendors are preparing your poultry products for immediate dispatch.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
                 <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
                   <Button
                     onClick={() => navigate('/dashboard')}

@@ -133,6 +133,103 @@ function handleGetSMSStats() {
 }
 
 /**
+ * Get Textwave wallet balance (Admin only)
+ *
+ * GET /api/admin/sms/balance
+ */
+function handleGetSMSBalance() {
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    try {
+        $smsService = new SMSService();
+        $result = $smsService->checkSMSBalance();
+
+        if (!($result['success'] ?? false)) {
+            $code = $result['code'] ?? null;
+            if ($code === 'VALIDATION_ERROR') http_response_code(400);
+            elseif ($code === 'UNAUTHORIZED') http_response_code(401);
+            elseif ($code === 'INSUFFICIENT_CREDITS') http_response_code(402);
+            elseif ($code === 'NOT_FOUND') http_response_code(404);
+            elseif ($code === 'RATE_LIMIT') http_response_code(429);
+            else http_response_code(500);
+
+            echo json_encode([
+                'success' => false,
+                'error' => $result['error'] ?? 'Failed to fetch balance',
+                'code' => $code,
+                'details' => $result['response'] ?? null
+            ]);
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'data' => $result['data'] ?? null
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    } catch (Exception $e) {
+        http_response_code(500);
+        error_log("SMS Balance API: Exception - " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Failed to fetch SMS balance']);
+    }
+}
+
+/**
+ * Get delivery status for a messageId (Admin only)
+ *
+ * GET /api/admin/sms/status/:messageId
+ */
+function handleGetSMSDeliveryStatus($messageId) {
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    try {
+        require_once __DIR__ . '/../utils/security.php';
+        $messageId = sanitizeInput($messageId);
+
+        $smsService = new SMSService();
+        $result = $smsService->getDeliveryStatus($messageId);
+
+        if (!($result['success'] ?? false)) {
+            $code = $result['code'] ?? null;
+            if ($code === 'VALIDATION_ERROR') http_response_code(400);
+            elseif ($code === 'UNAUTHORIZED') http_response_code(401);
+            elseif ($code === 'INSUFFICIENT_CREDITS') http_response_code(402);
+            elseif ($code === 'NOT_FOUND') http_response_code(404);
+            elseif ($code === 'RATE_LIMIT') http_response_code(429);
+            else http_response_code(500);
+
+            echo json_encode([
+                'success' => false,
+                'error' => $result['error'] ?? 'Failed to fetch delivery status',
+                'code' => $code,
+                'details' => $result['response'] ?? null
+            ]);
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'data' => $result['data'] ?? null
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    } catch (Exception $e) {
+        http_response_code(500);
+        error_log("SMS Delivery Status API: Exception - " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Failed to fetch delivery status']);
+    }
+}
+
+/**
  * Delete SMS log (Admin only)
  */
 function handleDeleteSMSLog() {
@@ -190,6 +287,28 @@ function handleRetrySMS() {
     $token = getBearerToken();
     if (!$token || !validateAdminSession($token)) {
         http_response_code(401);
+
+        // Help diagnose Authorization header forwarding issues in local dev without leaking secrets in production.
+        $isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true);
+        if ($isLocal) {
+            $headers = function_exists('getallheaders') ? getallheaders() : [];
+            $serverAuth = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null);
+            $headerAuth = $headers['Authorization'] ?? ($headers['authorization'] ?? null);
+            $auth = $headerAuth ?: $serverAuth;
+
+            echo json_encode([
+                'error' => 'Unauthorized',
+                'debug' => [
+                    'has_authorization_header' => (bool)$auth,
+                    'authorization_header_prefix' => is_string($auth) ? substr($auth, 0, 24) : null,
+                    'token_length' => is_string($token) ? strlen($token) : 0,
+                    'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? null,
+                    'request_uri' => $_SERVER['REQUEST_URI'] ?? null
+                ]
+            ]);
+            return;
+        }
+
         echo json_encode(['error' => 'Unauthorized']);
         return;
     }
@@ -219,21 +338,33 @@ function handleRetrySMS() {
         // Retry sending the SMS
         $smsService = new SMSService();
         $result = $smsService->sendSMS($smsLog['phone'], $smsLog['message'], [
+            // Reuse the same log entry (don't create a new one on retry)
+            'sms_log_id' => $smsId,
             'recipient_type' => $smsLog['recipient_type'],
             'related_order_id' => $smsLog['related_order_id'],
             'related_user_id' => $smsLog['related_user_id']
         ]);
+
+        // If provider failed, return a non-2xx status so the admin UI shows an error toast.
+        if (!($result['success'] ?? false)) {
+            $code = $result['code'] ?? null;
+            if ($code === 'VALIDATION_ERROR') http_response_code(400);
+            elseif ($code === 'UNAUTHORIZED') http_response_code(401);
+            elseif ($code === 'INSUFFICIENT_CREDITS') http_response_code(402);
+            elseif ($code === 'NOT_FOUND') http_response_code(404);
+            elseif ($code === 'RATE_LIMIT') http_response_code(429);
+            else http_response_code(500);
+        } else {
+            http_response_code(200);
+        }
         
-        // Update the log entry with new status
-        $newStatus = $result ? 'sent' : 'failed';
-        $stmt = $pdo->prepare("UPDATE sms_logs SET status = ?, sent_at = NOW() WHERE id = ?");
-        $stmt->execute([$newStatus, $smsId]);
-        
-        http_response_code(200);
         echo json_encode([
-            'success' => true,
+            'success' => (bool)($result['success'] ?? false),
             'message' => 'SMS retry completed',
-            'status' => $newStatus
+            'sms_log_id' => $smsId,
+            'status' => $result['status'] ?? (($result['success'] ?? false) ? 'sent' : 'failed'),
+            'provider_message_id' => $result['message_id'] ?? null,
+            'error' => $result['error'] ?? null
         ]);
         
     } catch (Exception $e) {

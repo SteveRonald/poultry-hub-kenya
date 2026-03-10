@@ -11,7 +11,7 @@ require_once __DIR__ . '/../utils/system_logs.php';
  */
 function safeLog($action, $message, $data = []) {
     if (function_exists('logSystemEvent')) {
-        safeLog($action, $message, $data);
+        logSystemEvent($action, $message, $data);
     }
 }
 
@@ -379,6 +379,31 @@ function cleanupEmailQueue($daysToKeep = 30) {
 /**
  * Helper functions for queuing specific email types
  */
+function findExistingEmailJob($templateType, $recipientEmail, $paymentReference) {
+    global $pdo;
+
+    if (!$paymentReference || !$recipientEmail || !$templateType) {
+        return null;
+    }
+
+    try {
+        $like = '%"payment_reference":"' . $paymentReference . '"%';
+        $stmt = $pdo->prepare("
+            SELECT id, status
+            FROM email_jobs
+            WHERE template_type = ?
+              AND recipient_email = ?
+              AND template_data LIKE ?
+            ORDER BY id DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$templateType, $recipientEmail, $like]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
 function queueOrderConfirmationEmail($orderId) {
     global $pdo;
 
@@ -459,6 +484,14 @@ function queueOrderConfirmationEmail($orderId) {
                 'email' => $order['user_email']
             ]
         ];
+
+        $existing = findExistingEmailJob('order_confirmation', $order['user_email'], $paymentReference);
+        if ($existing && in_array($existing['status'], ['pending', 'processing', 'completed'], true)) {
+            error_log("Customer email already queued/sent (job {$existing['id']}) for payment reference: $paymentReference");
+            // Still ensure vendor emails are queued if missing
+            queueVendorEmailsForPayment($paymentReference, $order);
+            return $existing['id'];
+        }
 
         // Queue customer email
         $customerJobId = queueEmail(
@@ -577,6 +610,12 @@ function queueVendorEmailsForPayment($paymentReference, $customerOrder) {
                 ]
             ];
 
+            $existing = findExistingEmailJob('vendor_notification', $vendor['email'], $paymentReference);
+            if ($existing && in_array($existing['status'], ['pending', 'processing', 'completed'], true)) {
+                error_log("Vendor email already queued/sent (job {$existing['id']}) for {$vendor['farm_name']} payment: $paymentReference");
+                continue;
+            }
+
             $jobId = queueEmail(
                 'vendor_new_order',
                 $vendor['email'],
@@ -623,7 +662,7 @@ function queueVendorOrderNotification($orderId, $vendorId) {
 
         // Get order details for this vendor
         $stmt = $pdo->prepare("
-            SELECT o.*, p.name as product_name
+            SELECT o.*, p.name as product_name, p.price as unit_price
             FROM orders o
             LEFT JOIN products p ON o.product_id = p.id
             WHERE o.id = ? AND o.vendor_id = ?
@@ -643,10 +682,12 @@ function queueVendorOrderNotification($orderId, $vendorId) {
                 'shipping_address' => $orderItems[0]['shipping_address'],
                 'contact_phone' => $orderItems[0]['contact_phone'],
                 'items' => array_map(function($item) {
+                    $quantity = $item['quantity'] ?: 1;
+                    $unitPrice = $item['unit_price'] ?? ($item['subtotal'] ?? 0) / $quantity;
                     return [
                         'product_name' => $item['product_name'],
                         'quantity' => $item['quantity'],
-                        'unit_price' => $item['price'],
+                        'unit_price' => $unitPrice,
                         'total_amount' => $item['subtotal'] ?? $item['total_amount']
                     ];
                 }, $orderItems)
@@ -658,6 +699,14 @@ function queueVendorOrderNotification($orderId, $vendorId) {
                 'contact_person' => $vendor['full_name']
             ]
         ];
+
+        $paymentReference = $orderItems[0]['payment_reference'] ?? null;
+        if ($paymentReference && !empty($vendor['email'])) {
+            $existing = findExistingEmailJob('vendor_notification', $vendor['email'], $paymentReference);
+            if ($existing && in_array($existing['status'], ['pending', 'processing', 'completed'], true)) {
+                return $existing['id'];
+            }
+        }
 
         return queueEmail(
             'vendor_new_order',

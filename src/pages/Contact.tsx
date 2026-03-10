@@ -32,14 +32,14 @@ const Contact = () => {
     if (activeTab === 'help') {
       // Check if bot ID is configured
       if (!CHATBASE_CONFIG.botId) {
-        console.error('Chatbase bot ID not configured. Please set VITE_CHATBASE_BOT_ID in .env file');
-        toast.error('Help center is not configured. Please contact support.');
+        console.error('Chatbot not Available. Please try again later.');
+        toast.error('Help center is not available. Please contact support.');
         return;
       }
 
       // Mark as loaded immediately since we're using iframe
       setChatbaseLoaded(true);
-      console.log('Chatbase help center iframe ready');
+      console.log('Chatbase help center ready');
     }
   }, [activeTab]);
 
@@ -63,7 +63,7 @@ const Contact = () => {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(data.message || 'Message sent successfully! We\'ll get back to you soon.');
+        toast.success(data.message || 'Message sent successfully! We\'ll get back to you within 3hrs.');
         
         // Reset form
         setFormData({

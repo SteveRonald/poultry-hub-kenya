@@ -32,6 +32,7 @@ interface ChatResponse {
 }
 
 const Chatbot: React.FC = () => {
+  const isGeminiChatbotHidden = true;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -775,7 +776,7 @@ const Chatbot: React.FC = () => {
         maxWidth: 'calc(100vw - 24px)',
         zIndex: 999999,
         position: 'fixed',
-        display: 'block',
+        display: isGeminiChatbotHidden ? 'none' : 'block',
         visibility: 'visible',
         opacity: 1,
         pointerEvents: 'auto',
@@ -856,7 +857,8 @@ const Chatbot: React.FC = () => {
             position: 'fixed',
             bottom: '16px',
             right: '16px',
-            zIndex: 9999
+            zIndex: 9999,
+            display: isGeminiChatbotHidden ? 'none' : 'block'
           }}
           aria-label="Open AI Assistant"
           title="AI Assistant - Ask me anything!"
@@ -878,7 +880,10 @@ const Chatbot: React.FC = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-0 right-0 sm:bottom-6 sm:right-6 z-50 w-full sm:w-96 sm:max-w-[calc(100vw-2rem)] h-[calc(100vh-4rem)] sm:h-[600px] sm:max-h-[calc(100vh-8rem)] sm:rounded-lg bg-white shadow-2xl flex flex-col border-t sm:border border-gray-200">
+        <div
+          className="fixed bottom-0 right-0 sm:bottom-6 sm:right-6 z-50 w-full sm:w-96 sm:max-w-[calc(100vw-2rem)] h-[calc(100vh-4rem)] sm:h-[600px] sm:max-h-[calc(100vh-8rem)] sm:rounded-lg bg-white shadow-2xl flex flex-col border-t sm:border border-gray-200"
+          style={{ display: isGeminiChatbotHidden ? 'none' : 'flex' }}
+        >
           {/* Header */}
           <div className="bg-gradient-to-r from-primary to-secondary text-white p-3 sm:p-4 rounded-t-lg sm:rounded-t-lg flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1419,4 +1424,3 @@ const Chatbot: React.FC = () => {
 };
 
 export default Chatbot;
-

@@ -10,36 +10,36 @@ import { Card, CardContent } from '../components/ui/card';
 import AdvertisementBanner from '../components/AdvertisementBanner';
 import { getApiUrl, getImageUrl } from '../config/api';
 
-// Hero images for carousel - Balanced poultry-related images: Eggs, Live Chicken, Chicken Meat, Chicks, Poultry Farm, Poultry Feed
-const heroImages = [
+// Hero media for carousel - Balanced poultry-related images plus login/register animation video
+const heroMedia = [
   {
+    type: "image" as const,
     url: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=1200&h=800&auto=format&fit=crop&q=90",
     alt: "Fresh eggs in a bowl",
     objectPosition: "center center"
   },
   {
+    type: "image" as const,
     url: "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=1200&h=800&auto=format&fit=crop&q=90",
     alt: "Live chickens on a farm",
     objectPosition: "center center"
   },
   {
+    type: "image" as const,
     url: "https://media.istockphoto.com/id/93456466/photo/raw-skin-on-chicken-legs-cross-each-other.webp?a=1&b=1&s=612x612&w=0&k=20&c=RwiA2ov5IuHI7OT8U01FJdGm88nxSt4wHpML7MGGTHY=",
     alt: "Fresh chicken meat products",
     objectPosition: "center center"
   },
   {
-    url: "https://media.istockphoto.com/id/1383102145/photo/very-young-chicks-searching-for-food.webp?a=1&b=1&s=612x612&w=0&k=20&c=9xN1MbRcC521TmzbxZKcxuw74VPDJPINqoagee_Coyg=",
-    alt: "Day old chicks",
-    objectPosition: "center center"
-  },
-  {
-    url: "https://media.istockphoto.com/id/2240911649/photo/large-indoor-poultry-farms.webp?a=1&b=1&s=612x612&w=0&k=20&c=NG8ZNXSbqgR93QPfRGrUJGgyW4pznmPmUe12qfof4y8=",
-    alt: "Modern poultry farm",
-    objectPosition: "center center"
-  },
-  {
+    type: "image" as const,
     url: "https://images.unsplash.com/photo-1694854038360-56b29a16fb0c?w=1200&h=800&auto=format&fit=crop&q=90&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTB8fFBvdWx0cnklMjBmZWVkJTIwYW5kJTIwbnV0cml0aW9ufGVufDB8fDB8fHww",
     alt: "Poultry feed and nutrition",
+    objectPosition: "center center"
+  },
+  {
+    type: "video" as const,
+    url: "/Login-Register-Animation.mp4",
+    alt: "Login and register animation",
     objectPosition: "center center"
   }
 ];
@@ -57,9 +57,10 @@ const Index = () => {
   const featuredCarouselRef = useRef<HTMLDivElement>(null);
   const featuredAutoScrollRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Hero image carousel state
+  // Hero media carousel state
   const [currentHeroImageIndex, setCurrentHeroImageIndex] = useState(0);
   const heroImageIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heroVideoRef = useRef<HTMLVideoElement | null>(null);
   
   // Scroll animation refs
   const heroTextRef = useRef<HTMLDivElement>(null);
@@ -73,18 +74,42 @@ const Index = () => {
     fetchAdvertisements();
     fetchFeaturedProducts();
     
-    // Hero image carousel - rotate every 5 seconds
-    heroImageIntervalRef.current = setInterval(() => {
-      setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroImages.length);
-    }, 5000);
-
     return () => {
       if (premiumRotationRef.current) clearTimeout(premiumRotationRef.current);
       if (basicRotationRef.current) clearTimeout(basicRotationRef.current);
-      if (heroImageIntervalRef.current) clearInterval(heroImageIntervalRef.current);
+      if (heroImageIntervalRef.current) clearTimeout(heroImageIntervalRef.current);
       if (featuredAutoScrollRef.current) clearInterval(featuredAutoScrollRef.current);
     };
   }, []);
+  
+  useEffect(() => {
+    if (heroImageIntervalRef.current) {
+      clearTimeout(heroImageIntervalRef.current);
+      heroImageIntervalRef.current = null;
+    }
+
+    const current = heroMedia[currentHeroImageIndex];
+    if (!current) return;
+
+    if (current.type === 'image') {
+      heroImageIntervalRef.current = setTimeout(() => {
+        setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroMedia.length);
+      }, 5000);
+      if (heroVideoRef.current) {
+        heroVideoRef.current.pause();
+      }
+    } else {
+      if (heroVideoRef.current) {
+        heroVideoRef.current.currentTime = 0;
+        const playPromise = heroVideoRef.current.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {
+            // Autoplay might be blocked; user interaction will start playback
+          });
+        }
+      }
+    }
+  }, [currentHeroImageIndex]);
 
   const fetchFeaturedProducts = async () => {
     try {
@@ -319,18 +344,18 @@ const Index = () => {
   const testimonials = [
     {
       name: "Sarah Wanjiku",
-      role: "Poultry Farmer",
+      role: "Poultry Specialist",
       content: "PoultryHubKenya (KE) has transformed my business. I can now reach customers directly without middlemen.",
-      rating: 5
+      rating: 4
     },
     {
       name: "Steve Ronald",
       role: "Customer",
       content: "I always find quality chicks here. The farmers are reliable and the prices are fair.",
-      rating: 5
+      rating: 3
     },
     {
-      name: "Grace Akinyi",
+      name: "Maguna's Poultry farm",
       role: "Vendor",
       content: "The platform is easy to use and has helped me grow my poultry supply business significantly.",
       rating: 5
@@ -386,9 +411,9 @@ const Index = () => {
             {/* Animated Image Carousel */}
             <div className="relative h-[300px] sm:h-[400px] md:h-[450px] lg:h-[500px] w-full">
               <div className="relative w-full h-full rounded-lg shadow-2xl overflow-hidden bg-gray-200 dark:bg-gray-800">
-                {heroImages.map((image, index) => (
+                {heroMedia.map((item, index) => (
                   <div
-                    key={`hero-image-${index}-${image.url.substring(0, 20)}`}
+                    key={`hero-media-${index}-${item.url.substring(0, 20)}`}
                     className={`absolute inset-0 transition-all duration-1000 ease-in-out ${
                       index === currentHeroImageIndex
                         ? 'opacity-100 scale-100 translate-x-0 z-10'
@@ -397,39 +422,61 @@ const Index = () => {
                         : 'opacity-0 scale-95 translate-x-full z-0'
                     }`}
                   >
-                    <img 
-                      key={`img-${index}-${image.url.substring(0, 20)}`}
-                      src={image.url} 
-                      alt={image.alt} 
-                      className="w-full h-full object-cover"
-                      style={{ 
-                        objectFit: 'cover', 
-                        objectPosition: image.objectPosition || 'center center',
-                        width: '100%', 
-                        height: '100%',
-                        minHeight: '100%',
-                        minWidth: '100%'
-                      }}
-                      loading="eager"
-                      crossOrigin="anonymous"
-                      onError={(e) => {
-                        // Fallback to a reliable poultry image if original fails
-                        // Use different fallbacks based on image index to avoid all showing the same image
-                        const target = e.target as HTMLImageElement;
-                        const fallbackImages = [
-                          "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=1200&h=800&auto=format&fit=crop&q=90", // eggs
-                          "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=1200&h=800&auto=format&fit=crop&q=90", // live chicken
-                          "https://images.unsplash.com/photo-1606914469633-bd39294ea743?w=1200&h=800&auto=format&fit=crop&q=90", // meat
-                          "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=1200&h=800&auto=format&fit=crop&q=90", // chicks
-                          "https://images.unsplash.com/photo-1564759224907-6b3d55e4d7f9?w=1200&h=800&auto=format&fit=crop&q=90", // farm
-                          "https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=1200&h=800&auto=format&fit=crop&q=90" // feed
-                        ];
-                        const imageIndex = heroImages.findIndex(img => img.url === target.src);
-                        if (imageIndex >= 0 && imageIndex < fallbackImages.length) {
-                          target.src = fallbackImages[imageIndex];
-                        }
-                      }}
-                    />
+                    {item.type === 'image' ? (
+                      <img 
+                        key={`img-${index}-${item.url.substring(0, 20)}`}
+                        src={item.url} 
+                        alt={item.alt} 
+                        className="w-full h-full object-cover"
+                        style={{ 
+                          objectFit: 'cover', 
+                          objectPosition: item.objectPosition || 'center center',
+                          width: '100%', 
+                          height: '100%',
+                          minHeight: '100%',
+                          minWidth: '100%'
+                        }}
+                        loading="eager"
+                        crossOrigin="anonymous"
+                        onError={(e) => {
+                          // Fallback to a reliable poultry image if original fails
+                          // Use different fallbacks based on image index to avoid all showing the same image
+                          const target = e.target as HTMLImageElement;
+                          const fallbackImages = [
+                            "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=1200&h=800&auto=format&fit=crop&q=90", // eggs
+                            "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=1200&h=800&auto=format&fit=crop&q=90", // live chicken
+                            "https://images.unsplash.com/photo-1606914469633-bd39294ea743?w=1200&h=800&auto=format&fit=crop&q=90", // meat
+                            "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=1200&h=800&auto=format&fit=crop&q=90", // chicks
+                            "https://images.unsplash.com/photo-1564759224907-6b3d55e4d7f9?w=1200&h=800&auto=format&fit=crop&q=90", // farm
+                            "https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=1200&h=800&auto=format&fit=crop&q=90" // feed
+                          ];
+                          const imageIndex = heroMedia.findIndex(img => img.url === target.src);
+                          if (imageIndex >= 0 && imageIndex < fallbackImages.length) {
+                            target.src = fallbackImages[imageIndex];
+                          }
+                        }}
+                      />
+                    ) : (
+                      <video
+                        ref={index === currentHeroImageIndex ? heroVideoRef : null}
+                        src={item.url}
+                        className="w-full h-full object-cover"
+                        style={{
+                          objectFit: 'cover',
+                          objectPosition: item.objectPosition || 'center center',
+                          width: '100%',
+                          height: '100%',
+                          minHeight: '100%',
+                          minWidth: '100%'
+                        }}
+                        muted
+                        playsInline
+                        preload="auto"
+                        onEnded={() => {
+                          setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroMedia.length);
+                        }}
+                      />
+                    )}
                     {/* Gradient overlay for better text readability */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                   </div>
@@ -437,17 +484,17 @@ const Index = () => {
                 
                 {/* Image indicators - Mobile responsive */}
                 <div className="absolute bottom-2 sm:bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1.5 sm:gap-2 z-20">
-                  {heroImages.map((_, index) => (
+                  {heroMedia.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => {
                         setCurrentHeroImageIndex(index);
                         // Reset interval
                         if (heroImageIntervalRef.current) {
-                          clearInterval(heroImageIntervalRef.current);
+                          clearTimeout(heroImageIntervalRef.current);
                         }
-                        heroImageIntervalRef.current = setInterval(() => {
-                          setCurrentHeroImageIndex((prev) => (prev + 1) % heroImages.length);
+                        heroImageIntervalRef.current = setTimeout(() => {
+                          setCurrentHeroImageIndex((prev) => (prev + 1) % heroMedia.length);
                         }, 5000);
                       }}
                       className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${

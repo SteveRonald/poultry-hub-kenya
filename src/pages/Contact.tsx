@@ -97,8 +97,8 @@ const Contact = () => {
     {
       icon: <Mail className="h-6 w-6 text-accent" />,
       title: "Email",
-      details: ["okothroni863@gmail.com", "support@kukusoko.com", "kothroni863@gmail.com"],
-      description: "We'll respond within 24 hours"
+      details: ["okothroni863@gmail.com", "kothroni863@gmail.com"],
+      description: "We'll respond within 3 - 4 hours"
     },
     {
       icon: <MapPin className="h-6 w-6 text-accent" />,

@@ -275,6 +275,8 @@ function handleMultipleImageUpload() {
     $files = $_FILES['images'];
     $uploadedFiles = [];
     $errors = [];
+    $rejectionReasonForResponse = null;
+    $rejectionVerification = null;
     
     // Create upload directory if it doesn't exist
     $uploadDir = __DIR__ . '/../../uploads/products/';
@@ -376,6 +378,15 @@ function handleMultipleImageUpload() {
                         @unlink($uploadPath);
                         $rejectionReason = $analysis['rejection_reason'] ?? 'Image must show poultry products (chickens, eggs, feed, equipment, etc.)';
                         $errors[] = "Image verification failed - Not poultry-related. " . $rejectionReason;
+                        if ($rejectionVerification === null) {
+                            $rejectionReasonForResponse = $rejectionReason;
+                            $rejectionVerification = [
+                                'verified' => false,
+                                'is_poultry_related' => false,
+                                'confidence' => $confidence,
+                                'analysis' => $analysis
+                            ];
+                        }
                         $verificationPassed = false;
                         continue;
                     }
@@ -429,7 +440,9 @@ function handleMultipleImageUpload() {
     echo json_encode([
         'success' => count($uploadedFiles) > 0,
         'uploaded' => $uploadedFiles,
-        'errors' => $errors
+        'errors' => $errors,
+        'rejection_reason' => $rejectionReasonForResponse,
+        'verification' => $rejectionVerification
     ]);
 }
 ?>

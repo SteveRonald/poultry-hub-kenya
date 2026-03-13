@@ -776,6 +776,36 @@ const VendorDashboard = () => {
     return categoryMap[normalized] || 'other';
   };
 
+  const buildNonPoultryMessage = (analysis?: any, rejectionReason?: string) => {
+    const detectedObjects = Array.isArray(analysis?.detected_objects)
+      ? analysis.detected_objects.filter((item: any) => typeof item === 'string' && item.trim().length > 0)
+      : [];
+    const imageDescription = typeof analysis?.image_description === 'string'
+      ? analysis.image_description.trim()
+      : '';
+    const rawReason = typeof rejectionReason === 'string' ? rejectionReason.trim() : '';
+    let cleanedReason = rawReason
+      .replace(/not poultry[- ]related\.?/ig, '')
+      .replace(/please upload.*$/ig, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (/image must show|please upload|poultry products|does not contain poultry|not poultry/i.test(cleanedReason)) {
+      cleanedReason = '';
+    }
+    let detectedText = '';
+    if (detectedObjects.length > 0) {
+      detectedText = detectedObjects.join(', ');
+    } else if (imageDescription) {
+      detectedText = imageDescription;
+    } else if (cleanedReason) {
+      detectedText = cleanedReason;
+    } else {
+      detectedText = 'unknown object';
+    }
+    detectedText = detectedText.replace(/[.]+$/g, '').trim();
+    return `Image verification failed. The image shows ${detectedText}, which is not poultry-related. Please upload another poultry-related image.`;
+  };
+
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     // Reset file input to allow re-uploading the same file
     const input = e.target;
@@ -853,7 +883,14 @@ const VendorDashboard = () => {
         
         if (errorMessages.length > 0) {
           const errorMessage = errorMessages.join('. ');
-          setUploadError(errorMessage);
+          const isNonPoultry = data?.verification?.is_poultry_related === false
+            || data?.verification?.analysis?.is_poultry_related === false
+            || errorMessages.some((message: string) => message.toLowerCase().includes('not poultry'));
+          const rejectionReason = data?.rejection_reason || (isNonPoultry ? errorMessage : '');
+          const nonPoultryMessage = isNonPoultry
+            ? buildNonPoultryMessage(data?.verification?.analysis, rejectionReason)
+            : null;
+          setUploadError(nonPoultryMessage || errorMessage);
           setIsImageVerified(false);
           setIsAnalyzing(false);
           
@@ -874,7 +911,7 @@ const VendorDashboard = () => {
             }
           }, 100);
           
-          toast.error(errorMessage);
+          toast.error(nonPoultryMessage || errorMessage);
         } else {
           setUploadError('Upload failed. Please try again.');
           setIsImageVerified(false);
@@ -1023,7 +1060,7 @@ const VendorDashboard = () => {
           }
         } else {
           // All images were rejected
-          const rejectionMessage = 'Image was rejected. Please upload only poultry-related images (chickens, eggs, feed, equipment, etc.)';
+          const rejectionMessage = buildNonPoultryMessage();
           setUploadError(rejectionMessage);
           setIsImageVerified(false);
           setIsAnalyzing(false);
@@ -1047,7 +1084,7 @@ const VendorDashboard = () => {
             }
           }, 100);
           
-          toast.error("The uploaded image did not pass verification. Please upload only poultry-related images.");
+          toast.error(rejectionMessage);
           // Reset input after rejection
           if (fileInputRef.current) {
             fileInputRef.current.value = '';

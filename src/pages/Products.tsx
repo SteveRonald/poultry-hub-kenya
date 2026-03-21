@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, ShoppingCart, Star, MapPin, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Filter, Star, X, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -16,12 +16,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
 import AdvertisementBanner from '../components/AdvertisementBanner';
-import ChatButton from '../components/ChatButton';
+import ProductCard, { createCategoryPlaceholder } from '../components/ProductCard';
+import { cn } from '../lib/utils';
 
 const Products = () => {
   const navigate = useNavigate();
-  const PLACEHOLDER_IMAGE = 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp';
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const highlightedProductId = searchParams.get('product');
   const productRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,12 +35,9 @@ const Products = () => {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState('all');
-  const [expandedSections, setExpandedSections] = useState(() => {
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    return {
-      quickFilters: !isMobile,
-      searchCategory: !isMobile
-    };
+  const [expandedSections, setExpandedSections] = useState({
+    quickFilters: false,
+    searchCategory: true
   });
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedDescription, setSelectedDescription] = useState<{ name: string; description: string } | null>(null);
@@ -48,7 +45,7 @@ const Products = () => {
   const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const { addToCart, loading: cartLoading } = useCart();
+  const { addToCart } = useCart();
   const { user } = useAuth();
 
   // Debounce search term
@@ -162,22 +159,6 @@ const Products = () => {
     return allProducts.filter(p => vendor === 'all' || p.vendor_profiles?.farm_name === vendor).length;
   };
   
-  // Function to check if description needs truncation (more than ~150 characters or 2 lines)
-  const needsTruncation = (description: string): boolean => {
-    if (!description) return false;
-    // Check if description is longer than approximately 2 lines (150 chars is roughly 2 lines at text-sm)
-    return description.length > 150 || description.split('\n').filter(line => line.trim().length > 0).length > 2;
-  };
-  
-  // Function to handle viewing full description
-  const handleViewDescription = (product: Product) => {
-    setSelectedDescription({
-      name: product.name,
-      description: product.description
-    });
-    setShowDescriptionModal(true);
-  };
-
   const getProductCardImage = (product: Product) => {
     // Handle both old single image_url and new image_urls array
     // Prefer explicit `image_urls` when present, otherwise fall back to `image_url` which may be a URL or JSON-stringified array
@@ -193,8 +174,10 @@ const Products = () => {
         // fallthrough
       }
     }
-    const fallback = product.image_url || PLACEHOLDER_IMAGE;
-    return getImageUrl(String(fallback));
+    if (product.image_url) {
+      return getImageUrl(String(product.image_url));
+    }
+    return createCategoryPlaceholder(product.category, product.name);
   };
 
   // Handle ESC key to close description modal
@@ -419,39 +402,60 @@ const Products = () => {
   // Get unique locations from products
   const locations: string[] = ['all', ...Array.from(new Set(products.map(p => p.vendor_profiles.location)))];
 
-  const handleOrderNow = async (product: any) => {
-    const minQty = product.minimum_order_quantity || 1;
-    
-    // Always add to cart first (whether logged in or not)
-    if (!user) {
-      // Add to local cart if not logged in
-      const localCart = JSON.parse(localStorage.getItem('local_cart') || '[]');
-      const existingItem = localCart.find((item: any) => item.product_id === product.id);
-      
-      if (existingItem) {
-        existingItem.quantity += minQty;
-      } else {
-        localCart.push({
-          product_id: product.id,
-          product_name: product.name,
-          price: product.price,
-          quantity: minQty,
-          unit: product.unit,
-          image_url: product.image_url,
-          category: product.category
-        });
-      }
-      
-      localStorage.setItem('local_cart', JSON.stringify(localCart));
-      toast.success(`${product.name} added to cart`);
-    } else {
-      // Add to database cart if logged in
-      await addToCart(product.id, minQty);
-    }
-    
+  const handleOrderNow = async (product: Product) => {
+    await handleAddToCart(product.id);
     // Navigate to checkout page with all cart items
     navigate('/checkout');
   };
+
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('all');
+    setSelectedLocation('all');
+    setMinPrice('');
+    setMaxPrice('');
+    setMinRating('0');
+    setSortBy('newest');
+    setInStockOnly(false);
+    setSelectedVendor('all');
+  };
+
+  const resetAdvancedFilters = () => {
+    setMinPrice('');
+    setMaxPrice('');
+    setMinRating('0');
+    setSortBy('newest');
+    setInStockOnly(false);
+    setSelectedVendor('all');
+  };
+
+  const activeFilters: Array<{ type: string; label: string; clear: () => void }> = [];
+  if (searchTerm) activeFilters.push({ type: 'search', label: `Search: "${searchTerm}"`, clear: () => setSearchTerm('') });
+  if (selectedCategory !== 'all') activeFilters.push({ type: 'category', label: `Category: ${selectedCategory}`, clear: () => setSelectedCategory('all') });
+  if (selectedLocation !== 'all') activeFilters.push({ type: 'location', label: `Location: ${selectedLocation}`, clear: () => setSelectedLocation('all') });
+  if (minPrice || maxPrice) activeFilters.push({ type: 'price', label: `Price: ${minPrice || '0'} - ${maxPrice || '∞'} KSH`, clear: () => { setMinPrice(''); setMaxPrice(''); } });
+  if (minRating !== '0') activeFilters.push({ type: 'rating', label: `Rating: ${minRating}+ stars`, clear: () => setMinRating('0') });
+  if (sortBy !== 'newest') activeFilters.push({ type: 'sort', label: `Sort: ${sortBy === 'price-low' ? 'Low to High' : sortBy === 'price-high' ? 'High to Low' : sortBy === 'rating' ? 'Best Rated' : 'Newest'}`, clear: () => setSortBy('newest') });
+  if (inStockOnly) activeFilters.push({ type: 'stock', label: 'In Stock Only', clear: () => setInStockOnly(false) });
+  if (selectedVendor !== 'all') activeFilters.push({ type: 'vendor', label: `Vendor: ${selectedVendor}`, clear: () => setSelectedVendor('all') });
+
+  const advancedFilterCount = [
+    sortBy !== 'newest',
+    selectedVendor !== 'all',
+    minPrice || maxPrice,
+    minRating !== '0',
+    inStockOnly
+  ].filter(Boolean).length;
+  const hasAnyFilters = activeFilters.length > 0;
+  const hasSearchIntent = Boolean(searchTerm || selectedCategory !== 'all' || selectedLocation !== 'all');
+  const resultSummary = products.length === 1 ? '1 product found' : `${products.length} products found`;
+  const resultContext = hasSearchIntent ? `from ${allProducts.length} available listings` : 'across the marketplace';
+
+  const quickPriceRanges = [
+    { label: 'Under 100 KSH', min: '', max: '100' },
+    { label: '100-500 KSH', min: '100', max: '500' },
+    { label: '500+ KSH', min: '500', max: '' }
+  ];
 
 
   // Check if there's a premium ad (top banner) to add padding
@@ -503,40 +507,63 @@ const Products = () => {
             ))}
 
           {/* Filters */}
-          <div className="bg-white rounded-lg shadow-md mb-8 overflow-hidden">
+          <div className="mb-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+            <div className="border-b border-stone-200 bg-stone-50/80 px-4 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-stone-600">
+                  <span className="font-medium text-stone-900">{resultSummary}</span>
+                  {hasAnyFilters && (
+                    <Badge variant="secondary" className="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-medium text-green-700">
+                      {activeFilters.length} active
+                    </Badge>
+                  )}
+                </div>
+                {hasAnyFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetAllFilters}
+                    className="h-8 rounded-full px-3 text-xs text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  >
+                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
             {/* Search & Category Section */}
-            <div className="border-b border-gray-100">
+            <div className="border-b border-stone-100">
               <button
                 onClick={() => setExpandedSections(prev => ({ ...prev, searchCategory: !prev.searchCategory }))}
-                className="w-full px-4 sm:px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-stone-50 sm:px-6"
                 aria-expanded={expandedSections.searchCategory}
                 aria-controls="search-category-section"
               >
-                <h3 className="font-semibold text-gray-900">Search & Categories</h3>
+                <h3 className="font-semibold text-stone-900">Search & Categories</h3>
                 {expandedSections.searchCategory ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                  <ChevronUp className="h-5 w-5 text-stone-500" />
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                  <ChevronDown className="h-5 w-5 text-stone-500" />
                 )}
               </button>
 
               {expandedSections.searchCategory && (
-                <div id="search-category-section" className="px-4 sm:px-6 pb-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                <div id="search-category-section" className="px-4 pb-5 sm:px-6">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                       <Input
                         type="text"
                         placeholder="Search products or vendors..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
+                        className="h-12 rounded-xl border-stone-200 pl-10 text-base placeholder:text-stone-400 focus-visible:ring-green-600"
                         aria-label="Search products"
                       />
                     </div>
 
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger aria-label={`Product category filter, ${selectedCategory === 'all' ? 'showing all categories' : `filtered to ${selectedCategory}`}`}>
+                      <SelectTrigger className="h-12 rounded-xl border-stone-200 text-left" aria-label={`Product category filter, ${selectedCategory === 'all' ? 'showing all categories' : `filtered to ${selectedCategory}`}`}>
                         <SelectValue placeholder="All Categories" />
                       </SelectTrigger>
                       <SelectContent>
@@ -551,7 +578,7 @@ const Products = () => {
                     </Select>
 
                     <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                      <SelectTrigger aria-label={`Location filter, ${selectedLocation === 'all' ? 'showing all locations' : `filtered to ${selectedLocation}`}`}>
+                      <SelectTrigger className="h-12 rounded-xl border-stone-200 text-left" aria-label={`Location filter, ${selectedLocation === 'all' ? 'showing all locations' : `filtered to ${selectedLocation}`}`}>
                         <SelectValue placeholder="All Locations" />
                       </SelectTrigger>
                       <SelectContent>
@@ -562,82 +589,96 @@ const Products = () => {
                         ))}
                       </SelectContent>
                     </Select>
+
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="h-12 rounded-xl border-stone-200 bg-white text-sm">
+                        <SelectValue placeholder="Sort products" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="newest">Newest First</SelectItem>
+                        <SelectItem value="price-low">Price Low to High</SelectItem>
+                        <SelectItem value="price-high">Price High to Low</SelectItem>
+                        <SelectItem value="rating">Best Rated</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Quick Filters Section */}
-            <div className="border-b border-gray-100">
+            <div className="border-b border-stone-100">
               <button
                 onClick={() => setExpandedSections(prev => ({ ...prev, quickFilters: !prev.quickFilters }))}
-                className="w-full px-4 sm:px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-stone-50 sm:px-6"
                 aria-expanded={expandedSections.quickFilters}
                 aria-controls="quick-filters-section"
               >
-                <h3 className="font-semibold text-gray-900">Quick Filters</h3>
+                <h3 className="font-semibold text-stone-900">Quick Filters</h3>
                 {expandedSections.quickFilters ? (
-                  <ChevronUp className="h-5 w-5 text-gray-500" />
+                  <ChevronUp className="h-5 w-5 text-stone-500" />
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-500" />
+                  <ChevronDown className="h-5 w-5 text-stone-500" />
                 )}
               </button>
 
               {expandedSections.quickFilters && (
-                <div id="quick-filters-section" className="px-4 sm:px-6 pb-4">
-                  <div className="space-y-4">
-                    {/* Price Range Quick Select */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Price Range</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <Button
-                          variant={minPrice === '' && maxPrice === '100' ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => { setMinPrice(''); setMaxPrice('100'); }}
-                          className="text-xs h-8"
-                        >
-                          Under 100 KSH
-                        </Button>
-                        <Button
-                          variant={minPrice === '100' && maxPrice === '500' ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => { setMinPrice('100'); setMaxPrice('500'); }}
-                          className="text-xs h-8"
-                        >
-                          100-500 KSH
-                        </Button>
-                        <Button
-                          variant={minPrice === '500' && maxPrice === '' ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => { setMinPrice('500'); setMaxPrice(''); }}
-                          className="text-xs h-8"
-                        >
-                          500+ KSH
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Rating & Availability */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Rating & Availability</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <Button
-                          variant={minRating === '4' ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setMinRating(minRating === '4' ? '0' : '4')}
-                          className="text-xs h-8"
-                        >
-                          4+ ⭐ Rating
-                        </Button>
-                        <Button
-                          variant={inStockOnly ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setInStockOnly(!inStockOnly)}
-                          className="text-xs h-8"
-                        >
-                          In Stock Only
-                        </Button>
-                      </div>
+                <div id="quick-filters-section" className="px-4 pb-5 sm:px-6">
+                  <div>
+                    <div className="flex flex-wrap gap-2">
+                      {quickPriceRanges.map((range) => {
+                        const isActive = minPrice === range.min && maxPrice === range.max;
+                        return (
+                          <Button
+                            key={range.label}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (isActive) {
+                                setMinPrice('');
+                                setMaxPrice('');
+                                return;
+                              }
+                              setMinPrice(range.min);
+                              setMaxPrice(range.max);
+                            }}
+                            className={cn(
+                              'h-9 rounded-full border px-4 text-xs font-medium transition-all',
+                              isActive
+                                ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100'
+                                : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
+                            )}
+                          >
+                            {range.label}
+                          </Button>
+                        );
+                      })}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setMinRating(minRating === '4' ? '0' : '4')}
+                        className={cn(
+                          'h-9 rounded-full border px-4 text-xs font-medium transition-all',
+                          minRating === '4'
+                            ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100'
+                            : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
+                        )}
+                      >
+                        4+ Rating
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setInStockOnly(!inStockOnly)}
+                        className={cn(
+                          'h-9 rounded-full border px-4 text-xs font-medium transition-all',
+                          inStockOnly
+                            ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100'
+                            : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
+                        )}
+                      >
+                        In Stock
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -645,143 +686,86 @@ const Products = () => {
             </div>
 
             {/* Filter Actions */}
-            <div className="px-4 sm:px-6 py-4 bg-gray-50 border-t border-gray-100">
-              <div className="flex flex-col sm:flex-row gap-3">
-                {(() => {
-                  const advancedFilterCount = [
-                    sortBy !== 'newest',
-                    selectedVendor !== 'all',
-                    minPrice || maxPrice,
-                    minRating !== '0'
-                  ].filter(Boolean).length;
+            <div className="border-t border-stone-100 bg-stone-50 px-4 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-stone-600">
+                  <span className="font-medium text-stone-900">{resultSummary}</span>
+                  <span className="hidden sm:inline"> across the marketplace</span>
+                </div>
 
-                  const hasAnyFilters = searchTerm || selectedCategory !== 'all' || selectedLocation !== 'all' ||
-                                       minPrice || maxPrice || minRating !== '0' || inStockOnly;
-
-                  return (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="flex items-center justify-center sm:flex-1 h-10"
-                        onClick={() => setShowMoreFilters(true)}
-                        aria-label={`Advanced filters ${advancedFilterCount > 0 ? `(${advancedFilterCount} active)` : ''}`}
-                      >
-                        <Filter className="h-4 w-4 mr-2" />
-                        Advanced Filters
-                        {advancedFilterCount > 0 && (
-                          <Badge className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs bg-primary text-white">
-                            {advancedFilterCount}
-                          </Badge>
-                        )}
-                      </Button>
-
-                      {hasAnyFilters && (
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            setSearchTerm('');
-                            setSelectedCategory('all');
-                            setSelectedLocation('all');
-                            setMinPrice('');
-                            setMaxPrice('');
-                            setMinRating('0');
-                            setInStockOnly(false);
-                          }}
-                          className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 h-10 sm:w-auto"
-                          aria-label="Clear all filters"
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          Clear All
-                        </Button>
-                      )}
-                    </>
-                  );
-                })()}
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl border-stone-200 bg-white text-stone-700 hover:bg-stone-100"
+                  onClick={() => setShowMoreFilters(true)}
+                  aria-label={`Advanced filters ${advancedFilterCount > 0 ? `(${advancedFilterCount} active)` : ''}`}
+                >
+                  <SlidersHorizontal className="mr-2 h-4 w-4" />
+                  Advanced Filters
+                  {advancedFilterCount > 0 && (
+                    <Badge className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-green-600 px-1.5 text-[11px] text-white">
+                      {advancedFilterCount}
+                    </Badge>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
 
           {/* Active Filter Chips */}
-          {(() => {
-            const activeFilters = [];
-
-            if (searchTerm) activeFilters.push({ type: 'search', label: `Search: "${searchTerm}"`, clear: () => setSearchTerm('') });
-            if (selectedCategory !== 'all') activeFilters.push({ type: 'category', label: `Category: ${selectedCategory}`, clear: () => setSelectedCategory('all') });
-            if (selectedLocation !== 'all') activeFilters.push({ type: 'location', label: `Location: ${selectedLocation}`, clear: () => setSelectedLocation('all') });
-            if (minPrice || maxPrice) activeFilters.push({ type: 'price', label: `Price: ${minPrice || '0'} - ${maxPrice || '∞'} KSH`, clear: () => { setMinPrice(''); setMaxPrice(''); } });
-            if (minRating !== '0') activeFilters.push({ type: 'rating', label: `Rating: ${minRating}+ stars`, clear: () => setMinRating('0') });
-            if (sortBy !== 'newest') activeFilters.push({ type: 'sort', label: `Sort: ${sortBy === 'price-low' ? 'Low to High' : sortBy === 'price-high' ? 'High to Low' : sortBy === 'rating' ? 'Best Rated' : 'Newest'}`, clear: () => setSortBy('newest') });
-            if (inStockOnly) activeFilters.push({ type: 'stock', label: 'In Stock Only', clear: () => setInStockOnly(false) });
-            if (selectedVendor !== 'all') activeFilters.push({ type: 'vendor', label: `Vendor: ${selectedVendor}`, clear: () => setSelectedVendor('all') });
-
-            return activeFilters.length > 0 && (
-              <div className="bg-white p-3 sm:p-4 rounded-lg shadow-md mb-6">
-                <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2">
-                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Active Filters:</span>
-                  <div className="flex flex-wrap items-center gap-2 flex-1">
-                    {activeFilters.map((filter, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1 px-2 sm:px-3 py-1 text-xs">
-                        <span className="truncate max-w-24 sm:max-w-none">{filter.label}</span>
-                        <button
-                          onClick={filter.clear}
-                          className="ml-1 hover:bg-gray-300 rounded-full p-0.5 transition-colors flex-shrink-0"
-                          aria-label={`Remove ${filter.label} filter`}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSearchTerm('');
-                      setSelectedCategory('all');
-                      setSelectedLocation('all');
-                      setMinPrice('');
-                      setMaxPrice('');
-                      setMinRating('0');
-                      setSortBy('newest');
-                      setInStockOnly(false);
-                      setSelectedVendor('all');
-                    }}
-                    className="text-xs text-gray-500 hover:text-gray-700 whitespace-nowrap mt-1 sm:mt-0"
+          {activeFilters.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {activeFilters.map((filter, index) => (
+                <Badge
+                  key={index}
+                  variant="secondary"
+                  className="flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700"
+                >
+                  <span className="truncate max-w-[180px] sm:max-w-none">{filter.label}</span>
+                  <button
+                    onClick={filter.clear}
+                    className="ml-1 rounded-full p-0.5 transition-colors hover:bg-stone-200"
+                    aria-label={`Remove ${filter.label} filter`}
                   >
-                    Clear All
-                  </Button>
-                </div>
-              </div>
-            );
-          })()}
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
 
           {/* Advanced Filters Modal */}
           {showMoreFilters && (
             <div
-              className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4"
+              className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
               onClick={() => setShowMoreFilters(false)}
             >
-              <Card className="w-full sm:max-w-md animate-in zoom-in-95 duration-200 rounded-t-2xl sm:rounded-xl max-h-[90vh] overflow-y-auto sm:max-h-[95vh] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <CardHeader className="sticky top-0 bg-white dark:bg-gray-800 border-b flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4">
-                  <div className="flex items-center gap-3">
-                    <Filter className="h-5 w-5 text-gray-600" />
-                    <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">Advanced Filters</CardTitle>
+              <Card className="animate-in zoom-in-95 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border-0 shadow-2xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+                <CardHeader className="sticky top-0 z-10 border-b bg-white px-4 py-3 sm:px-6 sm:py-4">
+                  <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-stone-200 sm:hidden" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Filter className="h-5 w-5 text-gray-600" />
+                      <div>
+                        <CardTitle className="text-base font-bold text-gray-900 sm:text-lg">Advanced Filters</CardTitle>
+                        <p className="mt-0.5 text-xs text-stone-500">Vendor, price, and detailed preferences</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowMoreFilters(false)}
+                      className="flex-shrink-0 rounded-full bg-stone-100 p-2.5 text-gray-600 transition-colors duration-150 hover:bg-stone-200 hover:text-gray-800 touch-manipulation"
+                      aria-label="Close filters"
+                      title="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setShowMoreFilters(false)}
-                    className="flex-shrink-0 p-3 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white transition-colors duration-150 touch-manipulation"
-                    aria-label="Close filters"
-                    title="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
                 </CardHeader>
-                <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+                <CardContent className="flex-1 space-y-5 overflow-y-auto p-4 pb-24 sm:space-y-6 sm:p-6 sm:pb-6">
                   {/* Sort By */}
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Sort By</label>
+                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Sort By</label>
                     <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="text-sm">
+                      <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -795,24 +779,24 @@ const Products = () => {
 
                   {/* Stock Availability */}
                   <div>
-                    <label htmlFor="in-stock-only" className="flex items-center gap-3 cursor-pointer">
+                    <label htmlFor="in-stock-only" className="flex items-center gap-3 rounded-xl border border-stone-200 p-3 cursor-pointer">
                       <input
                         id="in-stock-only"
                         type="checkbox"
                         checked={inStockOnly}
                         onChange={(e) => setInStockOnly(e.target.checked)}
                         aria-label="Show only products in stock"
-                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                       />
-                      <span className="text-xs sm:text-sm font-medium text-gray-700">In Stock Only</span>
+                      <span className="text-sm font-medium text-gray-700">In Stock Only</span>
                     </label>
                   </div>
 
                   {/* Vendor Filter */}
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Vendor/Farm</label>
+                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Vendor/Farm</label>
                     <Select value={selectedVendor} onValueChange={setSelectedVendor}>
-                      <SelectTrigger className="text-sm">
+                      <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -828,69 +812,66 @@ const Products = () => {
 
                   {/* Price Range */}
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Price Range (KSH)</label>
-                    <div className="flex gap-2">
+                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Price Range (KSH)</label>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <Input
                         type="number"
                         placeholder="Min price"
                         value={minPrice}
                         onChange={(e) => setMinPrice(e.target.value)}
-                        className="w-1/2 text-sm"
+                        className="h-11 rounded-xl border-stone-200 text-sm"
                       />
                       <Input
                         type="number"
                         placeholder="Max price"
                         value={maxPrice}
                         onChange={(e) => setMaxPrice(e.target.value)}
-                        className="w-1/2 text-sm"
+                        className="h-11 rounded-xl border-stone-200 text-sm"
                       />
                     </div>
                   </div>
 
                   {/* Rating Filter */}
                   <div>
-                    <label htmlFor="min-rating-slider" className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Minimum Rating</label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        id="min-rating-slider"
-                        type="range"
-                        min="0"
-                        max="5"
-                        step="0.5"
-                        value={minRating}
-                        onChange={(e) => setMinRating(e.target.value)}
-                        className="flex-1"
-                        aria-label="Minimum rating filter"
-                        title={`Minimum rating: ${minRating} stars`}
-                      />
-                      <span className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
-                        {minRating} <Star className="h-3 w-3 sm:h-4 sm:w-4 inline text-yellow-400 fill-yellow-400" />
-                      </span>
+                    <label htmlFor="min-rating-slider" className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Minimum Rating</label>
+                    <div className="rounded-xl border border-stone-200 p-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          id="min-rating-slider"
+                          type="range"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={minRating}
+                          onChange={(e) => setMinRating(e.target.value)}
+                          className="flex-1 accent-green-600"
+                          aria-label="Minimum rating filter"
+                          title={`Minimum rating: ${minRating} stars`}
+                        />
+                        <span className="whitespace-nowrap text-sm font-medium text-gray-700">
+                          {minRating} <Star className="h-3 w-3 sm:h-4 sm:w-4 inline text-yellow-400 fill-yellow-400" />
+                        </span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3 sm:gap-3 pt-6 sm:pt-4 sticky bottom-0 bg-white dark:bg-gray-800 border-t mt-6 -mb-6 -mx-4 px-4 py-4 sm:relative sm:bg-transparent sm:border-t-0 sm:mt-0 sm:-mb-0 sm:-mx-0 sm:px-0 sm:py-0">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setMinPrice('');
-                        setMaxPrice('');
-                        setMinRating('0');
-                        setSortBy('newest');
-                        setInStockOnly(false);
-                        setSelectedVendor('all');
-                      }}
-                      className="flex-1 h-12 sm:h-10 text-sm sm:text-sm touch-manipulation font-medium"
-                    >
-                      Reset All
-                    </Button>
-                    <Button
-                      onClick={() => setShowMoreFilters(false)}
-                      className="flex-1 h-12 sm:h-10 btn-primary text-sm sm:text-sm touch-manipulation font-medium"
-                    >
-                      Apply Filters
-                    </Button>
+                  <div className="sticky bottom-0 -mx-4 -mb-4 mt-6 border-t bg-white px-4 py-4 sm:static sm:m-0 sm:border-t-0 sm:bg-transparent sm:p-0">
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={resetAdvancedFilters}
+                        className="h-12 flex-1 rounded-xl border-stone-300 text-sm font-medium touch-manipulation sm:h-10"
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        onClick={() => setShowMoreFilters(false)}
+                        className="h-12 flex-1 rounded-xl bg-green-600 text-sm font-medium text-white touch-manipulation hover:bg-green-700 sm:h-10"
+                      >
+                        Show Results
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -915,7 +896,7 @@ const Products = () => {
 
           {/* Products Grid */}
           {!isLoading && (
-            <div ref={productsGridRef} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+            <div ref={productsGridRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {products.map((product, index) => {
                 const isHighlighted = highlightedProductId === product.id;
                 // Vary animation directions: 0=up, 1=left, 2=right, 3=down
@@ -927,138 +908,20 @@ const Products = () => {
                   3: 'opacity-0 translate-y-8' // up (alternate)
                 };
                 return (
-                <Card 
-                  key={product.id} 
-                  ref={(el) => { productRefs.current[product.id] = el; }}
-                  className={`product-card group relative card-hover overflow-hidden transition-all duration-300 ease-out animate-out cursor-pointer ${directionClasses[direction as keyof typeof directionClasses]} ${
-                    isHighlighted 
-                      ? 'ring-4 ring-yellow-400 ring-offset-4 shadow-2xl scale-105 z-10 border-4 border-yellow-400' 
-                      : ''
-                  }`}
-                  style={{
-                    animation: isHighlighted ? 'pulse 2s ease-in-out' : undefined,
-                    transitionDelay: `${(index % 6) * 30}ms` // Very fast stagger for products
-                  }}
-                  onClick={() => {
-                    // Navigate to product details page
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  highlighted={isHighlighted}
+                  imageSrc={getProductCardImage(product)}
+                  animationClassName={`${directionClasses[direction as keyof typeof directionClasses]} animate-out`}
+                  animationDelayMs={(index % 6) * 30}
+                  cardRef={(el) => { productRefs.current[product.id] = el; }}
+                  onCardClick={() => {
                     navigate(`/product/${product.id}`);
                   }}
-                >
-                  {isHighlighted && (
-                    <div className="absolute -top-2 -right-2 z-20 bg-yellow-400 text-black px-3 py-1 rounded-full text-xs font-bold shadow-lg animate-bounce">
-                      ADVERTISED PRODUCT
-                    </div>
-                  )}
-                  <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
-                    <img
-                      src={getProductCardImage(product)}
-                      alt={product.name}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => {
-                        const target = e.currentTarget;
-                        if (target.src !== PLACEHOLDER_IMAGE) {
-                          target.src = PLACEHOLDER_IMAGE;
-                        }
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
-
-                    <div className="absolute top-2 right-2 bg-white/90 text-gray-900 px-2 py-1 rounded-md text-xs font-semibold shadow-sm border border-white/40 backdrop-blur">
-                      KSH {product.price.toLocaleString()}
-                    </div>
-
-                    {product.stock_quantity <= 0 && (
-                      <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-1 rounded-md text-xs font-semibold shadow-sm">
-                        Out of stock
-                      </div>
-                    )}
-                    {product.stock_quantity > 0 && product.stock_quantity < 10 && (
-                      <div className="absolute bottom-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-semibold shadow-sm">
-                        Limited stock
-                      </div>
-                    )}
-                  </div>
-                  
-                  <CardContent className="p-2 md:p-3">
-                    <h3 className="font-semibold text-sm md:text-base text-primary mb-1 line-clamp-2">{product.name}</h3>
-                    <div className="mb-2 hidden md:block">
-                      <div className="text-gray-600 text-xs line-clamp-1">
-                        {product.description}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center text-xs text-gray-500">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        <span className="truncate">{product.vendor_profiles.location}</span>
-                      </div>
-                      {product.average_rating && product.average_rating > 0 ? (
-                        <div className="flex items-center gap-0.5">
-                          <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                          <span className="text-xs font-medium">
-                            {product.average_rating.toFixed(1)}
-                          </span>
-                          {product.total_ratings && product.total_ratings > 0 && (
-                            <span className="text-[10px] text-gray-500 ml-0.5">
-                              ({product.total_ratings})
-                            </span>
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div>
-                        <p className="text-xs text-gray-500 truncate">by {product.vendor_profiles.farm_name}</p>
-                        <p className="text-sm md:text-base font-bold text-primary">
-                          KSH {product.price.toLocaleString()}
-                        </p>
-                        <p className="text-xs text-gray-500">Stock: {product.stock_quantity}</p>
-                        <p className="text-xs text-orange-600 font-medium">
-                          Min Order: {product.minimum_order_quantity || 1}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Button
-                          size="sm"
-                          className="bg-primary text-white hover:bg-primary/95 flex items-center justify-center w-full h-8 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddToCart(product.id);
-                          }}
-                          disabled={cartLoading || product.stock_quantity <= 0}
-                        >
-                          <Plus className="h-3 w-3 mr-1" />
-                          Add to Cart
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex items-center justify-center w-full h-8 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOrderNow(product);
-                          }}
-                        >
-                          <ShoppingCart className="h-3 w-3 mr-1" />
-                          Order Now
-                        </Button>
-
-                        <div className="hidden md:block">
-                          <ChatButton
-                            productId={product.id}
-                            vendorId={product.vendor_id}
-                            vendorUserId={product.vendor_profiles?.user_id || product.vendor_user_id}
-                            className="w-full h-10 text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  onAddToCart={handleAddToCart}
+                  onOrderNow={handleOrderNow}
+                />
                 );
               })}
             </div>

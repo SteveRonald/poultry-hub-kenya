@@ -585,9 +585,10 @@ const ProductDetails = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3 sm:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row">
               <Button
-                className="flex-1 bg-primary hover:bg-primary/90 text-white h-11"
+                className="h-11 flex-1 rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700"
                 onClick={handleAddToCart}
                 disabled={cartLoading || product.stock_quantity <= 0}
               >
@@ -596,23 +597,25 @@ const ProductDetails = () => {
               </Button>
               <Button
                 variant="outline"
-                className="flex-1 h-11"
+                className="h-11 flex-1 rounded-xl border-stone-300 bg-white text-sm font-semibold text-stone-800 hover:bg-stone-50"
                 onClick={handleOrderNow}
                 disabled={product.stock_quantity <= 0}
               >
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Order Now
               </Button>
-            </div>
+              </div>
 
-            {/* Chat action separated to avoid mis-clicks */}
-            <div className="pt-3 border-t mt-2">
+              {/* Chat action separated to avoid competing with the primary CTA */}
+              <div className="mt-3 border-t border-stone-200 pt-3">
               <ChatButton
                 productId={product.id}
                 vendorId={product.vendor_id}
                 vendorUserId={product.vendor_profiles?.user_id}
-                className="w-full h-10 text-sm"
+                variant="ghost"
+                className="h-10 w-full justify-start rounded-xl px-2 text-sm font-medium text-stone-600 hover:bg-transparent hover:text-stone-900"
               />
+              </div>
             </div>
 
             {/* Stock Status */}

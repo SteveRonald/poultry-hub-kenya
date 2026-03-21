@@ -80,7 +80,7 @@ const ChatButton: React.FC<ChatButtonProps> = ({
       aria-label="Chat with vendor"
       title="Chat with vendor"
     >
-      <MessageSquare className="h-4 w-4 mr-2 text-primary" />
+      <MessageSquare className="h-4 w-4 mr-2" />
       Chat with Vendor
     </Button>
   );

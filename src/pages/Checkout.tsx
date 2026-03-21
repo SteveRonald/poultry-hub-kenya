@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart, MapPin, Phone, CreditCard, Shield, Lock, Truck, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import Navbar from '../components/Navbar';
@@ -34,6 +34,7 @@ const Checkout = () => {
   const [selectedCounty, setSelectedCounty] = useState('');
   const [selectedPickupStation, setSelectedPickupStation] = useState('');
   const [loadingLocations, setLoadingLocations] = useState(false);
+  const orderSummaryRef = useRef<HTMLDivElement | null>(null);
 
   const [formData, setFormData] = useState({
     shipping_address: '',
@@ -142,6 +143,24 @@ const Checkout = () => {
   const isFreeDelivery = subtotal >= freeDeliveryThreshold;
   const actualDeliveryFee = isFreeDelivery ? 0 : deliveryFee;
   const totalAmount = subtotal + actualDeliveryFee;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth >= 1024) return;
+    if (loadingProduct) return;
+    if (checkoutItems.length === 0 && !productId) return;
+
+    const scrollToSummary = () => {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      orderSummaryRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      window.setTimeout(scrollToSummary, 50);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [loadingProduct, checkoutItems.length, productId]);
 
   // Fetch delivery fee from settings
   useEffect(() => {
@@ -355,7 +374,7 @@ const Checkout = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Order Summary - Priority 1 on Mobile */}
-          <div className="order-1 lg:order-2 lg:col-span-1">
+          <div ref={orderSummaryRef} className="order-1 lg:order-2 lg:col-span-1">
             <div className="sticky top-4 space-y-4">
               <Card className="border-primary/20 shadow-md">
                 <CardHeader className="bg-primary/5 pb-3">
@@ -632,4 +651,3 @@ const Checkout = () => {
 };
 
 export default Checkout;
-

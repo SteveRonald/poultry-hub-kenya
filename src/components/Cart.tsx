@@ -107,10 +107,10 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
   const currentTotal = subtotal + actualDeliveryFee;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden">
-        <Card className="h-full flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
+        <Card className="flex h-[min(90vh,760px)] flex-col border-0 shadow-none">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b bg-white pb-4 dark:bg-gray-800">
             <CardTitle className="flex items-center text-xl">
               <ShoppingCart className="h-6 w-6 mr-2" />
               Your Cart ({currentItems.length})
@@ -120,9 +120,9 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
             </Button>
           </CardHeader>
 
-          <CardContent className="flex-1 overflow-y-auto">
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             {currentItems.length === 0 ? (
-              <div className="text-center py-12">
+              <div className="flex-1 px-6 py-12 text-center">
                 <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">Your cart is empty</h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-4">Add some products to get started!</p>
@@ -131,9 +131,10 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="flex min-h-0 flex-1 flex-col">
                 {/* Cart Items */}
-                <div className="space-y-4">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                  <div className="space-y-4 pr-1">
                   {currentItems.map((item, index) => {
                     const cartId = user ? item.cart_id : `local_${index}`;
                     return (
@@ -206,10 +207,11 @@ const Cart: React.FC<CartProps> = ({ isOpen, onClose }) => {
                       </Card>
                     );
                   })}
+                  </div>
                 </div>
 
                 {/* Cart Summary */}
-                <Card>
+                <Card className="rounded-none border-x-0 border-b-0 border-t bg-white dark:bg-gray-800">
                   <CardContent className="p-4">
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">

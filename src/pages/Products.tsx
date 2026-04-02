@@ -14,10 +14,11 @@ import { useProducts, Product } from '../hooks/useProducts';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
-import { getApiUrl, getImageUrl } from '../config/api';
+import { getImageUrl } from '../config/api';
 import AdvertisementBanner from '../components/AdvertisementBanner';
 import ProductCard, { createCategoryPlaceholder } from '../components/ProductCard';
 import { cn } from '../lib/utils';
+import { useAdvertisementSlots } from '../hooks/useAdvertisementSlots';
 
 const Products = () => {
   const navigate = useNavigate();
@@ -41,12 +42,9 @@ const Products = () => {
   });
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedDescription, setSelectedDescription] = useState<{ name: string; description: string } | null>(null);
-  const [advertisements, setAdvertisements] = useState<any[]>([]);
-  const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
-  const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const { advertisements, visibleAds, hasPremiumAd, handleAdClose } = useAdvertisementSlots('products', 20);
 
   // Debounce search term
   useEffect(() => {
@@ -202,15 +200,6 @@ const Products = () => {
   }, [showDescriptionModal]);
 
   useEffect(() => {
-    fetchAdvertisements();
-    return () => {
-      if (adRotationIntervalRef.current) {
-        clearInterval(adRotationIntervalRef.current);
-      }
-    };
-  }, []);
-  
-  useEffect(() => {
     setupScrollAnimations();
   }, [products.length, searchTerm, selectedCategory, selectedLocation]);
   
@@ -238,89 +227,6 @@ const Products = () => {
       const productCards = document.querySelectorAll('.product-card');
       productCards.forEach((card) => observer.observe(card));
     }, 50);
-  };
-
-  const fetchAdvertisements = async () => {
-    try {
-      const response = await fetch(getApiUrl('/api/advertisements?limit=10&page_location=products'));
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setAdvertisements(data);
-        // Show first premium ad or first ad if no premium
-        const premiumAds = data.filter((ad: any) => ad.tier === 'premium');
-        const firstAd = premiumAds.length > 0 ? premiumAds[0] : data[0];
-        if (firstAd) {
-          setVisibleAds(new Set([firstAd.id]));
-          setCurrentAdIndex(0);
-          
-          // Start rotation if there are multiple ads
-          if (data.length > 1) {
-            startAdRotation(data);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch advertisements:', error);
-    }
-  };
-
-  const startAdRotation = (ads: any[]) => {
-    // Clear any existing interval
-    if (adRotationIntervalRef.current) {
-      clearInterval(adRotationIntervalRef.current);
-    }
-
-    // Rotate ads based on their content_duration for fairness
-    // Each ad gets equal time based on its configured duration (default 30 seconds)
-    const rotateToNext = () => {
-      setCurrentAdIndex((prevIndex) => {
-        const currentAd = ads[prevIndex];
-        const duration = currentAd?.content_duration ? currentAd.content_duration * 1000 : 30000; // Convert to ms, default 30s
-        
-        // Schedule next rotation based on current ad's duration
-        if (adRotationIntervalRef.current) {
-          clearInterval(adRotationIntervalRef.current);
-        }
-        
-        adRotationIntervalRef.current = setTimeout(() => {
-          const nextIndex = (prevIndex + 1) % ads.length;
-          const nextAd = ads[nextIndex];
-          setVisibleAds(new Set([nextAd.id]));
-          setCurrentAdIndex(nextIndex);
-          rotateToNext(); // Continue rotation
-        }, duration);
-        
-        return prevIndex;
-      });
-    };
-
-    // Start rotation with first ad's duration
-    const firstAd = ads[0];
-    const firstDuration = firstAd?.content_duration ? firstAd.content_duration * 1000 : 30000;
-    adRotationIntervalRef.current = setTimeout(() => {
-      const nextIndex = 1 % ads.length;
-      const nextAd = ads[nextIndex];
-      setVisibleAds(new Set([nextAd.id]));
-      setCurrentAdIndex(nextIndex);
-      rotateToNext();
-    }, firstDuration);
-  };
-
-  const handleAdClose = (adId: string) => {
-    setVisibleAds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(adId);
-      
-      // If no ads visible, show next ad
-      if (newSet.size === 0 && advertisements.length > 0) {
-        const nextIndex = (currentAdIndex + 1) % advertisements.length;
-        const nextAd = advertisements[nextIndex];
-        newSet.add(nextAd.id);
-        setCurrentAdIndex(nextIndex);
-      }
-      
-      return newSet;
-    });
   };
 
   // Scroll to and highlight product when product query parameter is present (from ad click)
@@ -457,11 +363,6 @@ const Products = () => {
     { label: '500+ KSH', min: '500', max: '' }
   ];
 
-
-  // Check if there's a premium ad (top banner) to add padding
-  const hasPremiumAd = advertisements.some(ad => 
-    visibleAds.has(ad.id) && ad.tier === 'premium'
-  );
 
   if (error) {
     return (

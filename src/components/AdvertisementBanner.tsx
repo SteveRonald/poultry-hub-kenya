@@ -17,6 +17,8 @@ interface Advertisement {
   page_location?: string;
   previous_price?: number | null;
   current_price?: number | null;
+  fallback_path?: string;
+  is_fallback?: boolean;
 }
 
 interface AdvertisementBannerProps {
@@ -51,6 +53,18 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
 
   // Get user ID from auth context if available
   const userId = localStorage.getItem('user_id') || null;
+  const isFallbackAd = Boolean(advertisement.is_fallback);
+
+  const getProductImages = () => {
+    if (!advertisement.product_images) return [];
+
+    try {
+      const parsed = JSON.parse(advertisement.product_images);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  };
 
   // Check if ad is video or static (for viewability tracking)
   const isVideo = advertisement.ad_image?.endsWith('.mp4') || 
@@ -67,7 +81,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
 
   // Track viewability using Intersection Observer API (IAB/MRC compliant)
   useEffect(() => {
-    if (!adRef.current || viewTracked) return;
+    if (!adRef.current || viewTracked || isFallbackAd) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -122,7 +136,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
         clearTimeout(viewTimerRef.current);
       }
     };
-  }, [advertisement.id, sessionId, userId, pageLocation, minViewableTime, viewTracked]);
+  }, [advertisement.id, sessionId, userId, pageLocation, minViewableTime, viewTracked, isFallbackAd]);
 
   // Auto-dismiss timer for basic tier ads only (premium ads should not auto-dismiss)
   useEffect(() => {
@@ -165,6 +179,11 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
 
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
+
+    if (isFallbackAd) {
+      navigate(advertisement.fallback_path || '/vendor-dashboard');
+      return;
+    }
     
     // Track click and get current product_id (handles product changes during reactivation)
     let currentProductId = advertisement.product_id;
@@ -220,7 +239,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
 
   // Get the raw image path
   const rawImagePath = advertisement.ad_image || 
-    (advertisement.product_images ? JSON.parse(advertisement.product_images)[0] : null) ||
+    getProductImages()[0] ||
     '/placeholder.svg';
   
   // Convert to proper URL using getImageUrl helper (handles localhost to network IP conversion)
@@ -468,16 +487,12 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
                     });
                     // Try fallback to product image if ad_image fails
                     if (rawImagePath === advertisement.ad_image && advertisement.product_images) {
-                      try {
-                        const productImages = JSON.parse(advertisement.product_images);
-                        if (productImages && productImages[0]) {
-                          const fallbackUrl = getImageUrl(productImages[0]);
-                          console.log('Trying fallback product image:', fallbackUrl);
-                          (e.target as HTMLImageElement).src = fallbackUrl;
-                          return;
-                        }
-                      } catch (err) {
-                        console.error('Failed to parse product_images:', err);
+                      const productImages = getProductImages();
+                      if (productImages[0]) {
+                        const fallbackUrl = getImageUrl(productImages[0]);
+                        console.log('Trying fallback product image:', fallbackUrl);
+                        (e.target as HTMLImageElement).src = fallbackUrl;
+                        return;
                       }
                     }
                     (e.target as HTMLImageElement).src = '/placeholder.svg';

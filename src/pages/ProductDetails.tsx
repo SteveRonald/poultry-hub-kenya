@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import { getApiUrl, getImageUrl } from '../config/api';
 import ProductRatings from '../components/ProductRatings';
 import ChatButton from '../components/ChatButton';
+import ProductCard, { createCategoryPlaceholder } from '../components/ProductCard';
+import type { Product } from '../hooks/useProducts';
 
 interface ProductDetails {
   id: string;
@@ -305,6 +307,93 @@ const ProductDetails = () => {
     
     // Fallback to default image
     return ['https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp'];
+  };
+
+  const getRelatedProductImage = (relatedProduct: RelatedProduct) => {
+    const imgs: any = relatedProduct.image_urls ?? relatedProduct.image_url;
+
+    if (imgs && Array.isArray(imgs) && imgs.length > 0) {
+      return getImageUrl(String(imgs[0]).replace(/\\/g, '/'));
+    }
+
+    if (typeof imgs === 'string') {
+      try {
+        const parsed = JSON.parse(imgs);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return getImageUrl(String(parsed[0]).replace(/\\/g, '/'));
+        }
+      } catch (e) {
+        if (relatedProduct.image_url) {
+          return getImageUrl(String(relatedProduct.image_url).replace(/\\/g, '/'));
+        }
+      }
+    }
+
+    if (relatedProduct.image_url) {
+      return getImageUrl(String(relatedProduct.image_url).replace(/\\/g, '/'));
+    }
+
+    return createCategoryPlaceholder(relatedProduct.category, relatedProduct.name);
+  };
+
+  const toProductCardProduct = (relatedProduct: RelatedProduct): Product => ({
+    id: relatedProduct.id,
+    name: relatedProduct.name,
+    description: relatedProduct.description,
+    category: relatedProduct.category,
+    price: relatedProduct.price,
+    stock_quantity: relatedProduct.stock_quantity,
+    minimum_order_quantity: relatedProduct.minimum_order_quantity,
+    unit: relatedProduct.unit,
+    image_url: relatedProduct.image_url,
+    image_urls: relatedProduct.image_urls,
+    is_available: Number(relatedProduct.stock_quantity || 0) > 0,
+    average_rating: relatedProduct.average_rating,
+    total_ratings: relatedProduct.total_ratings,
+    vendor_profiles: {
+      farm_name: relatedProduct.vendor_profiles?.farm_name || 'Verified vendor',
+      location: relatedProduct.vendor_profiles?.location || 'Location unavailable',
+      user_id: relatedProduct.vendor_profiles?.user_id ? String(relatedProduct.vendor_profiles.user_id) : undefined,
+    },
+    vendor_id: relatedProduct.vendor_id,
+    vendor_user_id: relatedProduct.vendor_user_id,
+  });
+
+  const handleRelatedAddToCart = async (relatedProduct: RelatedProduct) => {
+    const minQty = Math.max(1, relatedProduct.minimum_order_quantity || 1);
+    const imageUrl = getRelatedProductImage(relatedProduct);
+
+    if (!user) {
+      const localCart = JSON.parse(localStorage.getItem('local_cart') || '[]');
+      const existingItem = localCart.find((item: any) => item.product_id === relatedProduct.id);
+
+      if (existingItem) {
+        existingItem.quantity += minQty;
+      } else {
+        localCart.push({
+          product_id: relatedProduct.id,
+          product_name: relatedProduct.name,
+          price: relatedProduct.price,
+          quantity: minQty,
+          unit: relatedProduct.unit,
+          image_url: imageUrl,
+          minimum_order_quantity: minQty,
+          category: relatedProduct.category || '',
+        });
+      }
+
+      localStorage.setItem('local_cart', JSON.stringify(localCart));
+      toast.success(`Added ${minQty} ${relatedProduct.unit}(s) to cart`);
+      return;
+    }
+
+    await addToCart(relatedProduct.id, minQty);
+    toast.success(`Added ${minQty} ${relatedProduct.unit}(s) to cart`);
+  };
+
+  const handleRelatedOrderNow = async (relatedProduct: RelatedProduct) => {
+    await handleRelatedAddToCart(relatedProduct);
+    navigate('/checkout');
   };
 
   const images = getProductImages();
@@ -669,58 +758,22 @@ const ProductDetails = () => {
           )}
 
           {!relatedLoading && relatedProducts.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {relatedProducts.map((p) => {
-                const imgAny: any = (p as any).image_urls ?? p.image_urls;
-                let img = p.image_url || '';
-                if (imgAny && Array.isArray(imgAny) && imgAny.length > 0) {
-                  img = String(imgAny[0]);
-                } else if (typeof imgAny === 'string') {
-                  try {
-                    const parsed = JSON.parse(imgAny);
-                    if (Array.isArray(parsed) && parsed.length > 0) img = String(parsed[0]);
-                  } catch (e) {
-                    // ignore
-                  }
-                }
-
-                const safeImg = img
-                  ? getImageUrl(String(img).replace(/\\/g, '/'))
-                  : 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp';
+                const relatedCardProduct = toProductCardProduct(p);
 
                 return (
-                  <Card
+                  <ProductCard
                     key={p.id}
-                    className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => {
+                    product={relatedCardProduct}
+                    imageSrc={getRelatedProductImage(p)}
+                    onCardClick={() => {
                       navigate(`/product/${p.id}`);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                  >
-                    <div className="relative aspect-square bg-gray-100">
-                      <img src={safeImg} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-                      <div className="absolute top-2 right-2 bg-white/95 px-2 py-1 rounded text-xs font-semibold">
-                        KSH {Number(p.price || 0).toLocaleString()}
-                      </div>
-                    </div>
-                    <CardContent className="p-3 space-y-1">
-                      <div className="font-semibold text-sm line-clamp-2 text-primary">{p.name}</div>
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span className="truncate">{p.vendor_profiles?.location || ''}</span>
-                        {(p.average_rating || 0) > 0 ? (
-                          <span className="flex items-center gap-1 text-gray-700">
-                            <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                            {Number(p.average_rating || 0).toFixed(1)}
-                          </span>
-                        ) : (
-                          <span />
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Stock: {Number(p.stock_quantity || 0)}
-                      </div>
-                    </CardContent>
-                  </Card>
+                    onAddToCart={() => handleRelatedAddToCart(p)}
+                    onOrderNow={() => handleRelatedOrderNow(p)}
+                  />
                 );
               })}
             </div>

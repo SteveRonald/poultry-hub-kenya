@@ -1,14 +1,19 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Users, ShieldCheck, TrendingUp, Star, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import AdvertisementBanner from '../components/AdvertisementBanner';
 import { getApiUrl, getImageUrl } from '../config/api';
+import { useAdvertisementSlots } from '../hooks/useAdvertisementSlots';
+import ProductCard from '../components/ProductCard';
+import type { Product } from '../hooks/useProducts';
+import { toast } from 'sonner';
 
 // Hero media for carousel - Balanced poultry-related images plus login/register animation video
 const heroMedia = [
@@ -45,17 +50,14 @@ const heroMedia = [
 ];
 
 const Index = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const [advertisements, setAdvertisements] = useState<any[]>([]);
-  const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
+  const { addToCart } = useCart();
   const [isPaused, setIsPaused] = useState(false);
-  const [currentPremiumIndex, setCurrentPremiumIndex] = useState(0);
-  const [currentBasicIndex, setCurrentBasicIndex] = useState(0);
-  const premiumRotationRef = useRef<NodeJS.Timeout | null>(null);
-  const basicRotationRef = useRef<NodeJS.Timeout | null>(null);
-  const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const featuredCarouselRef = useRef<HTMLDivElement>(null);
   const featuredAutoScrollRef = useRef<NodeJS.Timeout | null>(null);
+  const { advertisements, visibleAds, hasPremiumAd, handleAdClose } = useAdvertisementSlots('homepage', 20);
   
   // Hero media carousel state
   const [currentHeroImageIndex, setCurrentHeroImageIndex] = useState(0);
@@ -71,12 +73,9 @@ const Index = () => {
 
   useEffect(() => {
     setupScrollAnimations();
-    fetchAdvertisements();
     fetchFeaturedProducts();
     
     return () => {
-      if (premiumRotationRef.current) clearTimeout(premiumRotationRef.current);
-      if (basicRotationRef.current) clearTimeout(basicRotationRef.current);
       if (heroImageIntervalRef.current) clearTimeout(heroImageIntervalRef.current);
       if (featuredAutoScrollRef.current) clearInterval(featuredAutoScrollRef.current);
     };
@@ -138,6 +137,44 @@ const Index = () => {
     }
     const fallback = prod?.image_url || 'https://media.istockphoto.com/id/1251142367/photo/small-cute-chickens-close-up.webp';
     return getImageUrl(String(fallback));
+  };
+
+  const handleFeaturedAddToCart = async (productId: string) => {
+    const product = featuredProducts.find((item) => item.id === productId);
+    if (!product) return;
+
+    const minQty = Math.max(1, product.minimum_order_quantity || 1);
+
+    if (!user) {
+      const guestCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+      const existingItem = guestCart.find((item: any) => item.product_id === productId);
+
+      if (existingItem) {
+        existingItem.quantity += minQty;
+      } else {
+        guestCart.push({
+          product_id: productId,
+          quantity: minQty,
+          product_name: product.name,
+          price: product.price,
+          image_url: product.image_url,
+          vendor_id: product.vendor_id,
+          stock_quantity: product.stock_quantity,
+        });
+      }
+
+      localStorage.setItem('guest_cart', JSON.stringify(guestCart));
+      window.dispatchEvent(new Event('cartUpdated'));
+      toast.success(`${product.name} added to cart`);
+      return;
+    }
+
+    await addToCart(productId, minQty);
+  };
+
+  const handleFeaturedOrderNow = async (product: Product) => {
+    await handleFeaturedAddToCart(product.id);
+    navigate('/checkout');
   };
 
   const scrollFeatured = (dir: 'left' | 'right') => {
@@ -238,73 +275,6 @@ const Index = () => {
     }, 100);
   };
 
-  const fetchAdvertisements = async () => {
-    try {
-      const response = await fetch(getApiUrl('/api/advertisements?limit=20&page_location=homepage'));
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setAdvertisements(data);
-        const premiumAds = data.filter(ad => ad.tier === 'premium');
-        const basicAds = data.filter(ad => ad.tier === 'basic');
-        
-        const initialVisible = new Set<string>();
-        if (premiumAds.length > 0) initialVisible.add(premiumAds[0].id);
-        if (basicAds.length > 0) initialVisible.add(basicAds[0].id);
-        
-        setVisibleAds(initialVisible);
-        
-        if (premiumAds.length > 1) startPremiumRotation(premiumAds);
-        if (basicAds.length > 1) startBasicRotation(basicAds);
-      }
-    } catch (error) {
-      console.error('Failed to fetch advertisements:', error);
-    }
-  };
-
-  const startPremiumRotation = (ads: any[]) => {
-    const rotate = (index: number) => {
-      premiumRotationRef.current = setTimeout(() => {
-        const nextIndex = (index + 1) % ads.length;
-        const nextAd = ads[nextIndex];
-        setCurrentPremiumIndex(nextIndex);
-        setVisibleAds(prev => {
-          const next = new Set(prev);
-          ads.forEach(a => next.delete(a.id));
-          next.add(nextAd.id);
-          return next;
-        });
-        rotate(nextIndex);
-      }, (ads[index].content_duration || 30) * 1000);
-    };
-    rotate(0);
-  };
-
-  const startBasicRotation = (ads: any[]) => {
-    const rotate = (index: number) => {
-      basicRotationRef.current = setTimeout(() => {
-        const nextIndex = (index + 1) % ads.length;
-        const nextAd = ads[nextIndex];
-        setCurrentBasicIndex(nextIndex);
-        setVisibleAds(prev => {
-          const next = new Set(prev);
-          ads.forEach(a => next.delete(a.id));
-          next.add(nextAd.id);
-          return next;
-        });
-        rotate(nextIndex);
-      }, (ads[index].content_duration || 30) * 1000);
-    };
-    rotate(0);
-  };
-
-  const handleAdClose = (adId: string) => {
-    setVisibleAds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(adId);
-      return newSet;
-    });
-  };
-
   const features = [
     {
       icon: <Users className="h-8 w-8 text-accent" />,
@@ -363,10 +333,6 @@ const Index = () => {
   ];
 
   // Check if there's a premium ad (top banner) to add padding
-  const hasPremiumAd = advertisements.some(ad => 
-    visibleAds.has(ad.id) && ad.tier === 'premium'
-  );
-
   return (
     <div className="min-h-screen bg-background dark:bg-gray-900">
       <Navbar />
@@ -659,45 +625,19 @@ const Index = () => {
               onTouchEnd={() => setIsPaused(false)}
             >
               {featuredProducts.map((prod, idx) => (
-                <Card
+                <div
                   key={prod.id || idx}
                   data-featured-item={idx === 0 ? '1' : undefined}
-                  className="card-hover overflow-hidden flex-shrink-0 w-64 sm:w-72 md:w-80 snap-start cursor-pointer"
-                  onClick={() => {
-                    window.location.href = `/product/${prod.id}`;
-                  }}
+                  className="flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] snap-start"
                 >
-                  <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
-                    <img
-                      src={getFeaturedImage(prod)}
-                      alt={prod.name}
-                      className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                    <div className="absolute top-2 right-2 bg-white/90 text-gray-900 px-2 py-1 rounded-md text-xs font-semibold shadow-sm border border-white/40 backdrop-blur">
-                      KSH {Number(prod.price || 0).toLocaleString()}
-                    </div>
-                    {Number(prod.stock_quantity || 0) <= 0 && (
-                      <div className="absolute bottom-2 left-2 bg-red-600 text-white px-2 py-1 rounded-md text-xs font-semibold shadow-sm">
-                        Out of stock
-                      </div>
-                    )}
-                  </div>
-                  <CardContent className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">{prod.name}</h4>
-                    <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">{prod.description}</p>
-                    <div className="flex items-center justify-between text-sm text-gray-500">
-                      <span className="truncate">{prod.vendor_profiles?.farm_name || ''}</span>
-                      {Number(prod.average_rating || 0) > 0 && (
-                        <span className="flex items-center gap-1 text-gray-700">
-                          <Star className="h-4 w-4 text-accent fill-current" />
-                          {Number(prod.average_rating || 0).toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                  <ProductCard
+                    product={prod}
+                    imageSrc={getFeaturedImage(prod)}
+                    onCardClick={() => navigate(`/product/${prod.id}`)}
+                    onAddToCart={handleFeaturedAddToCart}
+                    onOrderNow={handleFeaturedOrderNow}
+                  />
+                </div>
               ))}
             </div>
           </div>

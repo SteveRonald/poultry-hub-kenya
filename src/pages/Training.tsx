@@ -7,28 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import AdvertisementBanner from '../components/AdvertisementBanner';
-import { getApiUrl } from '../config/api';
+import { useAdvertisementSlots } from '../hooks/useAdvertisementSlots';
 
 const Training = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [selectedVideoTitle, setSelectedVideoTitle] = useState<string>('');
   const [showVideoMessage, setShowVideoMessage] = useState(false);
-  const [advertisements, setAdvertisements] = useState<any[]>([]);
-  const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
-  const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const adRotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const trainingGridRef = useRef<HTMLDivElement>(null);
+  const { advertisements, visibleAds, hasPremiumAd, handleAdClose } = useAdvertisementSlots('training', 20);
 
-  useEffect(() => {
-    fetchAdvertisements();
-    return () => {
-      if (adRotationIntervalRef.current) {
-        clearInterval(adRotationIntervalRef.current);
-      }
-    };
-  }, []);
-  
   useEffect(() => {
     setupScrollAnimations();
   }, [selectedCategory]);
@@ -58,86 +46,6 @@ const Training = () => {
       trainingCards.forEach((card) => observer.observe(card));
     }, 100);
   };
-
-  const fetchAdvertisements = async () => {
-    try {
-      const response = await fetch(getApiUrl('/api/advertisements?limit=10&page_location=training'));
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setAdvertisements(data);
-        const premiumAds = data.filter((ad: any) => ad.tier === 'premium');
-        const firstAd = premiumAds.length > 0 ? premiumAds[0] : data[0];
-        if (firstAd) {
-          setVisibleAds(new Set([firstAd.id]));
-          setCurrentAdIndex(0);
-          if (data.length > 1) {
-            startAdRotation(data);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch advertisements:', error);
-    }
-  };
-
-  const startAdRotation = (ads: any[]) => {
-    if (adRotationIntervalRef.current) {
-      clearInterval(adRotationIntervalRef.current);
-    }
-
-    // Rotate ads based on their content_duration for fairness
-    // Each ad gets equal time based on its configured duration (default 30 seconds)
-    const rotateToNext = () => {
-      setCurrentAdIndex((prevIndex) => {
-        const currentAd = ads[prevIndex];
-        const duration = currentAd?.content_duration ? currentAd.content_duration * 1000 : 30000; // Convert to ms, default 30s
-        
-        // Schedule next rotation based on current ad's duration
-        if (adRotationIntervalRef.current) {
-          clearInterval(adRotationIntervalRef.current);
-        }
-        
-        adRotationIntervalRef.current = setTimeout(() => {
-          const nextIndex = (prevIndex + 1) % ads.length;
-          const nextAd = ads[nextIndex];
-          setVisibleAds(new Set([nextAd.id]));
-          setCurrentAdIndex(nextIndex);
-          rotateToNext(); // Continue rotation
-        }, duration);
-        
-        return prevIndex;
-      });
-    };
-
-    // Start rotation with first ad's duration
-    const firstAd = ads[0];
-    const firstDuration = firstAd?.content_duration ? firstAd.content_duration * 1000 : 30000;
-    adRotationIntervalRef.current = setTimeout(() => {
-      const nextIndex = 1 % ads.length;
-      const nextAd = ads[nextIndex];
-      setVisibleAds(new Set([nextAd.id]));
-      setCurrentAdIndex(nextIndex);
-      rotateToNext();
-    }, firstDuration);
-  };
-
-  const handleAdClose = (adId: string) => {
-    setVisibleAds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(adId);
-      if (newSet.size === 0 && advertisements.length > 0) {
-        const nextIndex = (currentAdIndex + 1) % advertisements.length;
-        const nextAd = advertisements[nextIndex];
-        newSet.add(nextAd.id);
-        setCurrentAdIndex(nextIndex);
-      }
-      return newSet;
-    });
-  };
-
-  const hasPremiumAd = advertisements.some(ad => 
-    visibleAds.has(ad.id) && ad.tier === 'premium'
-  );
 
   const categories = [
     { id: 'all', name: 'All Categories', count: 6 },

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
 require_once __DIR__ . '/../utils/security.php';
 require_once __DIR__ . '/../utils/system_logs.php';
+require_once __DIR__ . '/../utils/advertisement_serving.php';
 
 // Ensure validateAdminSession is available (from admin.php)
 if (!function_exists('validateAdminSession')) {
@@ -849,7 +850,7 @@ function handleGetActiveAdvertisements() {
     global $pdo;
     
     // Sanitize and validate GET parameters
-    $limit = isset($_GET['limit']) ? max(1, min(100, intval($_GET['limit']))) : 3;
+    $limit = isset($_GET['limit']) ? max(1, min(100, intval($_GET['limit']))) : 20;
     $pageLocation = isset($_GET['page_location']) ? sanitizeInput($_GET['page_location']) : 'homepage';
     
     // Validate page location to prevent injection
@@ -859,31 +860,6 @@ function handleGetActiveAdvertisements() {
     }
     
     try {
-        // Get active ads that match the page location
-        // Only show ads from approved vendors
-        // page_locations is a JSON array, so we need to check if it contains the requested page_location
-        $query = "
-            SELECT 
-                a.*,
-                p.name as product_name,
-                p.price as product_price,
-                p.image_urls as product_images,
-                a.previous_price,
-                a.current_price
-            FROM advertisements a
-            JOIN products p ON a.product_id = p.id
-            JOIN vendors v ON a.vendor_id = v.id
-            WHERE a.status = 'active'
-            AND v.status = 'approved'
-            AND (a.end_date IS NULL OR a.end_date > NOW())
-            AND JSON_CONTAINS(a.page_locations, ?)
-            ORDER BY a.priority DESC, a.created_at DESC
-            LIMIT ?
-        ";
-        
-        // Convert page_location to JSON string for JSON_CONTAINS
-        $pageLocationJson = json_encode($pageLocation);
-        
         // First, expire any ads that have passed their end_date
         $expireStmt = $pdo->prepare("
             UPDATE advertisements 
@@ -893,42 +869,55 @@ function handleGetActiveAdvertisements() {
             AND end_date < NOW()
         ");
         $expireStmt->execute();
-        
-        $stmt = $pdo->prepare($query);
-        $stmt->execute([$pageLocationJson, $limit]);
-        $ads = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Re-fetch if needed (for backward compatibility with ads that don't have page_locations set)
-        if (count($ads) < $limit) {
-            // Try to get ads without page_locations filter (for backward compatibility)
-            // Only show ads from approved vendors
-            $fallbackQuery = "
-                SELECT 
-                    a.*,
-                    p.name as product_name,
-                    p.id as product_id,
-                    p.image_urls as product_images,
-                    p.price as product_price,
-                    a.previous_price,
-                    a.current_price
-                FROM advertisements a
-                JOIN products p ON a.product_id = p.id
-                JOIN vendors v ON a.vendor_id = v.id
-                WHERE a.status = 'active'
-                AND v.status = 'approved'
-                AND (a.end_date IS NULL OR a.end_date > NOW())
-                AND (a.page_locations IS NULL OR a.page_locations = '[]')
-                AND p.is_active = 1
-                ORDER BY a.priority DESC, a.created_at DESC
-                LIMIT ?
-            ";
-            $fallbackStmt = $pdo->prepare($fallbackQuery);
-            $fallbackStmt->execute([$limit - count($ads)]);
-            $fallbackAds = $fallbackStmt->fetchAll(PDO::FETCH_ASSOC);
-            $ads = array_merge($ads, $fallbackAds);
+
+        $stmt = $pdo->prepare("
+            SELECT 
+                a.*,
+                p.id as product_id,
+                p.name as product_name,
+                p.price as product_price,
+                p.image_urls as product_images,
+                p.is_active as product_is_active,
+                v.status as vendor_status,
+                COALESCE(an.views_count, 0) as views_count,
+                COALESCE(an.clicks_count, 0) as clicks_count
+            FROM advertisements a
+            JOIN products p ON a.product_id = p.id
+            JOIN vendors v ON a.vendor_id = v.id
+            LEFT JOIN advertisement_analytics an ON a.id = an.advertisement_id
+            WHERE a.status = 'active'
+            ORDER BY a.priority DESC, a.created_at DESC
+            LIMIT 200
+        ");
+        $stmt->execute();
+        $candidateAds = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $diagnostics = buildAdvertisementServingDiagnostics($candidateAds, $pageLocation);
+        $eligibleAds = [];
+
+        foreach ($candidateAds as $advertisement) {
+            $eligibility = evaluateAdvertisementEligibility($advertisement, $pageLocation);
+            if (!$eligibility['eligible']) {
+                continue;
+            }
+
+            $eligibleAds[] = enrichAdvertisementForServing($advertisement, $pageLocation);
         }
-        
-        echo json_encode($ads);
+
+        $eligibleAds = sortAdvertisementsForServing($eligibleAds);
+        $servedAds = array_slice($eligibleAds, 0, $limit);
+        $premiumReturned = count(array_filter($servedAds, static fn($ad) => ($ad['tier'] ?? 'basic') === 'premium'));
+        $basicReturned = count($servedAds) - $premiumReturned;
+
+        header('X-Ad-Candidate-Count: ' . count($candidateAds));
+        header('X-Ad-Eligible-Count: ' . count($eligibleAds));
+        header('X-Ad-Returned-Count: ' . count($servedAds));
+        header('X-Ad-Premium-Returned: ' . $premiumReturned);
+        header('X-Ad-Basic-Returned: ' . $basicReturned);
+
+        error_log('[ads] active-serving page=' . $pageLocation . ' candidates=' . count($candidateAds) . ' eligible=' . count($eligibleAds) . ' returned=' . count($servedAds) . ' premium_returned=' . $premiumReturned . ' basic_returned=' . $basicReturned . ' filtered=' . json_encode($diagnostics['filtered_out']));
+
+        echo json_encode($servedAds);
         
     } catch (PDOException $e) {
         http_response_code(500);
@@ -1800,4 +1789,3 @@ function handleDisableAdvertisement() {
 
 
 ?>
-

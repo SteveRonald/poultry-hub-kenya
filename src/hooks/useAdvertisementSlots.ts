@@ -11,20 +11,6 @@ export interface Advertisement {
   [key: string]: any;
 }
 
-const buildFallbackAdvertisement = (pageLocation: string): Advertisement => ({
-  id: `fallback-house-ad-${pageLocation}`,
-  tier: 'basic',
-  rotation_weight: 1,
-  content_duration: 30,
-  fallback_path: '/vendor-dashboard',
-  is_fallback: true,
-  ad_title: 'Advertise your products on KukuSoko',
-  product_name: 'Reach more poultry buyers with a promoted listing.',
-  product_price: null,
-  ad_image: '/placeholder.svg',
-  served_page_location: pageLocation,
-});
-
 const dedupeAdvertisements = (ads: Advertisement[]) => {
   const seenIds = new Set<string>();
 
@@ -108,16 +94,13 @@ export const useAdvertisementSlots = (pageLocation: string, limit = 20) => {
         const response = await fetch(getApiUrl(`/api/advertisements?limit=${limit}&page_location=${pageLocation}`));
         const data = await response.json();
         if (!Array.isArray(data)) {
-          const fallbackAd = buildFallbackAdvertisement(pageLocation);
-          setAdvertisements([fallbackAd]);
-          setVisibleAds(new Set([fallbackAd.id]));
+          setAdvertisements([]);
+          setVisibleAds(new Set());
           return;
         }
 
         const uniqueAdvertisements = dedupeAdvertisements(data);
-        const advertisementsToServe = uniqueAdvertisements.length > 0
-          ? uniqueAdvertisements
-          : [buildFallbackAdvertisement(pageLocation)];
+        const advertisementsToServe = uniqueAdvertisements;
 
         setAdvertisements(advertisementsToServe);
 
@@ -142,9 +125,8 @@ export const useAdvertisementSlots = (pageLocation: string, limit = 20) => {
         scheduleTierRotation(basic, 'basic');
       } catch (error) {
         console.error('Failed to fetch advertisements:', error);
-        const fallbackAd = buildFallbackAdvertisement(pageLocation);
-        setAdvertisements([fallbackAd]);
-        setVisibleAds(new Set([fallbackAd.id]));
+        setAdvertisements([]);
+        setVisibleAds(new Set());
       }
     };
 

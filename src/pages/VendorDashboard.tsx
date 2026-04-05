@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign, Menu, ShieldCheck } from 'lucide-react';
+import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign, Menu, ShieldCheck, Share2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -100,6 +100,81 @@ const VendorDashboard = () => {
       setWarehouses([]);
     }
   }, [selectedCounty]);
+
+  const copyTextToClipboard = async (text: string, successMessage: string) => {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
+      toast.success(successMessage);
+    } catch (error) {
+      toast.error('Failed to copy share link');
+    }
+  };
+
+  const getVendorStoreLink = () => {
+    const farmName = user?.vendorData?.farm_name?.trim();
+    const vendorId = products.find((product) => product?.vendor_id)?.vendor_id;
+    if (!farmName || !vendorId) return '';
+
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/products?vendorId=${encodeURIComponent(String(vendorId))}&vendor=${encodeURIComponent(farmName)}`;
+  };
+
+  const handleShareStorefront = async () => {
+    const farmName = user?.vendorData?.farm_name?.trim();
+    const storefrontUrl = getVendorStoreLink();
+
+    if (!farmName || !storefrontUrl) {
+      toast.error('Please make sure you have at least one product and a farm name before sharing your storefront.');
+      return;
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${farmName} on KukuSoko`,
+          text: `Browse products from ${farmName} on KukuSoko.`,
+          url: storefrontUrl,
+        });
+        return;
+      } catch (error) {
+        // Fall back to clipboard if sharing is cancelled or unavailable.
+      }
+    }
+
+    await copyTextToClipboard(storefrontUrl, 'Storefront link copied');
+  };
+
+  const handleShareProductLink = async (product: any) => {
+    const productUrl = `${window.location.origin}/product/${product.id}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: product.name,
+          text: `Check out ${product.name} on KukuSoko.`,
+          url: productUrl,
+        });
+        return;
+      } catch (error) {
+        // Fall back to clipboard if sharing is cancelled or unavailable.
+      }
+    }
+
+    await copyTextToClipboard(productUrl, 'Product link copied');
+  };
 
   
   // Auto-scroll to section when tab changes
@@ -1655,28 +1730,38 @@ const VendorDashboard = () => {
                 <div id="tab-section-products" className="space-y-6 scroll-mt-24">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <h2 className="text-xl font-semibold text-primary">My Products</h2>
-                    <Button 
-                      className="btn-primary flex items-center w-full sm:w-auto"
-                      onClick={() => {
-                        // Reset form state when opening modal
-                        setProductForm({ 
-                          name: '', 
-                          description: '', 
-                          price: '', 
-                          category: '', 
-                          stock_quantity: '',
-                          image_urls: [] 
-                        });
-                        setAiAnalysis(null);
-                        setNameSuggestions(null);
-                        setIsImageVerified(false);
-                        setUploadError(null);
-                        setShowAddProductModal(true);
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add New Product
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        className="flex items-center w-full sm:w-auto"
+                        onClick={handleShareStorefront}
+                      >
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Share My Shop
+                      </Button>
+                      <Button 
+                        className="btn-primary flex items-center w-full sm:w-auto"
+                        onClick={() => {
+                          // Reset form state when opening modal
+                          setProductForm({ 
+                            name: '', 
+                            description: '', 
+                            price: '', 
+                            category: '', 
+                            stock_quantity: '',
+                            image_urls: [] 
+                          });
+                          setAiAnalysis(null);
+                          setNameSuggestions(null);
+                          setIsImageVerified(false);
+                          setUploadError(null);
+                          setShowAddProductModal(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add New Product
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -1730,6 +1815,16 @@ const VendorDashboard = () => {
                                     >
                                       <Edit className="h-4 w-4" />
                                       <span className="hidden sm:inline ml-1">Edit</span>
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => handleShareProductLink(product)}
+                                      title="Share product link"
+                                      className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                    >
+                                      <Share2 className="h-4 w-4" />
+                                      <span className="hidden sm:inline ml-1">Share</span>
                                     </Button>
                                     <Button 
                                       size="sm" 

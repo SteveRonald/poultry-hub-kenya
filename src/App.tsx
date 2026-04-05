@@ -35,6 +35,7 @@ import ChatPage from "./pages/ChatPage";
 import PaystackSuccess from "./pages/PaystackSuccess";
 import PaymentPage from "./pages/PaymentPage";
 import TermsAndConditions from "./pages/TermsAndConditions";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 const queryClient = new QueryClient();
 
@@ -73,6 +74,7 @@ const App = () => (
                       <Route path="/checkout/success" element={<PaystackSuccess />} />
                       <Route path="/contact" element={<Contact />} />
                       <Route path="/terms" element={<TermsAndConditions />} />
+                      <Route path="/privacy" element={<PrivacyPolicy />} />
                       <Route path="/dashboard" element={
                         <ProtectedRoute>
                           <Dashboard />

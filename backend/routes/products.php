@@ -75,7 +75,11 @@ function handleGetProducts() {
                 'image_urls' => $product['image_urls'],
                 'average_rating' => isset($product['average_rating']) ? floatval($product['average_rating']) : 0.00,
                 'total_ratings' => isset($product['total_ratings']) ? intval($product['total_ratings']) : 0,
+                // Include vendor identifiers so vendor-specific storefront links can
+                // filter public product results reliably.
+                'vendor_id' => isset($product['vendor_id']) ? strval($product['vendor_id']) : null,
                 'vendor_profiles' => [
+                    'id' => isset($product['vendor_id']) ? strval($product['vendor_id']) : null,
                     'farm_name' => $product['farm_name'],
                     'location' => $product['vendor_location']
                 ]

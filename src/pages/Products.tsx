@@ -46,6 +46,38 @@ const Products = () => {
   const { user } = useAuth();
   const { advertisements, visibleAds, hasPremiumAd, handleAdClose } = useAdvertisementSlots('products', 20);
 
+  const getVendorOptionValue = (vendorId?: string | number | null, vendorName?: string | null) => {
+    if (!vendorId) return vendorName || 'Unknown';
+    return `${vendorId}::${vendorName || 'Unknown'}`;
+  };
+
+  const getPublicVendorId = (product: Product) => {
+    return String(
+      product.vendor_id
+      || (product.vendor_profiles as any)?.id
+      || ''
+    );
+  };
+
+  const parseVendorSelection = (value: string) => {
+    if (!value || value === 'all') {
+      return { vendorId: 'all', vendorName: 'all' };
+    }
+
+    if (value.includes('::')) {
+      const [vendorId, ...nameParts] = value.split('::');
+      return {
+        vendorId: vendorId || 'all',
+        vendorName: nameParts.join('::') || 'Unknown',
+      };
+    }
+
+    return {
+      vendorId: 'all',
+      vendorName: value,
+    };
+  };
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -68,6 +100,7 @@ const Products = () => {
     const minRatingParam = urlParams.get('minRating') || '0';
     const sortByParam = urlParams.get('sortBy') || 'newest';
     const inStockOnlyParam = urlParams.get('inStockOnly') === 'true';
+    const vendorIdParam = urlParams.get('vendorId');
     const vendorParam = urlParams.get('vendor') || 'all';
 
     setSearchTerm(search);
@@ -79,7 +112,11 @@ const Products = () => {
     setMinRating(minRatingParam);
     setSortBy(sortByParam);
     setInStockOnly(inStockOnlyParam);
-    setSelectedVendor(vendorParam);
+    if (vendorIdParam) {
+      setSelectedVendor(getVendorOptionValue(vendorIdParam, vendorParam === 'all' ? 'Vendor' : vendorParam));
+    } else {
+      setSelectedVendor(vendorParam);
+    }
   }, []); // Only run on mount
 
   // Update URL when filters change
@@ -94,7 +131,15 @@ const Products = () => {
     if (minRating !== '0') params.set('minRating', minRating);
     if (sortBy !== 'newest') params.set('sortBy', sortBy);
     if (inStockOnly) params.set('inStockOnly', 'true');
-    if (selectedVendor !== 'all') params.set('vendor', selectedVendor);
+    const { vendorId, vendorName } = parseVendorSelection(selectedVendor);
+    if (selectedVendor !== 'all') {
+      if (vendorId !== 'all') {
+        params.set('vendorId', vendorId);
+        params.set('vendor', vendorName);
+      } else {
+        params.set('vendor', vendorName);
+      }
+    }
 
     const newSearch = params.toString();
     const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`;
@@ -124,7 +169,10 @@ const Products = () => {
     const priceMatch = p.price >= minPriceNum && p.price <= maxPriceNum;
     const ratingMatch = (p.average_rating || 0) >= minRatingNum;
     const stockMatch = !inStockOnly || (p.stock_quantity && p.stock_quantity > 0);
-    const vendorMatch = selectedVendor === 'all' || p.vendor_profiles?.farm_name === selectedVendor;
+    const { vendorId, vendorName } = parseVendorSelection(selectedVendor);
+    const vendorMatch = selectedVendor === 'all'
+      || (vendorId !== 'all' && getPublicVendorId(p) === vendorId)
+      || (vendorId === 'all' && p.vendor_profiles?.farm_name === vendorName);
 
     return priceMatch && ratingMatch && stockMatch && vendorMatch;
   }).sort((a, b) => {
@@ -142,7 +190,19 @@ const Products = () => {
   });
   
   // Get unique vendors
-  const vendors = Array.from(new Set(allProducts.map(p => p.vendor_profiles?.farm_name).filter(Boolean)));
+  const vendors = Array.from(
+    new Map(
+      allProducts
+        .filter((p) => p.vendor_profiles?.farm_name)
+        .map((p) => [
+          String(getPublicVendorId(p) || p.vendor_profiles?.farm_name),
+          {
+            id: getPublicVendorId(p),
+            name: p.vendor_profiles?.farm_name || 'Unknown',
+          },
+        ])
+    ).values()
+  );
 
   // Calculate result counts for filter options
   const getCategoryCount = (category: string) => {
@@ -153,8 +213,13 @@ const Products = () => {
     return allProducts.filter(p => location === 'all' || p.vendor_profiles?.location === location).length;
   };
 
-  const getVendorCount = (vendor: string) => {
-    return allProducts.filter(p => vendor === 'all' || p.vendor_profiles?.farm_name === vendor).length;
+  const getVendorCount = (vendorValue: string) => {
+    const { vendorId, vendorName } = parseVendorSelection(vendorValue);
+    return allProducts.filter((p) => {
+      if (vendorValue === 'all') return true;
+      if (vendorId !== 'all') return getPublicVendorId(p) === vendorId;
+      return p.vendor_profiles?.farm_name === vendorName;
+    }).length;
   };
   
   const getProductCardImage = (product: Product) => {
@@ -343,7 +408,10 @@ const Products = () => {
   if (minRating !== '0') activeFilters.push({ type: 'rating', label: `Rating: ${minRating}+ stars`, clear: () => setMinRating('0') });
   if (sortBy !== 'newest') activeFilters.push({ type: 'sort', label: `Sort: ${sortBy === 'price-low' ? 'Low to High' : sortBy === 'price-high' ? 'High to Low' : sortBy === 'rating' ? 'Best Rated' : 'Newest'}`, clear: () => setSortBy('newest') });
   if (inStockOnly) activeFilters.push({ type: 'stock', label: 'In Stock Only', clear: () => setInStockOnly(false) });
-  if (selectedVendor !== 'all') activeFilters.push({ type: 'vendor', label: `Vendor: ${selectedVendor}`, clear: () => setSelectedVendor('all') });
+  if (selectedVendor !== 'all') {
+    const { vendorName } = parseVendorSelection(selectedVendor);
+    activeFilters.push({ type: 'vendor', label: `Vendor: ${vendorName}`, clear: () => setSelectedVendor('all') });
+  }
 
   const advancedFilterCount = [
     sortBy !== 'newest',
@@ -702,11 +770,14 @@ const Products = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Vendors ({allProducts.length})</SelectItem>
-                        {vendors.map(vendor => (
-                          <SelectItem key={vendor} value={vendor || 'Unknown'}>
-                            {vendor || 'Unknown'} ({getVendorCount(vendor)})
+                        {vendors.map((vendor) => {
+                          const vendorValue = getVendorOptionValue(vendor.id, vendor.name);
+                          return (
+                          <SelectItem key={vendorValue} value={vendorValue}>
+                            {vendor.name || 'Unknown'} ({getVendorCount(vendorValue)})
                           </SelectItem>
-                        ))}
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>

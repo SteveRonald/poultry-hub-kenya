@@ -11,9 +11,9 @@ const TermsAndConditions = () => {
       icon: <FileText className="h-6 w-6 text-primary" />,
       title: "1. Acceptance of Terms",
       content: [
-        "By accessing and using KukuSoko platform, you accept and agree to be bound by these Terms and Conditions.",
+        "By accessing or using the KukuSoko platform, you agree to be bound by these Terms and Conditions.",
         "If you do not agree to these terms, please do not use our services.",
-        "We reserve the right to modify these terms at any time. Continued use of the platform constitutes acceptance of modified terms."
+        "We may update these terms from time to time. Continued use of the platform after an update means you accept the revised terms."
       ]
     },
     {
@@ -24,7 +24,7 @@ const TermsAndConditions = () => {
         "You are responsible for maintaining the confidentiality of your account credentials.",
         "You agree to provide accurate, current, and complete information during registration.",
         "You are responsible for all activities that occur under your account.",
-        "We reserve the right to suspend or terminate accounts that violate our terms."
+        "We may suspend, restrict, or terminate accounts that violate these terms, applicable law, or platform rules."
       ]
     },
     {
@@ -33,20 +33,20 @@ const TermsAndConditions = () => {
       content: [
         "Vendors must provide accurate product descriptions, pricing, and availability information.",
         "All products must comply with Kenyan laws and regulations regarding poultry products.",
-        "Vendors are responsible for product quality and must honor their stated return policies.",
-        "A commission fee applies to all vendor sales as outlined in the vendor agreement.",
-        "Vendors must respond to customer inquiries within 24 hours.",
-        "False advertising or misrepresentation of products may result in account suspension."
+        "Vendors are responsible for the quality, legality, safety, and accuracy of the products they list and sell.",
+        "Vendor accounts may be subject to review and approval before certain selling features are enabled.",
+        "Platform fees, commissions, advertisement charges, or other commercial terms may apply as communicated by KukuSoko.",
+        "False advertising, misleading product information, prohibited items, or abusive conduct may result in listing removal, account restriction, or suspension."
       ]
     },
     {
       icon: <ShoppingCart className="h-6 w-6 text-primary" />,
       title: "4. Customer Terms",
       content: [
-        "Customers must provide accurate delivery information and contact details.",
-        "Payment must be completed before order processing begins.",
-        "Customers are responsible for inspecting products upon delivery.",
-        "Any issues with products must be reported within 24 hours for live poultry, 7 days for other products.",
+        "Customers must provide accurate order, pickup, delivery, and contact information.",
+        "Payment is generally required before an order is completed or confirmed through the platform's payment flow.",
+        "Customers should inspect products promptly upon receipt or collection and report issues as soon as reasonably possible.",
+        "Customers are responsible for choosing products carefully, including quantity, minimum order, pickup location, and contact details.",
         "Customers agree to treat vendors and delivery personnel with respect."
       ]
     },
@@ -54,21 +54,21 @@ const TermsAndConditions = () => {
       icon: <CreditCard className="h-6 w-6 text-primary" />,
       title: "5. Payment Terms",
       content: [
-        "All prices are listed in Kenyan Shillings (KSH) and include applicable taxes.",
-        "We accept M-Pesa, Visa, Mastercard, and bank transfers through Paystack.",
-        "Payment must be completed at the time of order placement.",
-        "Refunds are processed according to our refund policy within 5-7 business days.",
-        "KukuSoko is not responsible for payment processing fees charged by third-party providers.",
-        "All transactions are secured with SSL encryption and PCI-DSS compliance."
+        "All prices displayed on KukuSoko are listed in Kenyan Shillings (KSH).",
+        "Payments made through the platform are processed through Paystack and any channels supported and made available through that payment flow at the time of checkout.",
+        "Order processing depends on successful payment confirmation and related order validation steps.",
+        "Third-party payment providers may apply their own terms, availability rules, processing times, or service interruptions.",
+        "KukuSoko does not guarantee that every payment method will always be available to every user or on every device.",
+        "Payment verification, settlement, and transaction records may depend on Paystack, banks, mobile money providers, card schemes, and related third-party services."
       ]
     },
     {
       icon: <Shield className="h-6 w-6 text-primary" />,
       title: "6. Product Quality & Verification",
       content: [
-        "All vendors are verified before being allowed to sell on our platform.",
-        "We use AI-powered image verification to ensure product authenticity.",
-        "Products must be accurately represented with real, unedited photos.",
+        "KukuSoko may review vendors, listings, advertisements, and related content before or after publication.",
+        "We use AI-assisted and manual review tools to help screen images, listings, and marketplace content, but these checks do not guarantee authenticity, legality, health status, or fitness for purpose.",
+        "Products should be represented using accurate descriptions and suitable images.",
         "We reserve the right to remove listings that do not meet our quality standards.",
         "Customer reviews and ratings help maintain quality across the platform."
       ]
@@ -77,23 +77,22 @@ const TermsAndConditions = () => {
       icon: <AlertCircle className="h-6 w-6 text-primary" />,
       title: "7. Delivery & Shipping",
       content: [
-        "Delivery times are estimates and may vary based on location and vendor availability.",
-        "Customers must be available to receive deliveries at the specified address.",
-        "Failed delivery attempts due to customer unavailability may incur additional fees.",
-        "KukuSoko is not liable for delays caused by circumstances beyond our control.",
-        "Live poultry deliveries require special handling and may have different terms."
+        "Fulfillment may involve pickup locations, vendor delivery arrangements, or other order-collection methods supported by the platform at the time of checkout.",
+        "Delivery or pickup times are estimates only and may change based on vendor operations, location, availability, traffic, weather, or other factors.",
+        "Customers are responsible for being reachable and available for the agreed pickup or delivery arrangement.",
+        "Additional costs or delays may arise where an order cannot be completed because of incorrect customer details, missed collection, or failed delivery coordination.",
+        "KukuSoko is not liable for delays or failures caused by vendors, third-party logistics providers, payment providers, or events beyond our reasonable control."
       ]
     },
     {
       icon: <CheckCircle className="h-6 w-6 text-primary" />,
       title: "8. Returns & Refunds",
       content: [
-        "We offer a 7-day return policy for products that don't meet quality standards.",
-        "Live poultry has a 24-hour guarantee from delivery time.",
-        "Products must be returned in their original condition with proof of purchase.",
-        "Refunds are processed to the original payment method within 5-7 business days.",
-        "Return shipping costs may apply depending on the reason for return.",
-        "Custom orders and special requests may not be eligible for returns."
+        "Returns, replacements, cancellations, and refunds are handled case by case based on the nature of the product, the order facts, vendor obligations, payment status, and applicable law.",
+        "Perishable products, live poultry, custom orders, and time-sensitive goods may be subject to stricter limits or may not be eligible for return once collected, delivered, or used.",
+        "Customers should report order issues promptly and provide reasonable supporting information such as photos, product details, payment reference, or order details.",
+        "Where KukuSoko assists with dispute handling, we may request information from both customer and vendor before deciding how the matter should proceed.",
+        "Any approved refund timing may depend on the payment provider, bank, or mobile money channel used for the transaction."
       ]
     },
     {
@@ -111,11 +110,12 @@ const TermsAndConditions = () => {
       icon: <Shield className="h-6 w-6 text-primary" />,
       title: "10. Privacy & Data Protection",
       content: [
-        "We collect and process personal data in accordance with Kenya's Data Protection Act.",
-        "Your information is used to provide services, process orders, and improve user experience.",
+        "We collect and process personal data in accordance with applicable Kenyan law, including the Data Protection Act where applicable.",
+        "Your information may be used to provide services, process orders, manage accounts, support chat and notifications, improve platform performance, and maintain security.",
         "We do not sell your personal information to third parties.",
-        "You have the right to access, correct, or delete your personal data.",
-        "Please refer to our Privacy Policy for detailed information on data handling."
+        "The platform also uses browser storage, session storage, cookies, and similar technical mechanisms for authentication, cart continuity, checkout flow, preferences, and analytics-related functions.",
+        "Subject to applicable law, you may request access to, correction of, or deletion of eligible personal data held by us by contacting KukuSoko.",
+        "For more detail on how we handle personal information, please review our Privacy Policy."
       ]
     },
     {
@@ -136,9 +136,9 @@ const TermsAndConditions = () => {
       title: "12. Limitation of Liability",
       content: [
         "KukuSoko acts as a marketplace connecting buyers and sellers.",
-        "We are not responsible for the quality, safety, or legality of products listed.",
-        "We are not liable for any direct, indirect, or consequential damages arising from platform use.",
-        "Our total liability is limited to the amount paid for the specific transaction in question.",
+        "We do not independently guarantee the quality, safety, availability, legality, or suitability of products listed by vendors.",
+        "To the extent permitted by law, KukuSoko is not liable for indirect, incidental, special, or consequential damages arising from platform use.",
+        "Where liability cannot be excluded by law, our liability will be limited to the amount directly paid through the platform for the affected transaction, if any.",
         "We do not guarantee uninterrupted or error-free service."
       ]
     },
@@ -159,7 +159,7 @@ const TermsAndConditions = () => {
       content: [
         "We reserve the right to suspend or terminate accounts for violations of these terms.",
         "You may close your account at any time by contacting support.",
-        "Upon termination, you lose access to your account and any associated data.",
+        "Upon termination, access to some or all platform features may be removed, subject to operational, legal, accounting, fraud-prevention, or record-retention requirements.",
         "Outstanding orders and financial obligations remain valid after termination.",
         "Certain provisions of these terms survive termination."
       ]
@@ -191,7 +191,7 @@ const TermsAndConditions = () => {
               Please read these terms and conditions carefully before using KukuSoko platform.
             </p>
             <p className="text-sm text-gray-500 mt-2">
-              Last Updated: January 22, 2026
+              Last Updated: April 5, 2026
             </p>
           </div>
 

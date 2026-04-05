@@ -1334,6 +1334,14 @@ const Register = () => {
                         >
                           Terms and Conditions
                         </Link>
+                        {' '}and{' '}
+                        <Link
+                          to="/privacy"
+                          target="_blank"
+                          className="text-primary font-semibold hover:underline"
+                        >
+                          Privacy Policy
+                        </Link>
                         {' '}and confirm that I have read and understood the policies governing the use of KukuSoko platform.
                       </span>
                     </label>

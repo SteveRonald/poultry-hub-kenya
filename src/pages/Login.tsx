@@ -429,6 +429,17 @@ const Login = () => {
                       Sign up here
                     </Link>
                   </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    By continuing, you agree to our{' '}
+                    <Link to="/terms" className="text-primary hover:underline font-medium">
+                      Terms
+                    </Link>
+                    {' '}and{' '}
+                    <Link to="/privacy" className="text-primary hover:underline font-medium">
+                      Privacy Policy
+                    </Link>
+                    .
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -440,4 +451,3 @@ const Login = () => {
 };
 
 export default Login;
-

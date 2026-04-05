@@ -1737,7 +1737,7 @@ const VendorDashboard = () => {
                         onClick={handleShareStorefront}
                       >
                         <Share2 className="h-4 w-4 mr-2" />
-                        Share My Shop
+                        Share My Store 
                       </Button>
                       <Button 
                         className="btn-primary flex items-center w-full sm:w-auto"

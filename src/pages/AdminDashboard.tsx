@@ -1218,8 +1218,8 @@ const AdminDashboard = () => {
     setSmsLoading(true);
     try {
       const apiUrl = getApiUrl('/api/admin/sms/logs');
-      console.log('🔍 Fetching SMS logs from:', apiUrl);
-      console.log('🔑 Using token:', token.substring(0, 20) + '...');
+      console.log(' Fetching SMS logs from:', apiUrl);
+      console.log(' Using token:', token.substring(0, 20) + '...');
       
       const [logsRes, statsRes] = await Promise.all([
         fetch(apiUrl, {
@@ -1230,8 +1230,8 @@ const AdminDashboard = () => {
         })
       ]);
       
-      console.log('📡 SMS Logs Response Status:', logsRes.status, logsRes.statusText);
-      console.log('📋 SMS Logs Response Headers:', Object.fromEntries(logsRes.headers.entries()));
+      console.log('SMS Logs Response Status:', logsRes.status, logsRes.statusText);
+      console.log('SMS Logs Response Headers:', Object.fromEntries(logsRes.headers.entries()));
       
       if (logsRes.ok) {
         let logsData;
@@ -1246,11 +1246,11 @@ const AdminDashboard = () => {
         }
         
         // Always log in console (not just dev mode) for debugging
-        console.log('📦 SMS Logs Response:', logsData);
-        console.log('📊 logsData type:', typeof logsData);
-        console.log('📊 logsData.logs type:', typeof logsData?.logs);
-        console.log('📊 logsData.logs is array:', Array.isArray(logsData?.logs));
-        console.log('📊 logsData.logs value:', logsData?.logs);
+        console.log('SMS Logs Response:', logsData);
+        console.log('logsData type:', typeof logsData);
+        console.log('logsData.logs type:', typeof logsData?.logs);
+        console.log('logsData.logs is array:', Array.isArray(logsData?.logs));
+        console.log('logsData.logs value:', logsData?.logs);
         
         // Handle different response formats
         let logs: any[] = [];
@@ -1284,7 +1284,7 @@ const AdminDashboard = () => {
         }
         
         // Always log in console for debugging
-        console.log('=== 📋 SMS Logs Parsing Summary ===');
+        console.log('===  SMS Logs Parsing Summary ===');
         console.log('Final logs array:', logs);
         console.log('Logs count:', logs.length);
         console.log('Logs is array:', Array.isArray(logs));
@@ -1313,7 +1313,7 @@ const AdminDashboard = () => {
             console.log('✅ Set smsLogs state with', logs.length, 'items');
           }
         } else {
-          console.error('❌ ERROR: logs is not an array:', typeof logs, logs);
+          console.error(' ERROR: logs is not an array:', typeof logs, logs);
           setSmsLogs([]);
         }
       } else {
@@ -2873,11 +2873,11 @@ const AdminDashboard = () => {
                 </div>
               )}
 
-              {/* SMS Logs Tab */}
+              {/* SMS history Tab */}
               {activeTab === 'sms' && (
                 <div id="tab-section-sms" className="space-y-6 scroll-mt-24">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-semibold text-primary">SMS Logs</h2>
+                    <h2 className="text-xl font-semibold text-primary">SMS History</h2>
                     <Button
                       onClick={() => {
                         setSmsLoading(true);
@@ -2935,7 +2935,7 @@ const AdminDashboard = () => {
                     <CardContent>
                       {smsLoading ? (
                         <div className="text-center py-8">
-                          <p className="text-gray-500">Loading SMS logs...</p>
+                          <p className="text-gray-500">Loading SMS history...</p>
                         </div>
                       ) : !Array.isArray(smsLogs) ? (
                         <div className="text-center py-8">
@@ -2954,7 +2954,7 @@ const AdminDashboard = () => {
                         </div>
                       ) : smsLogs.length === 0 ? (
                         <div className="text-center py-8">
-                          <p className="text-gray-500">No SMS logs found</p>
+                          <p className="text-gray-500">No SMS history found</p>
                           {import.meta.env.DEV && (
                             <p className="text-xs text-gray-400 mt-2">
                               Array is empty (length: {smsLogs.length})

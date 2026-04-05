@@ -259,7 +259,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         { id: 'orders', label: 'All Orders', icon: ShoppingCart },
         { id: 'users', label: 'User Management', icon: Users },
         { id: 'advertisements', label: 'Advertisements', icon: Megaphone },
-        { id: 'locations', label: 'Locations', icon: MapPin }
+        { id: 'locations', label: 'Locations Setup', icon: MapPin }
       ]
     },
     {
@@ -274,7 +274,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           icon: MessageSquare,
           badge: stats.newMessages || 0
         },
-        { id: 'sms', label: 'SMS Logs', icon: MessageSquare },
+        { id: 'sms', label: 'SMS History', icon: MessageSquare },
         { id: 'system-logs', label: 'System Logs', icon: FileText }
       ]
     },

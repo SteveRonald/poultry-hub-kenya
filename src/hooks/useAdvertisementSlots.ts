@@ -24,6 +24,16 @@ const dedupeAdvertisements = (ads: Advertisement[]) => {
   });
 };
 
+const isDismissedForSession = (adId?: string) => {
+  if (!adId || typeof window === 'undefined') return false;
+
+  try {
+    return window.sessionStorage.getItem(`dismissed_ad_${adId}`) === '1';
+  } catch {
+    return false;
+  }
+};
+
 const pickWeightedAd = (ads: Advertisement[], currentAdId?: string | null) => {
   if (ads.length === 0) return null;
 
@@ -101,28 +111,38 @@ export const useAdvertisementSlots = (pageLocation: string, limit = 20) => {
 
         const uniqueAdvertisements = dedupeAdvertisements(data);
         const advertisementsToServe = uniqueAdvertisements;
+        const availablePremium = advertisementsToServe.filter(
+          (ad: Advertisement) => ad.tier === 'premium' && !isDismissedForSession(ad.id)
+        );
+        const availableBasic = advertisementsToServe.filter(
+          (ad: Advertisement) => ad.tier === 'basic' && !isDismissedForSession(ad.id)
+        );
 
         setAdvertisements(advertisementsToServe);
 
-        const premium = advertisementsToServe.filter((ad: Advertisement) => ad.tier === 'premium');
-        const basic = advertisementsToServe.filter((ad: Advertisement) => ad.tier === 'basic');
-
         const initialVisible = new Set<string>();
-        if (premium.length > 0) {
-          currentPremiumIdRef.current = premium[0].id;
-          initialVisible.add(premium[0].id);
+        if (availablePremium.length > 0) {
+          currentPremiumIdRef.current = availablePremium[0].id;
+          initialVisible.add(availablePremium[0].id);
+        } else {
+          currentPremiumIdRef.current = null;
         }
-        if (basic.length > 0) {
-          currentBasicIdRef.current = basic[0].id;
-          initialVisible.add(basic[0].id);
+        if (availableBasic.length > 0) {
+          currentBasicIdRef.current = availableBasic[0].id;
+          initialVisible.add(availableBasic[0].id);
+        } else {
+          currentBasicIdRef.current = null;
         }
-        if (premium.length === 0 && basic.length === 0 && advertisementsToServe[0]) {
-          initialVisible.add(advertisementsToServe[0].id);
+        if (availablePremium.length === 0 && availableBasic.length === 0) {
+          const firstAvailableAd = advertisementsToServe.find((ad) => !isDismissedForSession(ad.id));
+          if (firstAvailableAd) {
+            initialVisible.add(firstAvailableAd.id);
+          }
         }
 
         setVisibleAds(initialVisible);
-        scheduleTierRotation(premium, 'premium');
-        scheduleTierRotation(basic, 'basic');
+        scheduleTierRotation(availablePremium, 'premium');
+        scheduleTierRotation(availableBasic, 'basic');
       } catch (error) {
         console.error('Failed to fetch advertisements:', error);
         setAdvertisements([]);
@@ -144,7 +164,8 @@ export const useAdvertisementSlots = (pageLocation: string, limit = 20) => {
 
       if (!closedAd) return next;
 
-      const tierAds = closedAd.tier === 'premium' ? premiumAds : basicAds;
+      const tierAds = (closedAd.tier === 'premium' ? premiumAds : basicAds)
+        .filter((ad) => !isDismissedForSession(ad.id));
       const replacement = pickWeightedAd(tierAds, adId);
 
       if (replacement && replacement.id !== adId) {

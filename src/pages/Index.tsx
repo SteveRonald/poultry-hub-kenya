@@ -19,33 +19,38 @@ import { toast } from 'sonner';
 const heroMedia = [
   {
     type: "image" as const,
-    url: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=1200&h=800&auto=format&fit=crop&q=90",
-    alt: "Fresh eggs in a bowl",
-    objectPosition: "center center"
+    url: "/Images/Fresh_eggs.jpeg",
+    alt: "Fresh eggs in a premium Kenyan egg-packing scene",
+    objectPosition: "center center",
+    objectFit: "cover" as const
   },
   {
     type: "image" as const,
-    url: "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=1200&h=800&auto=format&fit=crop&q=90",
-    alt: "Live chickens on a farm",
-    objectPosition: "center center"
+    url: "/Images/Healthy_chickens.jpeg",
+    alt: "Healthy chickens in a trusted Kenyan poultry farm setting",
+    objectPosition: "center center",
+    objectFit: "cover" as const
   },
   {
     type: "image" as const,
     url: "https://media.istockphoto.com/id/93456466/photo/raw-skin-on-chicken-legs-cross-each-other.webp?a=1&b=1&s=612x612&w=0&k=20&c=RwiA2ov5IuHI7OT8U01FJdGm88nxSt4wHpML7MGGTHY=",
     alt: "Fresh chicken meat products",
-    objectPosition: "center center"
+    objectPosition: "center center",
+    objectFit: "cover" as const
   },
   {
     type: "image" as const,
-    url: "https://images.unsplash.com/photo-1694854038360-56b29a16fb0c?w=1200&h=800&auto=format&fit=crop&q=90&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTB8fFBvdWx0cnklMjBmZWVkJTIwYW5kJTIwbnV0cml0aW9ufGVufDB8fDB8fHww",
-    alt: "Poultry feed and nutrition",
-    objectPosition: "center center"
+    url: "/Images/Poultry_marketplace.jpeg",
+    alt: "Curated poultry marketplace products and supplies",
+    objectPosition: "center center",
+    objectFit: "cover" as const
   },
   {
     type: "video" as const,
-    url: "/Login-Register-Animation.mp4",
-    alt: "Login and register animation",
-    objectPosition: "center center"
+    url: "/Animations/Hero-Section-animation.mp4",
+    alt: "KukuSoko homepage hero animation",
+    objectPosition: "center center",
+    objectFit: "contain" as const
   }
 ];
 
@@ -376,7 +381,7 @@ const Index = () => {
             
             {/* Animated Image Carousel */}
             <div className="relative h-[300px] sm:h-[400px] md:h-[450px] lg:h-[500px] w-full">
-              <div className="relative w-full h-full rounded-lg shadow-2xl overflow-hidden bg-gray-200 dark:bg-gray-800">
+              <div className="relative w-full h-full overflow-hidden rounded-lg bg-gray-200 shadow-2xl dark:bg-gray-800">
                 {heroMedia.map((item, index) => (
                   <div
                     key={`hero-media-${index}-${item.url.substring(0, 20)}`}
@@ -395,7 +400,7 @@ const Index = () => {
                         alt={item.alt} 
                         className="w-full h-full object-cover"
                         style={{ 
-                          objectFit: 'cover', 
+                          objectFit: item.objectFit || 'cover', 
                           objectPosition: item.objectPosition || 'center center',
                           width: '100%', 
                           height: '100%',
@@ -423,25 +428,27 @@ const Index = () => {
                         }}
                       />
                     ) : (
-                      <video
-                        ref={index === currentHeroImageIndex ? heroVideoRef : null}
-                        src={item.url}
-                        className="w-full h-full object-cover"
-                        style={{
-                          objectFit: 'cover',
-                          objectPosition: item.objectPosition || 'center center',
-                          width: '100%',
-                          height: '100%',
-                          minHeight: '100%',
-                          minWidth: '100%'
-                        }}
-                        muted
-                        playsInline
-                        preload="auto"
-                        onEnded={() => {
-                          setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroMedia.length);
-                        }}
-                      />
+                      <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.28),_transparent_42%),linear-gradient(135deg,_rgba(255,247,230,0.96),_rgba(244,238,225,0.94))] p-3 sm:p-4">
+                        <video
+                          ref={index === currentHeroImageIndex ? heroVideoRef : null}
+                          src={item.url}
+                          className="h-full w-full rounded-md object-cover shadow-[0_18px_45px_rgba(40,52,27,0.16)]"
+                          style={{
+                            objectFit: item.objectFit || 'cover',
+                            objectPosition: item.objectPosition || 'center center',
+                            width: '100%',
+                            height: '100%',
+                            minHeight: '100%',
+                            minWidth: '100%'
+                          }}
+                          muted
+                          playsInline
+                          preload="auto"
+                          onEnded={() => {
+                            setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroMedia.length);
+                          }}
+                        />
+                      </div>
                     )}
                     {/* Gradient overlay for better text readability */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />

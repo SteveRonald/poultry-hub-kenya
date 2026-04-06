@@ -31,6 +31,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import Chatbot from "./components/Chatbot";
 import ChatbaseWidget from "./components/ChatbaseWidget";
+import WhatsAppWidget from "./components/WhatsAppWidget";
 import ChatPage from "./pages/ChatPage";
 import PaystackSuccess from "./pages/PaystackSuccess";
 import PaymentPage from "./pages/PaymentPage";
@@ -109,6 +110,7 @@ const App = () => (
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <Chatbot />
+                    <WhatsAppWidget />
                     <ChatbaseWidget />
                   </BrowserRouter>
                 </AdminProvider>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign, Menu, ShieldCheck, Share2 } from 'lucide-react';
+import { Plus, Package, BarChart3, Users, Eye, Edit, Trash2, X, Bell, Sparkles, Loader2, AlertTriangle, DollarSign, Menu, ShieldCheck, Share2, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -267,6 +267,11 @@ const VendorDashboard = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [verificationFeedback, setVerificationFeedback] = useState<{
+    status: 'idle' | 'success' | 'error';
+    title?: string;
+    message?: string;
+  }>({ status: 'idle' });
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const analysisSectionRef = useRef<HTMLDivElement>(null);
@@ -692,7 +697,9 @@ const VendorDashboard = () => {
   };
 
   const editProduct = (product: any) => {
+    const parsedImageUrls = product.image_urls ? JSON.parse(product.image_urls) : [];
     setEditingProduct(product);
+    clearVerificationState();
     setProductForm({
       name: product.name,
       description: product.description,
@@ -700,8 +707,16 @@ const VendorDashboard = () => {
       category: product.category,
       stock_quantity: product.stock_quantity,
       minimum_order_quantity: product.minimum_order_quantity || 1,
-      image_urls: product.image_urls ? JSON.parse(product.image_urls) : []
+      image_urls: parsedImageUrls
     });
+    if (product.ai_analysis_data) {
+      try {
+        setAiAnalysis(JSON.parse(product.ai_analysis_data));
+      } catch (error) {
+        setAiAnalysis(null);
+      }
+    }
+    setIsImageVerified(parsedImageUrls.length > 0);
     setShowEditProductModal(true);
   };
 
@@ -725,7 +740,8 @@ const VendorDashboard = () => {
           category: productForm.category,
           stock_quantity: parseInt(productForm.stock_quantity),
           minimum_order_quantity: parseInt(productForm.minimum_order_quantity) || 1,
-          image_urls: productForm.image_urls
+          image_urls: productForm.image_urls,
+          ai_analysis: aiAnalysis && !aiAnalysis.error ? aiAnalysis : null
         }),
       });
 
@@ -734,6 +750,7 @@ const VendorDashboard = () => {
         setShowEditProductModal(false);
         setEditingProduct(null);
         setProductForm({ name: '', description: '', price: '', category: '', stock_quantity: '', minimum_order_quantity: '1', image_urls: [] });
+        clearVerificationState();
         fetchProducts();
       } else {
         const error = await response.json();
@@ -881,16 +898,62 @@ const VendorDashboard = () => {
     return `Image verification failed. The image shows ${detectedText}, which is not poultry-related. Please upload another poultry-related image.`;
   };
 
+  const clearVerificationState = () => {
+    setUploadError(null);
+    setAiAnalysis(null);
+    setNameSuggestions(null);
+    setIsImageVerified(false);
+    setIsAnalyzing(false);
+    setVerificationFeedback({ status: 'idle' });
+  };
+
+  const renderVerificationFeedback = () => {
+    if (verificationFeedback.status === 'success') {
+      return (
+        <div className="mt-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 animate-pulse">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-green-800">{verificationFeedback.title || 'Image verified'}</p>
+              <p className="mt-1 text-sm text-green-700">
+                {verificationFeedback.message || 'The selected image passed poultry verification and is ready to use.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (verificationFeedback.status === 'error') {
+      return (
+        <div ref={errorSectionRef} className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 animate-pulse">
+              <XCircle className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-red-800">{verificationFeedback.title || 'Image verification failed'}</p>
+              <p className="mt-1 text-sm text-red-700">{verificationFeedback.message || uploadError}</p>
+              <p className="mt-2 text-xs font-medium text-red-600">
+                Please upload only poultry-related images like chickens, eggs, feed, equipment, or medicine.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     // Reset file input to allow re-uploading the same file
     const input = e.target;
     const files = input.files;
     
-    setUploadError(null);
-    // Clear previous analysis and suggestions when starting a new upload
-    setAiAnalysis(null);
-    setNameSuggestions(null);
-    setIsImageVerified(false);
+    clearVerificationState();
     setIsAnalyzing(true); // Start analyzing indicator
     
     if (!files || files.length === 0) {
@@ -965,7 +1028,13 @@ const VendorDashboard = () => {
           const nonPoultryMessage = isNonPoultry
             ? buildNonPoultryMessage(data?.verification?.analysis, rejectionReason)
             : null;
-          setUploadError(nonPoultryMessage || errorMessage);
+          const finalErrorMessage = nonPoultryMessage || errorMessage;
+          setUploadError(finalErrorMessage);
+          setVerificationFeedback({
+            status: 'error',
+            title: 'Image verification failed',
+            message: finalErrorMessage,
+          });
           setIsImageVerified(false);
           setIsAnalyzing(false);
           
@@ -986,9 +1055,14 @@ const VendorDashboard = () => {
             }
           }, 100);
           
-          toast.error(nonPoultryMessage || errorMessage);
+          toast.error(finalErrorMessage);
         } else {
           setUploadError('Upload failed. Please try again.');
+          setVerificationFeedback({
+            status: 'error',
+            title: 'Upload failed',
+            message: 'We could not verify that image. Please try another poultry-related image.',
+          });
           setIsImageVerified(false);
           setIsAnalyzing(false);
           
@@ -1039,6 +1113,11 @@ const VendorDashboard = () => {
               setAiAnalysis(analysis);
               setIsImageVerified(true); // Mark image as verified
               setIsAnalyzing(false); // Stop analyzing indicator
+              setVerificationFeedback({
+                status: 'success',
+                title: 'Image verified successfully',
+                message: 'The selected image passed poultry verification and has been applied to this product.',
+              });
               
               // Auto-scroll to analysis section on success
               setTimeout(() => {
@@ -1122,12 +1201,22 @@ const VendorDashboard = () => {
               setAiAnalysis(null);
               setIsImageVerified(false);
               setIsAnalyzing(false);
+              setVerificationFeedback({
+                status: 'error',
+                title: 'Image verification failed',
+                message: 'The image could not be verified. Please try another poultry-related image.',
+              });
             }
           } else {
             // Clear analysis if no verified image found
             setAiAnalysis(null);
             setIsImageVerified(false);
             setIsAnalyzing(false);
+            setVerificationFeedback({
+              status: 'error',
+              title: 'Image verification failed',
+              message: 'The uploaded image did not return a valid verification result.',
+            });
           }
           // Reset input after successful processing
           if (fileInputRef.current) {
@@ -1137,6 +1226,11 @@ const VendorDashboard = () => {
           // All images were rejected
           const rejectionMessage = buildNonPoultryMessage();
           setUploadError(rejectionMessage);
+          setVerificationFeedback({
+            status: 'error',
+            title: 'Image verification failed',
+            message: rejectionMessage,
+          });
           setIsImageVerified(false);
           setIsAnalyzing(false);
           setProductForm((prev: any) => ({ 
@@ -1167,6 +1261,11 @@ const VendorDashboard = () => {
         }
       } else {
         setUploadError('No images were uploaded. Please try again.');
+        setVerificationFeedback({
+          status: 'error',
+          title: 'No image uploaded',
+          message: 'No image was uploaded. Please try again with a poultry-related image.',
+        });
         setIsImageVerified(false);
         setIsAnalyzing(false);
         // Reset input
@@ -1176,7 +1275,13 @@ const VendorDashboard = () => {
       }
     } catch (err: any) {
       console.error('Upload error:', err);
-      setUploadError(err.message || 'Upload failed. Please try again.');
+      const errorMessage = err.message || 'Upload failed. Please try again.';
+      setUploadError(errorMessage);
+      setVerificationFeedback({
+        status: 'error',
+        title: 'Upload failed',
+        message: errorMessage,
+      });
       setIsImageVerified(false);
       setIsAnalyzing(false);
       
@@ -2527,8 +2632,8 @@ const VendorDashboard = () => {
                     )}
                   </div>
                   
-                  {/* Upload Error Display */}
-                  {uploadError && (
+                  {renderVerificationFeedback()}
+                  {false && uploadError && (
                     <div ref={errorSectionRef} className="mt-2 text-sm text-red-600 bg-red-50 border-2 border-red-300 p-4 rounded-lg scroll-mt-4">
                       <div className="flex items-start space-x-2">
                         <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -2713,12 +2818,15 @@ const VendorDashboard = () => {
       {/* Edit Product Modal */}
       {showEditProductModal && editingProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+          <div ref={modalScrollContainerRef} className="bg-white rounded-lg w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-primary">Edit Product</h2>
                 <button
-                  onClick={() => setShowEditProductModal(false)}
+                  onClick={() => {
+                    setShowEditProductModal(false);
+                    clearVerificationState();
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                   title="Close modal"
                   aria-label="Close modal"
@@ -2828,16 +2936,16 @@ const VendorDashboard = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Product Images</label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center relative overflow-hidden">
                     <input
+                      ref={fileInputRef}
                       type="file"
-                      multiple
                       accept="image/*"
                       onChange={handleImageChange}
                       className="hidden"
                       id="edit-image-upload"
                     />
-                    <label htmlFor="edit-image-upload" className="cursor-pointer">
+                    <label htmlFor="edit-image-upload" className={`cursor-pointer block relative z-0 ${isAnalyzing ? 'opacity-50 pointer-events-none' : ''}`}>
                       <div className="space-y-2">
                         <div className="mx-auto h-12 w-12 text-gray-400">
                           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2845,15 +2953,31 @@ const VendorDashboard = () => {
                           </svg>
                         </div>
                         <p className="text-sm text-gray-600">
-                          {uploading ? 'Uploading & Verifying...' : 'Click to upload images or drag and drop'}
+                          {isAnalyzing ? 'Analyzing Image...' : uploading ? 'Uploading & Verifying...' : 'Click to upload image or drag and drop'}
                         </p>
-                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB each. Images are automatically verified for poultry content.</p>
+                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB. One image per product. Replacing an image will trigger verification again.</p>
                       </div>
                     </label>
+                    {isAnalyzing && (
+                      <div className="absolute top-0 left-0 right-0 bottom-0 bg-white/90 backdrop-blur-sm border-2 border-primary/30 rounded-lg flex items-center justify-center z-20">
+                        <div className="flex flex-col items-center space-y-3">
+                          <div className="relative">
+                            <div className="h-16 w-16 rounded-full border-4 border-gray-100 border-t-primary animate-spin"></div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <ShieldCheck className="h-6 w-6 text-primary" />
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <h3 className="text-base font-semibold text-primary">Verifying Image...</h3>
+                            <p className="text-xs text-gray-500">Checking for poultry content</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Upload Error Display */}
-                  {uploadError && (
+                  {renderVerificationFeedback()}
+                  {false && uploadError && (
                     <div ref={errorSectionRef} className="mt-2 text-sm text-red-600 bg-red-50 border-2 border-red-300 p-4 rounded-lg scroll-mt-4">
                       <div className="flex items-start space-x-2">
                         <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -2909,7 +3033,10 @@ const VendorDashboard = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowEditProductModal(false)}
+                    onClick={() => {
+                      setShowEditProductModal(false);
+                      clearVerificationState();
+                    }}
                   >
                     Cancel
                   </Button>

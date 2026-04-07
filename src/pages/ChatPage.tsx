@@ -99,6 +99,7 @@ const ChatPage: React.FC = () => {
 
   // Hide chatbot on chat page to prevent blocking send button
   useEffect(() => {
+    document.body.classList.add('chat-page-active');
     const chatbotButton = document.querySelector('[aria-label="Open AI Assistant"]') as HTMLElement;
     const chatbotWindow = document.querySelector('.fixed.bottom-0.right-0.z-50') as HTMLElement;
     
@@ -110,6 +111,7 @@ const ChatPage: React.FC = () => {
     }
     
     return () => {
+      document.body.classList.remove('chat-page-active');
       if (chatbotButton) {
         chatbotButton.style.display = '';
       }
@@ -644,34 +646,39 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 sm:p-5 relative z-[10000] shadow-lg">
+      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-3 py-3 sm:p-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] relative z-[10000] shadow-lg">
         <div className="max-w-6xl mx-auto lg:flex lg:gap-4">
           <div className="hidden lg:block lg:w-80 xl:w-96 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-          <div className="flex gap-3 items-end bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-2 border border-gray-200 dark:border-gray-700">
-            <input
-              ref={inputRef}
-              value={messageText}
-              onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
-              placeholder={!activeConversation ? 'Loading...' : 'Type your message...'}
-              className="flex-1 bg-transparent border-none px-3 sm:px-4 py-3 text-sm sm:text-base focus:outline-none disabled:cursor-not-allowed disabled:placeholder-gray-400 dark:disabled:placeholder-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-              disabled={sending || !activeConversation || loading}
-            />
-            <Button
-              onClick={handleSend}
-              disabled={!activeConversation || sending || loading || !messageText.trim()}
-              className="flex-shrink-0 rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 sm:px-5 py-3 transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none min-w-[48px] sm:min-w-auto"
-              size="lg"
-              title={!activeConversation ? 'Loading conversation...' : sending ? 'Sending...' : 'Send message'}
-            >
-              {sending ? (
-                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
-          </div>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-2 shadow-sm dark:border-gray-700 dark:bg-gray-900/50">
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  value={messageText}
+                  onChange={handleInputChange}
+                  onKeyPress={handleKeyPress}
+                  placeholder={!activeConversation ? 'Loading...' : 'Type your message...'}
+                  className="w-full bg-transparent border-none pl-3 pr-[4.5rem] sm:pl-4 sm:pr-28 py-3 text-sm sm:text-base focus:outline-none disabled:cursor-not-allowed disabled:placeholder-gray-400 dark:disabled:placeholder-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                  disabled={sending || !activeConversation || loading}
+                />
+                <Button
+                  onClick={handleSend}
+                  disabled={!activeConversation || sending || loading || !messageText.trim()}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 flex-shrink-0 rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary disabled:bg-gray-300 disabled:cursor-not-allowed text-white h-11 min-w-[44px] px-3 sm:h-11 sm:min-w-[88px] sm:px-4 transition-all duration-200 shadow-md hover:shadow-lg disabled:shadow-none"
+                  size="lg"
+                  title={!activeConversation ? 'Loading conversation...' : sending ? 'Sending...' : 'Send message'}
+                >
+                  {sending ? (
+                    <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Send className="h-4.5 w-4.5 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline ml-2 text-sm font-medium">Send</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

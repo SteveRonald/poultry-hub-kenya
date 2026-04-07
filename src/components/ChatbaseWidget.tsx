@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import { CHATBASE_CONFIG } from '../config/chatbase';
 
 declare global {
@@ -11,9 +12,18 @@ declare global {
 
 const ChatbaseWidget: React.FC = () => {
   const { user } = useAuth();
+  const location = useLocation();
   const [isChatbaseLoaded, setIsChatbaseLoaded] = useState(false);
 
   useEffect(() => {
+    if (location.pathname.startsWith('/chat/')) {
+      const existingScript = document.getElementById(CHATBASE_CONFIG.widget.scriptId);
+      if (existingScript) {
+        existingScript.remove();
+      }
+      return;
+    }
+
     // Initialize Chatbase immediately on component mount for faster loading
     const initChatbase = () => {
       if (!window.chatbase || window.chatbase("getState") !== "initialized") {
@@ -72,7 +82,7 @@ const ChatbaseWidget: React.FC = () => {
         existingScript.remove();
       }
     };
-  }, [user]);
+  }, [user, location.pathname]);
 
   const identifyUser = async () => {
     try {

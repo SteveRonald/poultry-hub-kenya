@@ -292,13 +292,7 @@ function handleUpdateProduct() {
             return;
         }
         
-        // Update the product
-        $stmt = $pdo->prepare("
-            UPDATE products 
-            SET name = ?, description = ?, price = ?, category = ?, stock_quantity = ?, minimum_order_quantity = ?, image_urls = ?, updated_at = NOW()
-            WHERE id = ?
-        ");
-        $stmt->execute([
+        $params = [
             $input['name'],
             $input['description'],
             $input['price'],
@@ -306,8 +300,44 @@ function handleUpdateProduct() {
             $input['stock_quantity'] ?? 0,
             $input['minimum_order_quantity'] ?? 1,
             json_encode($input['image_urls'] ?? []),
-            $productId
-        ]);
+        ];
+
+        $setClauses = [
+            "name = ?",
+            "description = ?",
+            "price = ?",
+            "category = ?",
+            "stock_quantity = ?",
+            "minimum_order_quantity = ?",
+            "image_urls = ?",
+        ];
+
+        if (isset($input['ai_analysis']) && is_array($input['ai_analysis'])) {
+            $aiAnalysisData = json_encode($input['ai_analysis'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $aiConfidence = isset($input['ai_analysis']['confidence'])
+                ? (float)$input['ai_analysis']['confidence']
+                : 0.8;
+            $aiConfidence = max(0, min(1, $aiConfidence));
+
+            $setClauses[] = "ai_verified = ?";
+            $setClauses[] = "ai_confidence = ?";
+            $setClauses[] = "ai_analysis_data = ?";
+            $setClauses[] = "ai_verified_at = ?";
+
+            $params[] = 1;
+            $params[] = $aiConfidence;
+            $params[] = $aiAnalysisData;
+            $params[] = date('Y-m-d H:i:s');
+        }
+
+        $params[] = $productId;
+
+        $stmt = $pdo->prepare("
+            UPDATE products 
+            SET " . implode(', ', $setClauses) . ", updated_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute($params);
         
         echo json_encode(['message' => 'Product updated successfully']);
         

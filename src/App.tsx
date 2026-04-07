@@ -29,7 +29,6 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminLogin from "./pages/AdminLogin";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
-import Chatbot from "./components/Chatbot";
 import ChatbaseWidget from "./components/ChatbaseWidget";
 import WhatsAppWidget from "./components/WhatsAppWidget";
 import ChatPage from "./pages/ChatPage";
@@ -109,7 +108,6 @@ const App = () => (
                       <Route path="/control_90E-panel" element={<AdminLogin />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
-                    <Chatbot />
                     <WhatsAppWidget />
                     <ChatbaseWidget />
                   </BrowserRouter>

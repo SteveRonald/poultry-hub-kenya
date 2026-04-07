@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Users, ShieldCheck, TrendingUp, Star, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -60,6 +60,7 @@ const Index = () => {
   const { addToCart } = useCart();
   const [isPaused, setIsPaused] = useState(false);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [featuredCategory, setFeaturedCategory] = useState('all');
   const featuredCarouselRef = useRef<HTMLDivElement>(null);
   const featuredAutoScrollRef = useRef<NodeJS.Timeout | null>(null);
   const { advertisements, visibleAds, hasPremiumAd, handleAdClose } = useAdvertisementSlots('homepage', 20);
@@ -181,6 +182,35 @@ const Index = () => {
     await handleFeaturedAddToCart(product.id);
     navigate('/checkout');
   };
+
+  const featuredCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    featuredProducts.forEach((product) => {
+      const key = (product.category || 'other').toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+    return [
+      { id: 'all', label: 'All Picks', count: featuredProducts.length },
+      ...Array.from(counts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([key, count]) => ({
+          id: key,
+          label: key.charAt(0).toUpperCase() + key.slice(1),
+          count,
+        })),
+    ];
+  }, [featuredProducts]);
+
+  const displayedFeaturedProducts = useMemo(() => {
+    const baseProducts = featuredCategory === 'all'
+      ? featuredProducts
+      : featuredProducts.filter((product) => (product.category || '').toLowerCase() === featuredCategory);
+
+    return baseProducts.slice(0, 12);
+  }, [featuredCategory, featuredProducts]);
 
   const scrollFeatured = (dir: 'left' | 'right') => {
     const el = featuredCarouselRef.current;
@@ -587,15 +617,57 @@ const Index = () => {
           </div>
 
           {/* Featured products carousel */}
-          <div className="flex items-center justify-between mb-4 gap-3">
-            <h3 className="text-xl font-bold text-primary">Featured Products</h3>
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mb-2 inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-green-700">
+                Featured Picks
+              </div>
+              <h3 className="text-2xl font-bold text-primary">Explore trusted products faster</h3>
+              <p className="mt-2 max-w-2xl text-sm text-stone-600 sm:text-base">
+                Browse a representative mix of high-interest products across the marketplace, then narrow down by category if you already know what you need.
+              </p>
+            </div>
             <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
               View All
               <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
 
-          <div className="relative">
+          <div className="-mx-4 mb-5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+            <div className="flex w-max min-w-full gap-2 sm:w-auto sm:min-w-0 sm:flex-wrap">
+            {featuredCategories.map((category) => {
+              const isActive = featuredCategory === category.id;
+
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setFeaturedCategory(category.id)}
+                  className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-medium transition-colors sm:px-4 ${
+                    isActive
+                      ? 'border-green-600 bg-green-600 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  {category.label} ({category.count})
+                </button>
+              );
+            })}
+            </div>
+          </div>
+
+          <div className="relative rounded-3xl border border-stone-200 bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:p-5">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-stone-600">
+                <span className="font-semibold text-stone-900">{displayedFeaturedProducts.length}</span>{' '}
+                {featuredCategory === 'all'
+                  ? 'featured products chosen from across the marketplace'
+                  : `featured ${featuredCategory} products ready to explore`}
+              </p>
+              <p className="text-xs uppercase tracking-[0.16em] text-stone-400">
+                Swipe or use arrows to browse
+              </p>
+            </div>
             <div className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10">
               <Button
                 variant="outline"
@@ -631,11 +703,11 @@ const Index = () => {
               onTouchStart={() => setIsPaused(true)}
               onTouchEnd={() => setIsPaused(false)}
             >
-              {featuredProducts.map((prod, idx) => (
+              {displayedFeaturedProducts.map((prod, idx) => (
                 <div
                   key={prod.id || idx}
                   data-featured-item={idx === 0 ? '1' : undefined}
-                  className="flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] snap-start"
+                  className="flex-shrink-0 w-[268px] sm:w-[300px] md:w-[320px] snap-start"
                 >
                   <ProductCard
                     product={prod}
@@ -647,6 +719,12 @@ const Index = () => {
                 </div>
               ))}
             </div>
+
+            {displayedFeaturedProducts.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-6 py-10 text-center text-stone-600">
+                No featured products found in this selection right now.
+              </div>
+            )}
           </div>
         </div>
       </section>

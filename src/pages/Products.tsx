@@ -1,13 +1,21 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Filter, Star, X, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw } from 'lucide-react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '../components/ui/breadcrumb';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { useProducts, Product } from '../hooks/useProducts';
@@ -36,10 +44,10 @@ const Products = () => {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState('all');
-  const [expandedSections, setExpandedSections] = useState({
+  const [expandedSections, setExpandedSections] = useState(() => ({
     quickFilters: false,
-    searchCategory: true
-  });
+    searchCategory: typeof window !== 'undefined' ? window.innerWidth >= 640 : true
+  }));
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [selectedDescription, setSelectedDescription] = useState<{ name: string; description: string } | null>(null);
   const { addToCart } = useCart();
@@ -456,6 +464,20 @@ const Products = () => {
       {hasPremiumAd && <div style={{ height: '90px' }} />}
       <div className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
+          <Breadcrumb className="mb-4">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link to="/">Home</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Products</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-primary mb-2">Browse Products</h1>
@@ -500,8 +522,63 @@ const Products = () => {
                 )}
               </div>
             </div>
+            <div className="border-b border-stone-100 px-4 py-4 sm:hidden">
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search products, vendors, or categories..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-12 rounded-xl border-stone-200 pl-10 text-base placeholder:text-stone-400 focus-visible:ring-green-600"
+                    aria-label="Search products, vendors, or categories"
+                  />
+                </div>
+
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="h-11 rounded-xl border-stone-200 text-left text-sm" aria-label={`Product category filter, ${selectedCategory === 'all' ? 'showing all categories' : `filtered to ${selectedCategory}`}`}>
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories ({allProducts.length})</SelectItem>
+                      <SelectItem value="chicks">Chicks ({getCategoryCount('chicks')})</SelectItem>
+                      <SelectItem value="eggs">Eggs ({getCategoryCount('eggs')})</SelectItem>
+                      <SelectItem value="chickens">Chickens ({getCategoryCount('chickens')})</SelectItem>
+                      <SelectItem value="feed">Feed ({getCategoryCount('feed')})</SelectItem>
+                      <SelectItem value="equipment">Equipment ({getCategoryCount('equipment')})</SelectItem>
+                      <SelectItem value="medicine">Medicine ({getCategoryCount('medicine')})</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant="outline"
+                    className="h-11 rounded-xl border-stone-200 px-4 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                    onClick={() => setShowMoreFilters(true)}
+                  >
+                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                    Filters
+                    {advancedFilterCount > 0 && (
+                      <Badge className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-green-600 px-1.5 text-[11px] text-white">
+                        {advancedFilterCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
+                  <span className="rounded-full bg-stone-100 px-3 py-1.5">
+                    {selectedLocation === 'all' ? 'All locations' : selectedLocation}
+                  </span>
+                  <span className="rounded-full bg-stone-100 px-3 py-1.5">
+                    {sortBy === 'newest' ? 'Newest First' : sortBy === 'price-low' ? 'Price Low to High' : sortBy === 'price-high' ? 'Price High to Low' : 'Best Rated'}
+                  </span>
+                </div>
+              </div>
+            </div>
             {/* Search & Category Section */}
-            <div className="border-b border-stone-100">
+            <div className="hidden border-b border-stone-100 sm:block">
               <button
                 onClick={() => setExpandedSections(prev => ({ ...prev, searchCategory: !prev.searchCategory }))}
                 className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-stone-50 sm:px-6"
@@ -523,11 +600,11 @@ const Products = () => {
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                       <Input
                         type="text"
-                        placeholder="Search products or vendors..."
+                        placeholder="Search products, vendors, or categories..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="h-12 rounded-xl border-stone-200 pl-10 text-base placeholder:text-stone-400 focus-visible:ring-green-600"
-                        aria-label="Search products"
+                        aria-label="Search products, vendors, or categories"
                       />
                     </div>
 
@@ -546,30 +623,34 @@ const Products = () => {
                       </SelectContent>
                     </Select>
 
-                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                      <SelectTrigger className="h-12 rounded-xl border-stone-200 text-left" aria-label={`Location filter, ${selectedLocation === 'all' ? 'showing all locations' : `filtered to ${selectedLocation}`}`}>
-                        <SelectValue placeholder="All Locations" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {locations.map(location => (
-                          <SelectItem key={location} value={location}>
-                            {location === 'all' ? `All Locations (${allProducts.length})` : `${location} (${getLocationCount(location)})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="hidden sm:block">
+                      <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                        <SelectTrigger className="h-12 rounded-xl border-stone-200 text-left" aria-label={`Location filter, ${selectedLocation === 'all' ? 'showing all locations' : `filtered to ${selectedLocation}`}`}>
+                          <SelectValue placeholder="All Locations" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {locations.map(location => (
+                            <SelectItem key={location} value={location}>
+                              {location === 'all' ? `All Locations (${allProducts.length})` : `${location} (${getLocationCount(location)})`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="h-12 rounded-xl border-stone-200 bg-white text-sm">
-                        <SelectValue placeholder="Sort products" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="newest">Newest First</SelectItem>
-                        <SelectItem value="price-low">Price Low to High</SelectItem>
-                        <SelectItem value="price-high">Price High to Low</SelectItem>
-                        <SelectItem value="rating">Best Rated</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="hidden sm:block">
+                      <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="h-12 rounded-xl border-stone-200 bg-white text-sm">
+                          <SelectValue placeholder="Sort products" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="newest">Newest First</SelectItem>
+                          <SelectItem value="price-low">Price Low to High</SelectItem>
+                          <SelectItem value="price-high">Price High to Low</SelectItem>
+                          <SelectItem value="rating">Best Rated</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               )}
@@ -778,6 +859,23 @@ const Products = () => {
                           </SelectItem>
                           );
                         })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Location Filter */}
+                  <div>
+                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Location</label>
+                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                      <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map(location => (
+                          <SelectItem key={location} value={location}>
+                            {location === 'all' ? `All Locations (${allProducts.length})` : `${location} (${getLocationCount(location)})`}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

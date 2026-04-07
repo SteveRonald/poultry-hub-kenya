@@ -417,3 +417,13 @@
   transform: scale(1.05) !important;
   box-shadow: 0 6px 16px rgba(26, 77, 46, 0.4) !important;
 }
+
+/* Never allow support widgets to cover the in-app chat composer */
+body.chat-page-active .chatbase-widget,
+body.chat-page-active #chatbase-bubble-button,
+body.chat-page-active [id*="chatbase"],
+body.chat-page-active [class*="chatbase"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

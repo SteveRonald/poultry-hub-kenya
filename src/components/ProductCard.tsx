@@ -1,4 +1,4 @@
-import { MapPin, Package, Plus, ShoppingCart, Store } from 'lucide-react';
+import { MapPin, Package, Plus, ShoppingCart, Star, Store } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import ChatButton from './ChatButton';
@@ -87,6 +87,9 @@ const ProductCard = ({
   const vendorName = product.vendor_profiles?.farm_name || 'Verified vendor';
   const vendorLocation = product.vendor_profiles?.location || 'Location unavailable';
   const placeholderImage = createCategoryPlaceholder(product.category, product.name);
+  const ratingValue = product.average_rating || 0;
+  const ratingCount = product.total_ratings || 0;
+  const hasRatings = ratingValue > 0 && ratingCount > 0;
 
   return (
     <Card
@@ -125,11 +128,25 @@ const ProductCard = ({
       </div>
 
       <CardContent className="flex flex-1 flex-col p-4">
-        <div className="space-y-3">
-          <div className="space-y-2">
+        <div className="space-y-2.5">
+          <div className="space-y-1.5">
             <h3 className="line-clamp-2 min-h-[3rem] text-sm font-semibold leading-6 text-stone-900 md:text-base">
               {product.name}
             </h3>
+            <div className="flex min-h-[1.25rem] items-center justify-between gap-3">
+              {hasRatings ? (
+                <div className="flex items-center gap-1.5 text-xs text-stone-500">
+                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  <span className="font-semibold text-stone-700">{ratingValue.toFixed(1)}</span>
+                  <span>({ratingCount})</span>
+                </div>
+              ) : (
+                <span className="text-xs text-stone-400">No ratings yet</span>
+              )}
+              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                {product.category || 'Product'}
+              </span>
+            </div>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-stone-400">
@@ -151,26 +168,26 @@ const ProductCard = ({
             </div>
           </div>
 
-          <div className="grid gap-2 rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-stone-400" />
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
+            <div className="rounded-lg bg-white px-3 py-2">
+              <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-stone-400">
+                <Package className="h-3.5 w-3.5" />
                 <span>Stock</span>
               </div>
-              <span className="font-medium text-stone-900">{product.stock_quantity}</span>
+              <span className="text-sm font-semibold text-stone-900">{product.stock_quantity}</span>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4 text-stone-400" />
+            <div className="rounded-lg bg-white px-3 py-2">
+              <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-stone-400">
+                <ShoppingCart className="h-3.5 w-3.5" />
                 <span>Min Order</span>
               </div>
-              <span className="font-medium text-stone-900">
+              <span className="text-sm font-semibold text-stone-900">
                 {minOrder} {product.unit || 'item'}
               </span>
             </div>
           </div>
 
-          <div className="space-y-2 text-sm text-stone-600">
+          <div className="space-y-1.5 text-sm text-stone-600">
             <div className="flex items-start gap-2">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
               <span className="line-clamp-1">{vendorLocation}</span>

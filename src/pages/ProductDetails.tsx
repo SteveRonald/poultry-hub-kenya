@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Plus, Minus, Star, MapPin, Check, ChevronDown, ChevronUp, X, Share2, ExternalLink } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { ArrowLeft, ShoppingCart, Plus, Minus, Star, MapPin, Check, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X, Share2, ExternalLink, Maximize2, ShieldCheck, Store, PackageCheck } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '../components/ui/breadcrumb';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
@@ -31,6 +39,8 @@ interface ProductDetails {
     location: string;
     user_id?: number;
   };
+  vendor_id?: string;
+  vendor_user_id?: string;
   average_rating?: number;
   total_ratings?: number;
 }
@@ -108,10 +118,13 @@ const ProductDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [showImageModal, setShowImageModal] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const ratingsRef = useRef<HTMLDivElement | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
 
   // Update quantity when product loads to respect minimum order quantity
   useEffect(() => {
@@ -119,6 +132,11 @@ const ProductDetails = () => {
       setQuantity(product.minimum_order_quantity);
     }
   }, [product]);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+    setShowImageModal(false);
+  }, [product?.id]);
 
   useEffect(() => {
     if (id) {
@@ -171,6 +189,50 @@ const ProductDetails = () => {
   const scrollToRatings = () => {
     if (!ratingsRef.current) return;
     ratingsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const goToPreviousImage = (event?: React.MouseEvent | React.KeyboardEvent) => {
+    event?.stopPropagation?.();
+    if (images.length <= 1) return;
+    setSelectedImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  const goToNextImage = (event?: React.MouseEvent | React.KeyboardEvent) => {
+    event?.stopPropagation?.();
+    if (images.length <= 1) return;
+    setSelectedImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const handleGalleryTouchStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
+  };
+
+  const handleGalleryTouchEnd = (event: React.TouchEvent) => {
+    if (images.length <= 1 || touchStartXRef.current === null || touchStartYRef.current === null) {
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - touchStartXRef.current;
+    const deltaY = touch.clientY - touchStartYRef.current;
+
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+
+    // Only trigger horizontal gallery swipe when it is clearly intentional.
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      goToNextImage();
+    } else {
+      goToPreviousImage();
+    }
   };
 
   const handleShare = async () => {
@@ -398,6 +460,22 @@ const ProductDetails = () => {
 
   const images = getProductImages();
   const mainImage = images[selectedImageIndex] || images[0];
+  const categoryLabel = useMemo(() => {
+    if (!product?.category) return 'Products';
+    return product.category.charAt(0).toUpperCase() + product.category.slice(1);
+  }, [product?.category]);
+  const productSpecifications = useMemo(() => {
+    if (!product) return [];
+
+    return [
+      { label: 'Category', value: categoryLabel },
+      { label: 'Price Unit', value: product.unit },
+      { label: 'Minimum Order', value: `${product.minimum_order_quantity || 1} ${product.unit}(s)` },
+      { label: 'Available Stock', value: `${product.stock_quantity} ${product.unit}(s)` },
+      { label: 'Vendor', value: product.vendor_profiles.farm_name },
+      { label: 'Location', value: product.vendor_profiles.location },
+    ];
+  }, [product, categoryLabel]);
   const mapsUrl = useMemo(() => {
     const location = product?.vendor_profiles?.location || '';
     if (!location) return '';
@@ -480,7 +558,33 @@ const ProductDetails = () => {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-6xl mx-auto px-4 pb-28 pt-6 sm:px-6 sm:pb-32 lg:px-8 lg:pb-12">
+        <Breadcrumb className="mb-4">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to="/">Home</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to="/products">Products</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to={`/products?category=${encodeURIComponent(product.category || '')}`}>{categoryLabel}</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{product.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+
         {/* Back Button */}
         <Button
           variant="ghost"
@@ -496,12 +600,50 @@ const ProductDetails = () => {
           {/* Left Side: Images */}
           <div className="space-y-3">
             {/* Main Image */}
-            <div className="relative aspect-square max-w-md mx-auto lg:max-w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+            <div
+              className="relative aspect-square max-w-md mx-auto overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm lg:max-w-full"
+              onTouchStart={handleGalleryTouchStart}
+              onTouchEnd={handleGalleryTouchEnd}
+            >
               <img
                 src={mainImage}
                 alt={product.name}
-                className="w-full h-full object-cover"
+                className="w-full h-full cursor-zoom-in object-contain p-4 sm:p-6"
+                onClick={() => setShowImageModal(true)}
               />
+              {images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={goToPreviousImage}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 p-2 text-stone-700 shadow-sm transition-colors hover:bg-white"
+                    aria-label="Previous product image"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToNextImage}
+                    className="absolute right-14 top-1/2 -translate-y-1/2 rounded-full bg-white/95 p-2 text-stone-700 shadow-sm transition-colors hover:bg-white"
+                    aria-label="Next product image"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowImageModal(true)}
+                className="absolute right-3 top-3 rounded-full bg-white/95 p-2 text-stone-700 shadow-sm transition-colors hover:bg-white"
+                aria-label="View larger image"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
+              {images.length > 1 && (
+                <div className="absolute bottom-3 right-3 rounded-full bg-black/65 px-3 py-1 text-xs font-medium text-white">
+                  {selectedImageIndex + 1} / {images.length}
+                </div>
+              )}
             </div>
 
             {/* Thumbnails */}
@@ -511,32 +653,53 @@ const ProductDetails = () => {
                   <button
                     key={index}
                     onClick={() => setSelectedImageIndex(index)}
-                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                    className={`flex-shrink-0 h-16 w-16 overflow-hidden rounded-xl border-2 bg-white transition-all ${
                       selectedImageIndex === index
                         ? 'border-primary ring-1 ring-primary ring-offset-1'
-                        : 'border-gray-200 hover:border-gray-300'
+                        : 'border-stone-200 hover:border-stone-300'
                     }`}
                   >
                     <img
                       src={img}
                       alt={`${product.name} - Image ${index + 1}`}
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-contain p-1.5"
                     />
                   </button>
                 ))}
               </div>
             )}
+
+            <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-green-600" />
+                <div>
+                  <h3 className="text-sm font-semibold text-stone-900">Buy with more confidence</h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-600">
+                    Review photos, confirm availability through chat, and complete checkout only when you are ready.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Right Side: Product Details */}
-          <div className="space-y-4">
+          <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
             {/* Product Title */}
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-primary mb-2">
+            <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Badge className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-50">
+                  Verified marketplace listing
+                </Badge>
+                <Badge variant="secondary" className="rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100">
+                  {categoryLabel}
+                </Badge>
+              </div>
+
+              <h1 className="mb-3 text-2xl font-bold leading-tight text-stone-950 sm:text-3xl">
                 {product.name}
               </h1>
 
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                   <div className="flex items-center">
                     <MapPin className="h-3.5 w-3.5 mr-1" />
@@ -600,132 +763,176 @@ const ProductDetails = () => {
                   </Button>
                 </div>
               </div>
-            </div>
 
-            {/* Price */}
-            <div className="border-t border-b border-gray-200 py-3">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-primary">
-                  KSH {product.price.toLocaleString()}
-                </span>
-                <span className="text-base text-gray-600">/ {product.unit}</span>
+              <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-stone-950">
+                    KSH {product.price.toLocaleString()}
+                  </span>
+                  <span className="text-base text-gray-600">/ {product.unit}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-stone-600 sm:grid-cols-2">
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <span className="font-medium text-stone-900">Stock:</span>{' '}
+                    {product.stock_quantity} {product.unit}(s)
+                  </div>
+                  <div className="rounded-xl bg-white px-3 py-2">
+                    <span className="font-medium text-stone-900">Minimum Order:</span>{' '}
+                    {product.minimum_order_quantity || 1} {product.unit}(s)
+                  </div>
+                </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <label className="font-medium text-sm text-stone-900">Quantity:</label>
+                <div className="flex items-center rounded-xl border border-stone-300 bg-white">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setQuantity(Math.max(product.minimum_order_quantity || 1, quantity - 1))}
+                      disabled={quantity <= (product.minimum_order_quantity || 1)}
+                      className="h-10 w-10 rounded-xl"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="min-w-[56px] px-3 py-1.5 text-center text-sm font-semibold">
+                      {quantity}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
+                      disabled={quantity >= product.stock_quantity}
+                      className="h-10 w-10 rounded-xl"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-stone-200 bg-white p-3">
+                  <div className="flex items-start gap-3">
+                    <Store className="mt-0.5 h-4 w-4 text-green-700" />
+                    <div className="text-sm text-stone-600">
+                      <p className="font-medium text-stone-900">{product.vendor_profiles.farm_name}</p>
+                      <p className="mt-1">If the details on this page are not enough, use the chat feature to message the vendor directly.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    className="h-11 flex-1 rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700"
+                    onClick={handleAddToCart}
+                    disabled={cartLoading || product.stock_quantity <= 0}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add to Cart
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-1 rounded-xl border-stone-300 bg-white text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                    onClick={handleOrderNow}
+                    disabled={product.stock_quantity <= 0}
+                  >
+                    <ShoppingCart className="mr-2 h-4 w-4" />
+                    Order Now
+                  </Button>
+                </div>
+
+                <div className="mt-3 border-t border-stone-200 pt-3">
+                  <ChatButton
+                    productId={product.id}
+                    vendorId={product.vendor_id}
+                    vendorUserId={product.vendor_profiles?.user_id}
+                    variant="ghost"
+                    className="h-10 w-full justify-start rounded-xl border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 hover:bg-stone-50 hover:text-stone-900"
+                  />
+                </div>
+
+                <div className="mt-4 grid gap-2 text-xs text-stone-600">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-green-600" />
+                    <span>Secure checkout flow with clear order review before payment.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <PackageCheck className="h-4 w-4 text-green-600" />
+                    <span>Delivery and pickup details can be confirmed with the vendor before placing your order.</span>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 mt-1">
-                Stock: {product.stock_quantity} {product.unit}(s) available
-              </p>
-              <p className="text-sm text-orange-600 font-medium mt-1">
-                Minimum Order: {product.minimum_order_quantity || 1} {product.unit}(s)
-              </p>
-            </div>
 
-            {/* Description */}
-            <div>
-              <h2 className="text-lg font-semibold mb-2">Description</h2>
-              <DescriptionText description={product.description} />
-            </div>
-
-            {/* Vendor Info */}
-            <Card>
-              <CardContent className="p-3">
-                <h3 className="font-semibold text-sm mb-2">Vendor Information</h3>
-                <p className="text-gray-700 text-sm">
-                  <span className="font-medium">Farm:</span> {product.vendor_profiles.farm_name}
-                </p>
-                <p className="text-gray-700 text-sm">
-                  <span className="font-medium">Location:</span> {product.vendor_profiles.location}
-                </p>
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <p className="text-xs text-gray-500">
-                    Tip: Use chat to confirm availability, delivery options, and pickup details before ordering.
+              {product.stock_quantity <= 0 && (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3">
+                  <p className="flex items-center text-sm font-medium text-red-800">
+                    <X className="mr-2 h-4 w-4" />
+                    Out of stock
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+              )}
 
-            {/* Quantity Selector */}
-            <div className="flex items-center gap-3">
-              <label className="font-medium text-sm">Quantity:</label>
-              <div className="flex items-center border rounded-lg">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setQuantity(Math.max(product.minimum_order_quantity || 1, quantity - 1))}
-                  disabled={quantity <= (product.minimum_order_quantity || 1)}
-                  className="h-9 w-9"
-                >
-                  <Minus className="h-3.5 w-3.5" />
-                </Button>
-                <span className="px-3 py-1.5 min-w-[50px] text-center font-semibold text-sm">
-                  {quantity}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
-                  disabled={quantity >= product.stock_quantity}
-                  className="h-9 w-9"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-              <span className="text-xs text-gray-600">
-                Max: {product.stock_quantity}
-              </span>
+              {product.stock_quantity > 0 && product.stock_quantity < 10 && (
+                <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+                  <p className="flex items-center text-sm font-medium text-yellow-800">
+                    <Check className="mr-2 h-4 w-4" />
+                    Limited stock available
+                  </p>
+                </div>
+              )}
             </div>
-
-            {/* Action Buttons */}
-            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3 sm:p-4">
-              <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                className="h-11 flex-1 rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700"
-                onClick={handleAddToCart}
-                disabled={cartLoading || product.stock_quantity <= 0}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add to Cart
-              </Button>
-              <Button
-                variant="outline"
-                className="h-11 flex-1 rounded-xl border-stone-300 bg-white text-sm font-semibold text-stone-800 hover:bg-stone-50"
-                onClick={handleOrderNow}
-                disabled={product.stock_quantity <= 0}
-              >
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Order Now
-              </Button>
-              </div>
-
-              {/* Chat action separated to avoid competing with the primary CTA */}
-              <div className="mt-3 border-t border-stone-200 pt-3">
-              <ChatButton
-                productId={product.id}
-                vendorId={product.vendor_id}
-                vendorUserId={product.vendor_profiles?.user_id}
-                variant="ghost"
-                className="h-10 w-full justify-start rounded-xl px-2 text-sm font-medium text-stone-600 hover:bg-transparent hover:text-stone-900"
-              />
-              </div>
-            </div>
-
-            {/* Stock Status */}
-            {product.stock_quantity <= 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-800 font-medium text-sm flex items-center">
-                  <X className="h-4 w-4 mr-2" />
-                  Out of Stock
-                </p>
-              </div>
-            )}
-
-            {product.stock_quantity > 0 && product.stock_quantity < 10 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <p className="text-yellow-800 font-medium text-sm flex items-center">
-                  <Check className="h-4 w-4 mr-2" />
-                  Limited Stock Available
-                </p>
-              </div>
-            )}
           </div>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.35fr_0.95fr]">
+          <Card className="rounded-2xl border-stone-200 shadow-sm">
+            <CardContent className="p-5 sm:p-6">
+              <h2 className="mb-3 text-xl font-semibold text-stone-950">Overview</h2>
+              <DescriptionText description={product.description} />
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-stone-200 shadow-sm">
+            <CardContent className="p-5 sm:p-6">
+              <h2 className="mb-4 text-xl font-semibold text-stone-950">Specifications</h2>
+              <div className="grid gap-3">
+                {productSpecifications.map((spec) => (
+                  <div key={spec.label} className="flex items-start justify-between gap-4 rounded-xl bg-stone-50 px-4 py-3">
+                    <span className="text-sm font-medium text-stone-500">{spec.label}</span>
+                    <span className="text-right text-sm font-semibold text-stone-900">{spec.value}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="rounded-2xl border-stone-200 shadow-sm">
+            <CardContent className="p-5 sm:p-6">
+              <h3 className="mb-3 text-lg font-semibold text-stone-950">Vendor Information</h3>
+              <div className="space-y-2 text-sm text-stone-600">
+                <p>
+                  <span className="font-medium text-stone-900">Farm:</span> {product.vendor_profiles.farm_name}
+                </p>
+                <p>
+                  <span className="font-medium text-stone-900">Location:</span> {product.vendor_profiles.location}
+                </p>
+                <p>
+                  <span className="font-medium text-stone-900">Support:</span> Chat with the vendor before ordering if you need stock, delivery, or pickup clarification.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-stone-200 shadow-sm">
+            <CardContent className="p-5 sm:p-6">
+              <h3 className="mb-3 text-lg font-semibold text-stone-950">Buying Notes</h3>
+              <ul className="space-y-2 text-sm text-stone-600">
+                <li>Orders are placed in Kenyan Shillings and reviewed in checkout before payment.</li>
+                <li>Use the quantity selector to match your needed order size and minimum order rules.</li>
+                <li>For time-sensitive orders, chat with the vendor first to confirm readiness.</li>
+              </ul>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Ratings Section - Full width on mobile */}
@@ -786,6 +993,105 @@ const ProductDetails = () => {
       </div>
 
       <Footer />
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-stone-200 bg-white/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/90 lg:hidden">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-stone-900">{product.name}</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="text-lg font-bold text-stone-950">KSH {product.price.toLocaleString()}</span>
+                <span className="text-xs text-stone-500">/ {product.unit}</span>
+              </div>
+            </div>
+            <Badge className={product.stock_quantity > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+              {product.stock_quantity > 0 ? 'In stock' : 'Out of stock'}
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              className="h-11 rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700"
+              onClick={handleAddToCart}
+              disabled={cartLoading || product.stock_quantity <= 0}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add to Cart
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 rounded-xl border-stone-300 bg-white text-sm font-semibold text-stone-800 hover:bg-stone-50"
+              onClick={handleOrderNow}
+              disabled={product.stock_quantity <= 0}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Order Now
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {showImageModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setShowImageModal(false)}
+          onTouchStart={handleGalleryTouchStart}
+          onTouchEnd={handleGalleryTouchEnd}
+        >
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={goToPreviousImage}
+                className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition-colors hover:bg-white/20"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={goToNextImage}
+                className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition-colors hover:bg-white/20"
+                aria-label="Next image"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowImageModal(false)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+            aria-label="Close image viewer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={mainImage}
+            alt={product.name}
+            className="max-h-[88vh] max-w-[92vw] rounded-2xl bg-white object-contain p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {images.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2 rounded-full bg-black/45 px-3 py-2">
+              {images.map((img, index) => (
+                <button
+                  key={`${img}-${index}`}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedImageIndex(index);
+                  }}
+                  className={`h-2.5 w-2.5 rounded-full transition-all ${
+                    selectedImageIndex === index ? 'bg-white' : 'bg-white/45'
+                  }`}
+                  aria-label={`View image ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

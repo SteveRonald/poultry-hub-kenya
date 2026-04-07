@@ -40,7 +40,7 @@ const ChatButton: React.FC<ChatButtonProps> = ({
     // Customers can always chat
     if (user.role === 'customer') return true;
     
-    // Vendors: never show (prevents vendor-to-vendor chats and avoids confusion)
+    // Vendors shouldn't see "chat with vendor" actions in the marketplace UI.
     if (user.role === 'vendor') {
       return false;
     }

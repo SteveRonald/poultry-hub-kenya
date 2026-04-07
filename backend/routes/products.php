@@ -36,7 +36,9 @@ function handleGetProducts() {
         $params = [];
         
         if (!empty($search)) {
-            $sql .= " AND (p.name LIKE ? OR v.farm_name LIKE ?)";
+            $sql .= " AND (p.name LIKE ? OR p.category LIKE ? OR p.description LIKE ? OR v.farm_name LIKE ?)";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
             $params[] = "%$search%";
             $params[] = "%$search%";
         }

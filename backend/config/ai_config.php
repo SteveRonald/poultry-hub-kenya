@@ -40,10 +40,11 @@ return [
         'max_image_size' => 5242880, // 5MB
         'supported_formats' => ['jpg', 'jpeg', 'png', 'webp'],
         'description_length' => [
-            'min_words' => 100, // Minimum words for SEO and comprehensiveness
+            'min_words' => 8, // Soft minimum for concise products
+            'min_characters' => 30, // Practical minimum for short product listings
             'max_words' => 400, // Maximum words to prevent overly long descriptions
-            'optimal_min' => 150, // Optimal minimum for best SEO
-            'optimal_max' => 300, // Optimal maximum for user engagement
+            'optimal_min' => 60, // Recommended minimum for better listing quality
+            'optimal_max' => 220, // Recommended upper bound for readability
             'max_characters' => 2500 // Maximum characters (approximately 400 words)
         ],
         'cache_duration' => 86400 // 24 hours (caching handled by OpenAI if needed)
@@ -51,7 +52,9 @@ return [
     'image_verification' => [
         'required' => true, // Images must be verified before product creation
         'auto_verify_on_upload' => true, // Automatically verify images when uploaded
-        'min_confidence' => 0.6, // Minimum confidence score (60%) for acceptance
+        'min_confidence' => 0.62, // Confidence score for clear acceptance
+        'review_confidence' => 0.35, // Allow uncertain-but-possibly-relevant products for manual review
+        'reject_confidence' => 0.8, // Reject only when AI is strongly confident the item is out of scope
         'reject_non_poultry' => true, // Reject images that are not poultry-related
         'allow_manual_override' => false, // Allow manual override when AI verification fails (for quota issues)
         'quota_error_mode' => 'reject' // 'reject' = reject upload, 'warn' = warn but allow, 'bypass' = skip verification
@@ -61,7 +64,9 @@ return [
         'egg', 'eggs', 'feed', 'grain', 'seed', 'corn', 'wheat', 'farm', 'farming',
         'livestock', 'animal', 'cage', 'coop', 'nest', 'feather', 'beak', 'wing',
         'meat', 'chicken meat', 'poultry meat', 'cooked chicken', 'broiler', 'layer',
-        'kienyeji', 'indigenous', 'feeder', 'waterer', 'incubator', 'hatchery'
+        'kienyeji', 'indigenous', 'feeder', 'waterer', 'incubator', 'hatchery',
+        'boots', 'gumboots', 'rubber boots', 'gloves', 'overalls', 'protective gear',
+        'disinfectant', 'sanitizer', 'cleaning tools', 'shovel', 'broom', 'brush'
     ]
 ];
 ?>

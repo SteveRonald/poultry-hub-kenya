@@ -13,11 +13,11 @@ class GeminiVisionAnalyzer {
     
     /**
      * Analyze image using Gemini Vision API
-     * Returns analysis with strict poultry verification
+     * Returns analysis with poultry-marketplace relevance verification
      */
     public function analyzeImage($imagePath, $imageUrl = null) {
         if (empty($this->apiKey)) {
-            return $this->getErrorResponse('Gemini API key is not configured. Please set GEMINI_API_KEY or GOOGLE_API_KEY in your environment variables.');
+            return $this->getErrorResponse('Image verification service configuration is incomplete.');
         }
         
         try {
@@ -57,7 +57,7 @@ class GeminiVisionAnalyzer {
             
             // Check if API call returned a result
             if ($result === null) {
-                return $this->getErrorResponse('Gemini API returned no response. Please check your API key, network connection, and try again.');
+                return $this->getErrorResponse('Image verification service returned no response. Please try again.');
             }
             
             // Check if result contains an error
@@ -67,12 +67,11 @@ class GeminiVisionAnalyzer {
                 
                 // Provide helpful messages for common error types
                 if ($errorType === 'quota_exceeded' || strpos($errorMsg, 'quota') !== false || strpos($errorMsg, '429') !== false) {
-                    $helpfulMsg = "Gemini API quota error: Your account has insufficient quota or rate limit exceeded. ";
-                    $helpfulMsg .= "Please check your Google Cloud billing and API quotas at https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas";
+                    $helpfulMsg = "Image verification limit reached. Please try again later.";
                     return $this->getErrorResponse($helpfulMsg);
                 }
                 
-                return $this->getErrorResponse("Gemini API error ({$errorType}): {$errorMsg}");
+                return $this->getErrorResponse("Image verification service error: {$errorMsg}");
             }
             
             // Process the result
@@ -81,7 +80,7 @@ class GeminiVisionAnalyzer {
             }
             
             // If result is not an array, it's an error
-            return $this->getErrorResponse('Invalid response from Gemini API. Please try again.');
+            return $this->getErrorResponse('Invalid response from image verification service. Please try again.');
             
         } catch (Exception $e) {
             error_log("Gemini Vision API Error: " . $e->getMessage());
@@ -98,7 +97,6 @@ class GeminiVisionAnalyzer {
         if (function_exists('finfo_open')) {
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mimeType = finfo_file($finfo, $imagePath);
-            finfo_close($finfo);
             
             // Validate it's an image type
             $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -131,24 +129,27 @@ class GeminiVisionAnalyzer {
         // Gemini API endpoint
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
         
-        // Enhanced prompt for strict poultry verification and detailed analysis
-        $prompt = "You are an expert poultry marketplace image analyzer. Analyze this image and determine if it contains poultry-related content.
+        // Prompt tuned for poultry marketplace relevance and manual review workflow
+        $prompt = "You are an expert poultry marketplace image analyzer. Analyze this image and determine whether it is relevant to poultry farming or the poultry supply chain.
 
-STRICT VERIFICATION RULES:
-- Poultry-related content includes: chickens, hens, roosters, chicks, ducks, geese, turkeys, eggs, poultry feed, grain, seed, corn, wheat, poultry meat, chicken meat, cages, coops, nests, feeders, waterers, incubators, hatchery equipment, or any poultry farming equipment.
-- NON-poultry content includes: cars, houses, people (unless clearly showing poultry), clothes, furniture, electronics, food items (unless poultry-related), pets (dogs, cats), or any non-poultry items.
+RELEVANCE RULES:
+- Clearly relevant content includes: chickens, hens, roosters, chicks, ducks, geese, turkeys, eggs, poultry feed, grain, seed, corn, wheat, poultry meat, cages, coops, nests, feeders, waterers, incubators, hatchery equipment, brooders, drinkers, farm tools, poultry medicine, disinfectants, protective gear, gumboots, work boots, gloves, overalls, cleaning tools, storage tools, and other items reasonably used in poultry farming.
+- Borderline but potentially relevant content should still be treated as poultry-related if it can reasonably be used in poultry farming, even if poultry animals are not visible.
+- Non-relevant content includes: fashion items with no farming use, electronics unrelated to farming, furniture, unrelated household goods, beauty items, phones, TVs, handbags, toys, and clearly unrelated products.
 
 ANALYSIS REQUIREMENTS:
-1. Verify if the image is poultry-related (STRICT - must be clearly visible)
+1. Decide whether the item is poultry-related or plausibly used in poultry farming
 2. Identify all detected objects
 3. Assess image quality (1-10 scale)
 4. Suggest appropriate category
 5. Provide confidence score (0.0-1.0)
-6. Generate a brief image description for use in product descriptions
+6. Provide a relevance_status of clear_match, borderline_match, or out_of_scope
+7. Generate a brief image description for use in product descriptions
 
 Respond with a JSON object in this EXACT format:
 {
   \"is_poultry_related\": true/false,
+  \"relevance_status\": \"clear_match\" OR \"borderline_match\" OR \"out_of_scope\",
   \"detected_objects\": [\"list\", \"of\", \"detected\", \"objects\"],
   \"category\": \"Live Poultry\" OR \"Eggs\" OR \"Feed & Nutrition\" OR \"Poultry Meat\" OR \"Equipment\" OR \"Other\",
   \"database_category\": \"chickens\" OR \"eggs\" OR \"feed\" OR \"equipment\" OR \"medicine\" OR \"chicks\" OR \"other\",
@@ -161,7 +162,10 @@ Respond with a JSON object in this EXACT format:
 
 Note: The database_category field should match one of these exact values: chickens, eggs, feed, equipment, medicine, chicks, or other.
 
-CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry_related to false and provide a rejection_reason.";
+CRITICAL:
+- If the item is clearly relevant to poultry farming, set is_poultry_related to true and relevance_status to clear_match.
+- If the item might reasonably be used in poultry farming but you are not fully certain, set is_poultry_related to true and relevance_status to borderline_match.
+- Only set is_poultry_related to false when the item is clearly out of scope for poultry farming.";
         
         // Build the request payload
         $parts = [];
@@ -218,7 +222,6 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         $curlInfo = curl_getinfo($ch);
-        curl_close($ch);
         
         if ($curlError) {
             error_log("Gemini Vision API cURL Error: " . $curlError);
@@ -339,6 +342,7 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
             'database_category' => $databaseCategory,
             'confidence' => isset($result['confidence']) ? (float)$result['confidence'] : 0.5,
             'is_poultry_related' => isset($result['is_poultry_related']) ? (bool)$result['is_poultry_related'] : false,
+            'relevance_status' => $result['relevance_status'] ?? 'out_of_scope',
             'analysis_method' => 'gemini_vision',
             'image_description' => $result['image_description'] ?? '',
             'rejection_reason' => $result['rejection_reason'] ?? null
@@ -348,6 +352,8 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
         if (!$analysis['is_poultry_related']) {
             $analysis['suggestions'] = ['Not poultry related. Please upload poultry-related images only.'];
             $analysis['rejection_reason'] = 'Not poultry related. Please upload poultry-related images only.';
+        } elseif (($analysis['relevance_status'] ?? '') === 'borderline_match') {
+            $analysis['suggestions'] = ['This image may be poultry-related, but AI is not fully certain. It can proceed for manual review.'];
         } else {
             $analysis['suggestions'] = ['Image verified successfully.'];
         }
@@ -365,7 +371,7 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
         // Check for specific error types to give better feedback without leaking internals
         $userFriendlyMessage = 'Image verification service is temporarily unavailable. Please try again later.';
         
-        if (strpos($message, 'not configured') !== false || strpos($message, 'API key') !== false) {
+        if (strpos($message, 'not configured') !== false || strpos($message, 'API key') !== false || strpos($message, 'configuration') !== false) {
             $userFriendlyMessage = 'AI verification is currently being set up. Please try again later.';
         } elseif (strpos($message, 'quota') !== false || strpos($message, '429') !== false) {
             $userFriendlyMessage = 'Verification limit reached. Please try again in a moment.';
@@ -387,4 +393,3 @@ CRITICAL: If you cannot clearly identify poultry-related content, set is_poultry
     }
 }
 ?>
-

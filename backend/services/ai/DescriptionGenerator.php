@@ -19,7 +19,7 @@ class DescriptionGenerator {
      */
     public function generateDescription($productName, $category, $imageAnalysis = null, $additionalInfo = []) {
         if (empty($this->apiKey)) {
-            return $this->getErrorResponse('Gemini API key is not configured. Please set GEMINI_API_KEY or GOOGLE_API_KEY in your environment variables.');
+            return $this->getErrorResponse('AI description service is currently unavailable.');
         }
         
         // Check cache
@@ -176,32 +176,31 @@ CRITICAL:
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
-        curl_close($ch);
         
         if ($curlError) {
             error_log("Gemini API cURL Error: " . $curlError);
-            return $this->getErrorResponse('Failed to connect to Gemini API: ' . $curlError);
+            return $this->getErrorResponse('Description service connection failed. Please try again.');
         }
         
         if ($httpCode === 200) {
             $responseData = json_decode($response, true);
             if (!$responseData) {
                 error_log("Gemini API Error: Invalid JSON response - $response");
-                return $this->getErrorResponse('Invalid response from Gemini API. Please try again.');
+                return $this->getErrorResponse('Invalid response from description service. Please try again.');
             }
             
             // Check for errors in response
             if (isset($responseData['error'])) {
                 $errorMessage = $responseData['error']['message'] ?? 'Unknown error';
                 error_log("Gemini API Error: " . $errorMessage);
-                return $this->getErrorResponse('Gemini API error: ' . $errorMessage);
+                return $this->getErrorResponse('Description service error. Please try again.');
             }
             
             // Extract content from response
             $candidate = $responseData['candidates'][0] ?? null;
             if (!$candidate) {
                 error_log("Gemini API Error: No candidates in response - " . json_encode($responseData));
-                return $this->getErrorResponse('Gemini API returned no response. Please try again.');
+                return $this->getErrorResponse('Description service returned no response. Please try again.');
             }
             
             // Check for finish reason
@@ -225,7 +224,6 @@ CRITICAL:
                 
                 $response = curl_exec($ch);
                 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
                 
                 if ($httpCode === 200) {
                     $responseData = json_decode($response, true);
@@ -239,7 +237,7 @@ CRITICAL:
                 
                 if (empty($generatedText)) {
                     error_log("Gemini API Error: Empty content in response");
-                    return $this->getErrorResponse('Gemini API returned empty response. Please try again.');
+                    return $this->getErrorResponse('Description service returned empty content. Please try again.');
                 }
                 
                 // Clean up the generated text
@@ -260,9 +258,9 @@ CRITICAL:
             $errorData = json_decode($response, true);
             if ($errorData && isset($errorData['error']['message'])) {
                 $errorMessage = $errorData['error']['message'];
-                return $this->getErrorResponse('Gemini API error: ' . $errorMessage);
+                return $this->getErrorResponse('Description service error. Please try again.');
             } else {
-                return $this->getErrorResponse('Gemini API error: HTTP ' . $httpCode . '. Please check your API key and try again.');
+                return $this->getErrorResponse('Description service is temporarily unavailable. Please try again.');
             }
         }
     }
@@ -342,7 +340,7 @@ CRITICAL:
      */
     private function getErrorResponse($message) {
         error_log("Description Generator Error: " . $message);
-        return "⚠️ " . $message . "\n\nPlease write a description manually or configure the Gemini API key.";
+        return "Description generation is unavailable right now. You can write a short manual description and continue.";
     }
     
     /**
@@ -440,7 +438,6 @@ Respond with ONLY the suggested product name, nothing else. No explanations, no 
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
         
         if ($httpCode === 200) {
             $responseData = json_decode($response, true);
@@ -556,3 +553,4 @@ Respond with ONLY the suggested product name, nothing else. No explanations, no 
     }
 }
 ?>
+

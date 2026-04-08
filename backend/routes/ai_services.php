@@ -103,18 +103,22 @@ function handleDescriptionGeneration() {
         );
         
         // Check if description generation failed
-        if (isset($description['error']) || (is_string($description) && strpos($description, '⚠️') === 0)) {
+        $isUnavailableMessage = is_string($description) && (
+            stripos($description, 'Description generation is unavailable') === 0 ||
+            stripos($description, 'service is currently unavailable') !== false
+        );
+        if (isset($description['error']) || $isUnavailableMessage || (is_string($description) && strpos($description, '??') === 0)) {
             $errorMessage = 'Description generation failed';
             if (is_string($description)) {
                 // Extract error message from warning emoji prefix
-                $errorMessage = trim(str_replace('⚠️', '', $description));
+                $errorMessage = trim(str_replace('??', '', $description));
                 // Remove redundant text
                 $errorMessage = preg_replace('/\n\nPlease write a description manually.*/s', '', $errorMessage);
             } elseif (isset($description['error'])) {
                 $errorMessage = $description['error'];
             }
             
-            http_response_code(500);
+            http_response_code(200);
             echo json_encode([
                 'success' => false,
                 'error' => $errorMessage,
@@ -140,11 +144,11 @@ function handleDescriptionGeneration() {
         ]);
         
     } catch (Exception $e) {
-        http_response_code(500);
+        http_response_code(200);
         error_log("Description Generation Error: " . $e->getMessage());
         echo json_encode([
             'success' => false,
-            'error' => 'Description generation failed: ' . $e->getMessage()
+            'error' => 'Description generation is currently unavailable. Please write a short manual description and continue.'
         ]);
     }
 }
@@ -328,3 +332,6 @@ function handleAIConfig() {
     ]);
 }
 ?>
+
+
+

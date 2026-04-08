@@ -3,6 +3,89 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../services/ai/ImageAnalyzer.php';
 
+function getVerificationUiMessage($status, $analysis = null, $verifiedConfidence = 0.6) {
+    if ($status === 'caution') {
+        return 'AI verification is not fully certain, but this product may be relevant to poultry farming. It can continue for manual review.';
+    }
+
+    if ($status === 'rejected') {
+        return $analysis['rejection_reason'] ?? 'This image appears to be outside the poultry farming marketplace scope.';
+    }
+
+    return 'Image verified successfully.';
+}
+
+function buildAnalysisText($analysis) {
+    $parts = [];
+    if (!empty($analysis['detected_objects']) && is_array($analysis['detected_objects'])) {
+        $parts[] = implode(' ', $analysis['detected_objects']);
+    }
+    if (!empty($analysis['image_description']) && is_string($analysis['image_description'])) {
+        $parts[] = $analysis['image_description'];
+    }
+    return strtolower(trim(implode(' ', $parts)));
+}
+
+function hasAnyKeyword($text, $keywords) {
+    foreach ($keywords as $keyword) {
+        if ($keyword !== '' && strpos($text, strtolower($keyword)) !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function classifyVerificationResult($analysis, $config) {
+    $verifiedConfidence = $config['image_verification']['min_confidence'] ?? 0.62;
+    $reviewConfidence = $config['image_verification']['review_confidence'] ?? 0.35;
+    $rejectConfidence = $config['image_verification']['reject_confidence'] ?? 0.8;
+    $isPoultryRelated = $analysis['is_poultry_related'] ?? false;
+    $confidence = (float)($analysis['confidence'] ?? 0);
+    $relevanceStatus = $analysis['relevance_status'] ?? null;
+    $text = buildAnalysisText($analysis);
+    $poultryKeywords = $config['poultry_keywords'] ?? [];
+    $supportiveKeywords = [
+        'boot', 'boots', 'gumboot', 'gumboots', 'rubber boot', 'work boot', 'footwear',
+        'glove', 'gloves', 'overall', 'overalls', 'protective', 'safety',
+        'disinfectant', 'sanitizer', 'cleaning', 'brush', 'broom', 'shovel',
+        'farm tool', 'equipment', 'barn', 'coop', 'hatchery'
+    ];
+    $hardRejectKeywords = [
+        'television', 'tv', 'phone', 'smartphone', 'laptop', 'headphone', 'earphone',
+        'watch', 'handbag', 'shoe fashion', 'lipstick', 'makeup', 'jewelry', 'sofa',
+        'blender', 'kettle', 'microwave'
+    ];
+
+    $hasPoultrySignal = hasAnyKeyword($text, $poultryKeywords) || hasAnyKeyword($text, $supportiveKeywords);
+    $hasHardRejectSignal = hasAnyKeyword($text, $hardRejectKeywords);
+
+    if ($isPoultryRelated && $confidence >= $verifiedConfidence && $relevanceStatus !== 'borderline_match') {
+        return 'verified';
+    }
+
+    if ($isPoultryRelated && ($confidence >= $reviewConfidence || $relevanceStatus === 'borderline_match')) {
+        return 'caution';
+    }
+
+    if ($hasHardRejectSignal && ($confidence >= max(0.55, $reviewConfidence) || $relevanceStatus === 'out_of_scope')) {
+        return 'rejected';
+    }
+
+    if ($hasPoultrySignal && $confidence >= max(0.25, $reviewConfidence - 0.05)) {
+        return 'caution';
+    }
+
+    if (!$isPoultryRelated && $confidence >= $rejectConfidence) {
+        return 'rejected';
+    }
+
+    if ($confidence >= $reviewConfidence) {
+        return 'caution';
+    }
+
+    return 'rejected';
+}
+
 function handleImageUpload() {
     $token = getBearerToken();
     if (!$token) {
@@ -47,7 +130,6 @@ function handleImageUpload() {
     // Check MIME type
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
     $mimeType = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
     
     // Check file extension
     $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
@@ -102,7 +184,6 @@ function handleImageUpload() {
         $verificationRequired = $config['image_verification']['required'] ?? true;
         $autoVerify = $config['image_verification']['auto_verify_on_upload'] ?? true;
         $minConfidence = $config['image_verification']['min_confidence'] ?? 0.6;
-        $rejectNonPoultry = $config['image_verification']['reject_non_poultry'] ?? true;
         
         $verificationResult = null;
         if ($verificationRequired && $autoVerify) {
@@ -112,7 +193,7 @@ function handleImageUpload() {
                 
                 // Check if analysis failed (error response)
                 if (isset($analysis['error']) || (isset($analysis['analysis_method']) && $analysis['analysis_method'] === 'error')) {
-                    $errorMessage = $analysis['error'] ?? $analysis['rejection_reason'] ?? 'Failed to analyze image';
+                    $errorMessage = $analysis['error'] ?? $analysis['rejection_reason'] ?? 'Image verification service is temporarily unavailable.';
                     $isQuotaError = strpos($errorMessage, 'quota') !== false || strpos($errorMessage, 'insufficient_quota') !== false;
                     $quotaErrorMode = $config['image_verification']['quota_error_mode'] ?? 'reject';
                     
@@ -121,10 +202,11 @@ function handleImageUpload() {
                         // Bypass verification and allow upload with warning
                         $verificationResult = [
                             'verified' => false,
+                            'status' => 'warning',
                             'is_poultry_related' => null, // Unknown
                             'confidence' => 0,
                             'analysis' => null,
-                            'warning' => 'AI verification skipped due to quota error. Image uploaded but not verified.',
+                            'warning' => 'Verification could not be completed automatically. The image was uploaded but still needs manual review.',
                             'error' => $errorMessage
                         ];
                         // Continue to upload the image
@@ -132,10 +214,11 @@ function handleImageUpload() {
                         // Warn but allow upload
                         $verificationResult = [
                             'verified' => false,
+                            'status' => 'warning',
                             'is_poultry_related' => null,
                             'confidence' => 0,
                             'analysis' => null,
-                            'warning' => 'AI verification failed due to quota error. Please verify image manually.',
+                            'warning' => 'Verification could not be completed automatically. Please try again later or continue for manual review.',
                             'error' => $errorMessage
                         ];
                         // Continue to upload the image
@@ -145,11 +228,12 @@ function handleImageUpload() {
                         http_response_code(500);
                         echo json_encode([
                             'success' => false,
-                            'error' => 'Image verification failed: ' . $errorMessage,
+                            'error' => $errorMessage,
                             'rejection_reason' => $errorMessage,
                             'quota_error' => $isQuotaError,
                             'verification' => [
                                 'verified' => false,
+                                'status' => 'error',
                                 'is_poultry_related' => false,
                                 'confidence' => 0,
                                 'analysis' => $analysis
@@ -163,53 +247,39 @@ function handleImageUpload() {
                 if (isset($verificationResult) && isset($verificationResult['warning'])) {
                     // Already handled quota error in bypass/warn mode, continue to upload
                 } else {
-                    // Check if image is poultry-related and meets confidence threshold
                     $isPoultryRelated = $analysis['is_poultry_related'] ?? false;
                     $confidence = $analysis['confidence'] ?? 0;
-                
-                if ($rejectNonPoultry && !$isPoultryRelated) {
-                    // Delete the uploaded file since it's not poultry-related
-                    @unlink($uploadPath);
-                    http_response_code(400);
-                    echo json_encode([
-                        'success' => false,
-                        'error' => 'Image verification failed: Image does not contain poultry-related content',
-                        'rejection_reason' => $analysis['rejection_reason'] ?? 'Image must show poultry products (chickens, eggs, feed, equipment, etc.)',
-                        'verification' => [
-                            'verified' => false,
-                            'is_poultry_related' => false,
-                            'confidence' => $confidence,
-                            'analysis' => $analysis
-                        ]
-                    ]);
-                    return;
-                }
-                
-                if ($confidence < $minConfidence) {
-                    // Delete the uploaded file since confidence is too low
-                    @unlink($uploadPath);
-                    http_response_code(400);
-                    echo json_encode([
-                        'success' => false,
-                        'error' => 'Image verification failed: Low confidence score',
-                        'rejection_reason' => "AI confidence ({$confidence}) is below minimum required ({$minConfidence})",
-                        'verification' => [
-                            'verified' => false,
-                            'is_poultry_related' => $isPoultryRelated,
-                            'confidence' => $confidence,
-                            'analysis' => $analysis
-                        ]
-                    ]);
-                    return;
-                }
-                
-                // Image passed verification
-                $verificationResult = [
-                    'verified' => true,
-                    'is_poultry_related' => $isPoultryRelated,
-                    'confidence' => $confidence,
-                    'analysis' => $analysis
-                ];
+                    $verificationStatus = classifyVerificationResult($analysis, $config);
+
+                    if ($verificationStatus === 'rejected') {
+                        @unlink($uploadPath);
+                        http_response_code(400);
+                        echo json_encode([
+                            'success' => false,
+                            'error' => getVerificationUiMessage('rejected', $analysis, $minConfidence),
+                            'rejection_reason' => getVerificationUiMessage('rejected', $analysis, $minConfidence),
+                            'verification' => [
+                                'verified' => false,
+                                'status' => 'rejected',
+                                'is_poultry_related' => $isPoultryRelated,
+                                'confidence' => $confidence,
+                                'analysis' => $analysis
+                            ]
+                        ]);
+                        return;
+                    }
+
+                    $verificationResult = [
+                        'verified' => true,
+                        'status' => $verificationStatus,
+                        'is_poultry_related' => $isPoultryRelated,
+                        'confidence' => $confidence,
+                        'analysis' => $analysis
+                    ];
+
+                    if ($verificationStatus === 'caution') {
+                        $verificationResult['warning'] = getVerificationUiMessage('caution', $analysis, $minConfidence);
+                    }
                 }
                 // If verificationResult is already set (from quota error handling), use it as-is
                 
@@ -223,8 +293,8 @@ function handleImageUpload() {
                 http_response_code(500);
                 echo json_encode([
                     'success' => false,
-                    'error' => 'Image verification failed: ' . $e->getMessage(),
-                    'rejection_reason' => $e->getMessage(),
+                    'error' => 'Image verification service is temporarily unavailable. Please try again later.',
+                    'rejection_reason' => 'Image verification service is temporarily unavailable. Please try again later.',
                     'verification' => null
                 ]);
                 return;
@@ -305,7 +375,6 @@ function handleMultipleImageUpload() {
         // Check MIME type
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $mimeType = finfo_file($finfo, $files['tmp_name'][$i]);
-        finfo_close($finfo);
         
         // Check file extension
         $extension = strtolower(pathinfo($files['name'][$i], PATHINFO_EXTENSION));
@@ -350,7 +419,6 @@ function handleMultipleImageUpload() {
             $verificationRequired = $config['image_verification']['required'] ?? true;
             $autoVerify = $config['image_verification']['auto_verify_on_upload'] ?? true;
             $minConfidence = $config['image_verification']['min_confidence'] ?? 0.6;
-            $rejectNonPoultry = $config['image_verification']['reject_non_poultry'] ?? true;
             
             $verificationResult = null;
             $verificationPassed = true;
@@ -362,26 +430,26 @@ function handleMultipleImageUpload() {
                     
                     // Check if analysis failed (error response)
                     if (isset($analysis['error']) || (isset($analysis['analysis_method']) && $analysis['analysis_method'] === 'error')) {
-                        $errorMessage = $analysis['error'] ?? $analysis['rejection_reason'] ?? 'Failed to analyze image';
+                        $errorMessage = $analysis['error'] ?? $analysis['rejection_reason'] ?? 'Image verification service is temporarily unavailable.';
                         @unlink($uploadPath);
-                        $errors[] = "Image verification failed - " . $errorMessage . ". Please try again or check Gemini API configuration.";
+                        $errors[] = $errorMessage;
                         $verificationPassed = false;
                         continue;
                     }
                     
-                    // Check if image is poultry-related and meets confidence threshold
                     $isPoultryRelated = $analysis['is_poultry_related'] ?? false;
                     $confidence = $analysis['confidence'] ?? 0;
+                    $verificationStatus = classifyVerificationResult($analysis, $config);
                     
-                    if ($rejectNonPoultry && !$isPoultryRelated) {
-                        // Delete the uploaded file since it's not poultry-related
+                    if ($verificationStatus === 'rejected') {
                         @unlink($uploadPath);
-                        $rejectionReason = $analysis['rejection_reason'] ?? 'Image must show poultry products (chickens, eggs, feed, equipment, etc.)';
-                        $errors[] = "Image verification failed - Not poultry-related. " . $rejectionReason;
+                        $rejectionReason = getVerificationUiMessage('rejected', $analysis, $minConfidence);
+                        $errors[] = $rejectionReason;
                         if ($rejectionVerification === null) {
                             $rejectionReasonForResponse = $rejectionReason;
                             $rejectionVerification = [
                                 'verified' => false,
+                                'status' => 'rejected',
                                 'is_poultry_related' => false,
                                 'confidence' => $confidence,
                                 'analysis' => $analysis
@@ -391,27 +459,23 @@ function handleMultipleImageUpload() {
                         continue;
                     }
                     
-                    if ($confidence < $minConfidence) {
-                        // Delete the uploaded file since confidence is too low
-                        @unlink($uploadPath);
-                        $errors[] = "Image verification failed - Low confidence ({$confidence}). Minimum required: {$minConfidence}";
-                        $verificationPassed = false;
-                        continue;
-                    }
-                    
-                    // Image passed verification
                     $verificationResult = [
                         'verified' => true,
+                        'status' => $verificationStatus,
                         'is_poultry_related' => $isPoultryRelated,
                         'confidence' => $confidence,
                         'analysis' => $analysis
                     ];
+
+                    if ($verificationStatus === 'caution') {
+                        $verificationResult['warning'] = getVerificationUiMessage('caution', $analysis, $minConfidence);
+                    }
                     
                 } catch (Exception $e) {
                     error_log("Image verification error for file {$i}: " . $e->getMessage());
                     // Strict mode: reject on API error
                     @unlink($uploadPath);
-                    $errors[] = "Image verification failed - " . $e->getMessage() . ". Please try again or check Gemini API configuration.";
+                    $errors[] = "Image verification service is temporarily unavailable. Please try again later.";
                     $verificationPassed = false;
                     continue;
                 }

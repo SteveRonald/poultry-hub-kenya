@@ -105,16 +105,15 @@ function handleCreateProduct() {
     
     // Validate description length
     $config = require __DIR__ . '/../config/ai_config.php';
-    $minWords = $config['limits']['description_length']['min_words'] ?? 100;
+    $minChars = $config['limits']['description_length']['min_characters'] ?? 30;
     $maxChars = $config['limits']['description_length']['max_characters'] ?? 2500;
     $description = trim($input['description']);
-    $wordCount = str_word_count($description);
     $charCount = strlen($description);
     
-    if ($wordCount < $minWords) {
+    if ($charCount < $minChars) {
         http_response_code(400);
         echo json_encode([
-            'error' => "Description is too short. Minimum {$minWords} words required. Current: {$wordCount} words."
+            'error' => "Description is too short. Minimum {$minChars} characters required. Current: {$charCount} characters."
         ]);
         return;
     }

@@ -268,7 +268,7 @@ const VendorDashboard = () => {
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [verificationFeedback, setVerificationFeedback] = useState<{
-    status: 'idle' | 'success' | 'error';
+    status: 'idle' | 'success' | 'caution' | 'error';
     title?: string;
     message?: string;
   }>({ status: 'idle' });
@@ -278,6 +278,8 @@ const VendorDashboard = () => {
   const errorSectionRef = useRef<HTMLDivElement>(null);
   const modalScrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const minDescriptionChars = 30;
+  const descriptionChars = (productForm.description || '').trim().length;
 
   useEffect(() => {
     // Always wait for auth to finish loading first
@@ -926,6 +928,24 @@ const VendorDashboard = () => {
       );
     }
 
+    if (verificationFeedback.status === 'caution') {
+      return (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 animate-pulse">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-800">{verificationFeedback.title || 'Verification needs manual review'}</p>
+              <p className="mt-1 text-sm text-amber-700">
+                {verificationFeedback.message || 'AI is not fully certain, but this product can continue for manual review.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (verificationFeedback.status === 'error') {
       return (
         <div ref={errorSectionRef} className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3">
@@ -1106,6 +1126,8 @@ const VendorDashboard = () => {
           const firstVerified = verifiedUploads[0];
           if (firstVerified.verification?.analysis) {
             const analysis = firstVerified.verification.analysis;
+            const verificationStatus = firstVerified.verification?.status || 'verified';
+            const verificationWarning = firstVerified.verification?.warning;
             
             // Only use analysis if it doesn't contain errors
             if (!analysis.error && analysis.analysis_method !== 'error') {
@@ -1113,11 +1135,19 @@ const VendorDashboard = () => {
               setAiAnalysis(analysis);
               setIsImageVerified(true); // Mark image as verified
               setIsAnalyzing(false); // Stop analyzing indicator
-              setVerificationFeedback({
-                status: 'success',
-                title: 'Image verified successfully',
-                message: 'The selected image passed poultry verification and has been applied to this product.',
-              });
+              if (verificationStatus === 'caution') {
+                setVerificationFeedback({
+                  status: 'caution',
+                  title: 'Verification passed with caution',
+                  message: verificationWarning || 'AI is not fully certain, but this product may be poultry-related and has been submitted for manual review.',
+                });
+              } else {
+                setVerificationFeedback({
+                  status: 'success',
+                  title: 'Image verified successfully',
+                  message: 'The selected image passed poultry verification and has been applied to this product.',
+                });
+              }
               
               // Auto-scroll to analysis section on success
               setTimeout(() => {
@@ -1191,11 +1221,17 @@ const VendorDashboard = () => {
               }
               
               // Show combined toast notification
-              const toastMessage = categoryUpdated && mappedCategory
-                ? `Image verified. Category set to "${mappedCategory.charAt(0).toUpperCase() + mappedCategory.slice(1)}" based on image analysis.`
-                : "Image successfully verified and uploaded.";
+              const toastMessage = verificationStatus === 'caution'
+                ? (verificationWarning || 'AI verification passed with caution. Product can proceed to manual review.')
+                : categoryUpdated && mappedCategory
+                  ? `Image verified. Category set to "${mappedCategory.charAt(0).toUpperCase() + mappedCategory.slice(1)}" based on image analysis.`
+                  : "Image successfully verified and uploaded.";
               
-              toast.success(toastMessage);
+              if (verificationStatus === 'caution') {
+                toast.warning(toastMessage);
+              } else {
+                toast.success(toastMessage);
+              }
             } else {
               // Clear analysis if it contains errors
               setAiAnalysis(null);
@@ -2409,16 +2445,27 @@ const VendorDashboard = () => {
                           <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                             <div className="flex items-center space-x-2 text-red-800">
                               <AlertTriangle className="h-4 w-4" />
-                              <span className="text-sm font-medium">❌ REJECTED - Not Poultry Content</span>
+                              <span className="text-sm font-medium">Rejected - Out of Poultry Scope</span>
                             </div>
                             <p className="text-xs text-red-700 mt-1">
-                              <strong>This image has been rejected by our AI.</strong> Please upload only poultry-related images: chickens, hens, roosters, eggs, feed, grain, or poultry equipment. Other content is not allowed on this marketplace.
+                              <strong>This image appears out of scope for poultry farming.</strong> Please upload poultry products or poultry-farm support items.
                             </p>
                             {aiAnalysis.confidence && (
                               <p className="text-xs text-red-600 mt-1">
-                                AI Confidence: {Math.round(aiAnalysis.confidence * 100)}% (Minimum required: 60%)
+                                AI Confidence: {Math.round(aiAnalysis.confidence * 100)}%
                               </p>
                             )}
+                          </div>
+                        )}
+                        {aiAnalysis.relevance_status === 'borderline_match' && (
+                          <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <div className="flex items-center space-x-2 text-amber-800">
+                              <AlertTriangle className="h-4 w-4" />
+                              <span className="text-sm font-medium">Accepted with Caution</span>
+                            </div>
+                            <p className="text-xs text-amber-700 mt-1">
+                              AI is not fully certain, but this image may be related to poultry farming and can proceed for manual review.
+                            </p>
                           </div>
                         )}
                       </div>
@@ -2586,6 +2633,9 @@ const VendorDashboard = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Describe your product or use AI to generate one..."
                   />
+                  <p className={`mt-1 text-xs ${descriptionChars >= minDescriptionChars ? 'text-green-600' : 'text-red-600'}`}>
+                    Minimum {minDescriptionChars} characters. Current: {descriptionChars}
+                  </p>
                 </div>
 
                 <div>
@@ -2633,20 +2683,7 @@ const VendorDashboard = () => {
                   </div>
                   
                   {renderVerificationFeedback()}
-                  {false && uploadError && (
-                    <div ref={errorSectionRef} className="mt-2 text-sm text-red-600 bg-red-50 border-2 border-red-300 p-4 rounded-lg scroll-mt-4">
-                      <div className="flex items-start space-x-2">
-                        <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="font-semibold text-red-800 mb-1">Image Verification Failed</p>
-                          <p className="text-red-700">{uploadError}</p>
-                          <p className="text-xs text-red-600 mt-2 font-medium">
-                            💡 Please upload only poultry-related images: chickens, eggs, feed, equipment, etc.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  
 
                   {/* Image Preview - Single Image */}
                   {productForm.image_urls && productForm.image_urls.length > 0 && (
@@ -2701,9 +2738,15 @@ const VendorDashboard = () => {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={submitting || !isImageVerified}
+                    disabled={submitting || !isImageVerified || descriptionChars < minDescriptionChars}
                     className="btn-primary"
-                    title={!isImageVerified ? "Please upload and verify an image before submitting" : ""}
+                    title={
+                      !isImageVerified
+                        ? "Please upload and verify an image before submitting"
+                        : descriptionChars < minDescriptionChars
+                          ? `Please enter at least ${minDescriptionChars} characters in description`
+                          : ""
+                    }
                   >
                     {submitting ? 'Submitting...' : 'Submit Product'}
                   </Button>
@@ -2932,6 +2975,9 @@ const VendorDashboard = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Describe your product..."
                   />
+                  <p className={`mt-1 text-xs ${descriptionChars >= minDescriptionChars ? 'text-green-600' : 'text-red-600'}`}>
+                    Minimum {minDescriptionChars} characters. Current: {descriptionChars}
+                  </p>
                 </div>
 
                 <div>
@@ -2977,20 +3023,7 @@ const VendorDashboard = () => {
                   </div>
 
                   {renderVerificationFeedback()}
-                  {false && uploadError && (
-                    <div ref={errorSectionRef} className="mt-2 text-sm text-red-600 bg-red-50 border-2 border-red-300 p-4 rounded-lg scroll-mt-4">
-                      <div className="flex items-start space-x-2">
-                        <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="font-semibold text-red-800 mb-1">Image Verification Failed</p>
-                          <p className="text-red-700">{uploadError}</p>
-                          <p className="text-xs text-red-600 mt-2 font-medium">
-                            💡 Please upload only poultry-related images: chickens, eggs, feed, equipment, etc.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  
 
                   {/* Image Preview */}
                   {productForm.image_urls && productForm.image_urls.length > 0 && (
@@ -3042,8 +3075,9 @@ const VendorDashboard = () => {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={submitting}
+                    disabled={submitting || descriptionChars < minDescriptionChars}
                     className="btn-primary"
+                    title={descriptionChars < minDescriptionChars ? `Please enter at least ${minDescriptionChars} characters in description` : ""}
                   >
                     {submitting ? 'Updating...' : 'Update Product'}
                   </Button>
@@ -3516,3 +3550,4 @@ const VendorDashboard = () => {
 };
 
 export default VendorDashboard;
+

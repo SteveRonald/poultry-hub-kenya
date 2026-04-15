@@ -3,23 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { X, ExternalLink } from 'lucide-react';
 import { getApiUrl, getImageUrl } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
-
-interface Advertisement {
-  id: string;
-  product_id: string;
-  product_name: string;
-  product_images: string;
-  product_price: number;
-  ad_image: string;
-  ad_title: string;
-  tier: 'basic' | 'premium';
-  content_duration: number;
-  page_location?: string;
-  previous_price?: number | null;
-  current_price?: number | null;
-  fallback_path?: string;
-  is_fallback?: boolean;
-}
+import type { Advertisement } from '../hooks/useAdvertisementSlots';
 
 interface AdvertisementBannerProps {
   advertisement: Advertisement;
@@ -37,7 +21,7 @@ const AdvertisementBanner: React.FC<AdvertisementBannerProps> = ({
   const [viewTracked, setViewTracked] = useState(false);
   const adRef = useRef<HTMLDivElement>(null);
   const viewStartTime = useRef<number | null>(null);
-  const viewTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const viewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   

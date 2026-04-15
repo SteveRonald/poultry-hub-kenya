@@ -30,7 +30,7 @@ const ChatDrawer: React.FC<ChatDrawerProps> = ({ isOpen, onClose, productId, ven
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationMessages = activeConversation ? (messages[activeConversation] || []) : [];
   const conversation = activeConversation 
     ? conversations.find(c => c.id === activeConversation)

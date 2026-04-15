@@ -43,7 +43,7 @@ const ChatPage: React.FC = () => {
   const [startingNewConversation, setStartingNewConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isStartingNewConversationRef = useRef(false);
 
   // Get vendorId from location state or product data

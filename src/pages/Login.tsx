@@ -281,7 +281,7 @@ const Login = () => {
               </CardTitle>
               <p className="text-gray-600 dark:text-gray-300 mt-2">
                 {step === 1 
-                  ? 'Sign in to your PoultryHubKE account' 
+                  ? 'Sign in to your KukuSoko (KE) account' 
                   : 'Enter the 6-digit code sent to your email'}
               </p>
             </CardHeader>

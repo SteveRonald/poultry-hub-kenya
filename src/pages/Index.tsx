@@ -62,12 +62,12 @@ const Index = () => {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [featuredCategory, setFeaturedCategory] = useState('all');
   const featuredCarouselRef = useRef<HTMLDivElement>(null);
-  const featuredAutoScrollRef = useRef<NodeJS.Timeout | null>(null);
+  const featuredAutoScrollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { advertisements, visibleAds, hasPremiumAd, handleAdClose } = useAdvertisementSlots('homepage', 20);
   
   // Hero media carousel state
   const [currentHeroImageIndex, setCurrentHeroImageIndex] = useState(0);
-  const heroImageIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heroImageIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heroVideoRef = useRef<HTMLVideoElement | null>(null);
   
   // Scroll animation refs
@@ -350,7 +350,7 @@ const Index = () => {
     {
       name: "Sarah Wanjiku",
       role: "Poultry Specialist",
-      content: "PoultryHubKenya (KE) has transformed my business. I can now reach customers directly without middlemen.",
+      content: "KukuSoko (KE) has transformed my business. I can now reach customers directly without middlemen.",
       rating: 4
     },
     {

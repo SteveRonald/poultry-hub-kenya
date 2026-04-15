@@ -6,6 +6,15 @@ export interface Advertisement {
   tier: 'basic' | 'premium';
   content_duration?: number;
   rotation_weight?: number;
+  product_id?: string;
+  product_name?: string;
+  product_images?: string;
+  product_price?: number;
+  ad_image?: string;
+  ad_title?: string;
+  page_location?: string;
+  previous_price?: number | null;
+  current_price?: number | null;
   fallback_path?: string;
   is_fallback?: boolean;
   [key: string]: any;
@@ -49,8 +58,8 @@ const pickWeightedAd = (ads: Advertisement[], currentAdId?: string | null) => {
 export const useAdvertisementSlots = (pageLocation: string, limit = 20) => {
   const [advertisements, setAdvertisements] = useState<Advertisement[]>([]);
   const [visibleAds, setVisibleAds] = useState<Set<string>>(new Set());
-  const premiumRotationRef = useRef<NodeJS.Timeout | null>(null);
-  const basicRotationRef = useRef<NodeJS.Timeout | null>(null);
+  const premiumRotationRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const basicRotationRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentPremiumIdRef = useRef<string | null>(null);
   const currentBasicIdRef = useRef<string | null>(null);
 

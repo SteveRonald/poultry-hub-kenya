@@ -1269,7 +1269,7 @@ const Register = () => {
           <Card className="shadow-lg">
             <CardHeader className="text-center pb-4">
               <CardTitle className="text-xl sm:text-2xl font-bold text-primary">
-                Join PoultryHubKE
+                Join KukuSoko (KE)
               </CardTitle>
               <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
                 Create your account to start buying or selling poultry products

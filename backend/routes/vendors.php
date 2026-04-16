@@ -4,6 +4,8 @@ require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
 require_once __DIR__ . '/../utils/system_logs.php';
 require_once __DIR__ . '/../utils/commission.php';
+require_once __DIR__ . '/../utils/wallet.php';
+require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
 
 function handleGetVendors() {
     global $pdo;
@@ -54,8 +56,7 @@ function handleGetVendorProducts() {
         }
         
         // Get products with order counts
-        $stmt = $pdo->prepare("
-            SELECT p.*, 
+        $stmt = $pdo->prepare("\n            SELECT p.*, 
                    COALESCE(order_counts.order_count, 0) as order_count
             FROM products p
             LEFT JOIN (
@@ -615,6 +616,13 @@ function handleUpdateVendorOrderStatus() {
     $newStatus = $input['status'];
     $statusNotes = $input['status_notes'] ?? null;
     $warehouseId = $input['warehouse_id'] ?? null;
+
+    // Delivery confirmation is platform-controlled and must be done by admin only.
+    if ($newStatus === 'delivered') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Only admin can mark an order as delivered']);
+        return;
+    }
     
     try {
         $pdo->beginTransaction();
@@ -705,27 +713,19 @@ function handleUpdateVendorOrderStatus() {
         
         // If changing FROM delivered to another status, reverse commission/earnings
         if ($oldStatus === 'delivered' && $newStatus !== 'delivered') {
+            // Reverse wallet earning/commission ledger for this delivered order.
+            try {
+                reverseWalletEarning($vendorId, $orderId);
+            } catch (Exception $walletReverseError) {
+                error_log("Wallet reversal failed for order {$orderId}: " . $walletReverseError->getMessage());
+            }
+
             // Check if earnings exist for this order
-            $stmt = $pdo->prepare("SELECT id FROM vendor_earnings WHERE order_id = ?");
-            $stmt->execute([$orderId]);
-            $existingEarning = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($existingEarning) {
-                // Delete vendor earnings and platform commission records
-                $stmt = $pdo->prepare("DELETE FROM vendor_earnings WHERE order_id = ?");
-                $stmt->execute([$orderId]);
-                
-                $stmt = $pdo->prepare("DELETE FROM platform_commissions WHERE order_id = ?");
-                $stmt->execute([$orderId]);
-                
-                // Reverse lifetime sales update (subtract the amount)
-                $stmt = $pdo->prepare("
-                    UPDATE vendors 
-                    SET lifetime_sales = lifetime_sales - ? 
-                    WHERE id = ?
-                ");
-                $stmt->execute([$order['total_amount'], $vendorId]);
-                
+
+            $reverseResult = reverseCommissionForOrder($orderId, $vendorId, $order['total_amount']);
+            if (!$reverseResult['success']) {
+                error_log("Commission reversal failed for order {$orderId}: " . ($reverseResult['message'] ?? 'Unknown error'));
+            } else {
                 error_log("Reversed commission/earnings for order {$orderId} (status changed from delivered to {$newStatus})");
             }
         }
@@ -825,7 +825,7 @@ function handleUpdateVendorOrderStatus() {
             if ($orderForSMS) {
                 // Ensure vendor_id exists for service (vendors.php already has $vendorId)
                 $orderForSMS['vendor_id'] = $vendorId;
-                OrderNotificationService::orderStatusChanged($pdo, $orderForSMS, $newStatus);
+                call_user_func(['OrderNotificationService', 'orderStatusChanged'], $pdo, $orderForSMS, $newStatus);
             }
         } catch (Exception $smsError) {
             error_log('Order status updated but SMS queue/send failed: ' . $smsError->getMessage());
@@ -1026,6 +1026,293 @@ function handleUpdateVendorProfile() {
     }
 }
 
+function handleGetVendorPayoutAccount() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+
+    $payload = validateJWT($token);
+    if (!$payload || ($payload['role'] ?? '') !== 'vendor') {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid vendor token']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT id FROM vendors WHERE user_id = ? LIMIT 1");
+        $stmt->execute([$payload['user_id']]);
+        $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$vendor) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Vendor profile not found']);
+            return;
+        }
+
+        $vendorId = $vendor['id'];
+        $stmt = $pdo->prepare("\n            SELECT method, account_name, provider_name, provider_code, account_last4, paystack_recipient_code, created_at, updated_at\n            FROM vendor_payout_accounts\n            WHERE vendor_id = ? AND is_active = 1\n            ORDER BY id DESC\n            LIMIT 1\n        ");
+        $stmt->execute([$vendorId]);
+        $account = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$account) {
+            echo json_encode([
+                'success' => true,
+                'has_account' => false,
+                'payout_account' => null
+            ]);
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'has_account' => true,
+            'payout_account' => [
+                'method' => $account['method'],
+                'account_name' => $account['account_name'],
+                'provider_name' => $account['provider_name'],
+                'provider_code' => $account['provider_code'],
+                'account_last4' => $account['account_last4'],
+                'account_number_masked' => '******' . $account['account_last4'],
+                'paystack_recipient_code' => $account['paystack_recipient_code'],
+                'created_at' => $account['created_at'],
+                'updated_at' => $account['updated_at']
+            ]
+        ]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch payout account: ' . $e->getMessage()]);
+    }
+}
+
+function handleGetVendorPayoutProviders() {
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+
+    $payload = validateJWT($token);
+    if (!$payload || ($payload['role'] ?? '') !== 'vendor') {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid vendor token']);
+        return;
+    }
+
+    $method = strtolower(trim($_GET['method'] ?? 'bank'));
+
+    try {
+        if ($method === 'mobile_money') {
+            echo json_encode([
+                'success' => true,
+                'providers' => [
+                    ['name' => 'Safaricom M-Pesa', 'code' => 'MPESA'],
+                    ['name' => 'Airtel Money', 'code' => 'AIRTEL_MONEY']
+                ]
+            ]);
+            return;
+        }
+
+        $response = listPaystackBanks('kenya');
+        $api = $response['response'] ?? [];
+
+        if (empty($api['status']) || !isset($api['data']) || !is_array($api['data'])) {
+            http_response_code(400);
+            echo json_encode([
+                'error' => 'Failed to fetch payout providers',
+                'details' => $api['message'] ?? ($response['curl_error'] ?? 'Unknown API error')
+            ]);
+            return;
+        }
+
+        $providers = [];
+        foreach ($api['data'] as $bank) {
+            $isActive = isset($bank['active']) ? (bool)$bank['active'] : true;
+            if (!$isActive) {
+                continue;
+            }
+
+            $providers[] = [
+                'name' => $bank['name'] ?? '',
+                'code' => $bank['code'] ?? ''
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'providers' => $providers
+        ]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch payout providers: ' . $e->getMessage()]);
+    }
+}
+
+function handleUpsertVendorPayoutAccount() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No token provided']);
+        return;
+    }
+
+    $payload = validateJWT($token);
+    if (!$payload || ($payload['role'] ?? '') !== 'vendor') {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid vendor token']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!$input) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid JSON payload']);
+        return;
+    }
+
+    $method = strtolower(trim($input['method'] ?? ''));
+    $accountName = trim($input['account_name'] ?? '');
+    $providerName = trim($input['provider_name'] ?? '');
+    $providerCode = trim($input['provider_code'] ?? '');
+    $accountNumber = preg_replace('/\s+/', '', trim($input['account_number'] ?? ''));
+    $digitsOnly = preg_replace('/\D+/', '', $accountNumber);
+
+    if (!in_array($method, ['bank', 'mobile_money'], true)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'method must be bank or mobile_money']);
+        return;
+    }
+
+    if ($accountName === '' || $providerName === '' || $accountNumber === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'account_name, provider_name, and account_number are required']);
+        return;
+    }
+
+    if (strlen($accountNumber) < 6) {
+        http_response_code(400);
+        echo json_encode(['error' => 'account_number appears invalid']);
+        return;
+    }
+
+    if ($method === 'bank' && $providerCode === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'provider_code (bank code) is required for bank payouts']);
+        return;
+    }
+
+    // Prevent accidental bank/mobile mismatch from being saved.
+    if ($method === 'bank') {
+        $looksLikeMobile = preg_match('/^(254|0)?[17]\d{8}$/', $digitsOnly) === 1;
+        if ($looksLikeMobile) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Bank method selected, but account number looks like a mobile number. Please enter a valid bank account number.']);
+            return;
+        }
+    }
+
+    if ($method === 'mobile_money') {
+        $isLocal = preg_match('/^0[17]\d{8}$/', $digitsOnly) === 1;
+        $isIntl = preg_match('/^254[17]\d{8}$/', $digitsOnly) === 1;
+        if (!$isLocal && !$isIntl) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Mobile money number format is invalid. Use 07XXXXXXXX, 01XXXXXXXX, or 2547XXXXXXXX.']);
+            return;
+        }
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT id FROM vendors WHERE user_id = ? LIMIT 1");
+        $stmt->execute([$payload['user_id']]);
+        $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$vendor) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Vendor profile not found']);
+            return;
+        }
+
+        $vendorId = $vendor['id'];
+
+        $recipientPayload = [
+            'type' => $method === 'bank' ? 'nuban' : 'mobile_money',
+            'name' => $accountName,
+            'account_number' => $accountNumber,
+            'currency' => 'KES',
+            'description' => 'Vendor payout account (' . $vendorId . ')'
+        ];
+
+        if ($method === 'bank' && $providerCode !== '') {
+            $recipientPayload['bank_code'] = $providerCode;
+        }
+
+        $recipientResponse = createPaystackTransferRecipient($recipientPayload);
+        $recipientData = $recipientResponse['response'] ?? [];
+
+        if (empty($recipientData['status']) || empty($recipientData['data']['recipient_code'])) {
+            http_response_code(400);
+            echo json_encode([
+                'error' => 'Failed to create transfer recipient with Paystack',
+                'details' => $recipientData['message'] ?? ($recipientResponse['curl_error'] ?? 'Unknown API error'),
+                'paystack_response' => $recipientData
+            ]);
+            return;
+        }
+
+        $recipientCode = $recipientData['data']['recipient_code'];
+        $maskedData = maskAccountNumber($accountNumber);
+        $encryptedAccountNumber = encryptPayoutAccountNumber($accountNumber);
+
+        $pdo->beginTransaction();
+
+        $deactivateStmt = $pdo->prepare("UPDATE vendor_payout_accounts SET is_active = 0, updated_at = NOW() WHERE vendor_id = ?");
+        $deactivateStmt->execute([$vendorId]);
+
+        $insertStmt = $pdo->prepare("\n            INSERT INTO vendor_payout_accounts\n                (vendor_id, method, account_name, provider_name, provider_code, account_number_encrypted, account_last4, paystack_recipient_code, is_active)\n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)\n        ");
+        $insertStmt->execute([
+            $vendorId,
+            $method,
+            $accountName,
+            $providerName,
+            $providerCode !== '' ? $providerCode : null,
+            $encryptedAccountNumber,
+            $maskedData['last4'],
+            $recipientCode
+        ]);
+
+        upsertVendorRecipientCode($vendorId, $recipientCode);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Payout account saved successfully',
+            'payout_account' => [
+                'method' => $method,
+                'account_name' => $accountName,
+                'provider_name' => $providerName,
+                'provider_code' => $providerCode !== '' ? $providerCode : null,
+                'account_last4' => $maskedData['last4'],
+                'account_number_masked' => $maskedData['masked'],
+                'paystack_recipient_code' => $recipientCode
+            ]
+        ]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to save payout account: ' . $e->getMessage()]);
+    }
+}
+
 function handleGetVendorEarnings() {
     global $pdo;
     
@@ -1056,70 +1343,50 @@ function handleGetVendorEarnings() {
         }
         
         $vendorId = $vendor['id'];
-        
-        // Get total earnings
-        $totalEarnings = getVendorTotalEarnings($vendorId);
-        
-        // Get earnings breakdown
-        $earningsBreakdown = getVendorEarningsBreakdown($vendorId, 20);
-        
-        // Get ad-specific revenue and earnings
-        // Gross revenue from ads (ALL orders from ads, regardless of status)
-        $stmt = $pdo->prepare("
-            SELECT COALESCE(SUM(o.total_amount), 0) as ad_revenue
+
+        // Total net earnings from delivered orders only.
+        $stmt = $pdo->prepare("\n            SELECT COALESCE(SUM(o.total_amount - COALESCE(o.commission_amount, 0)), 0) as total_earnings
+            FROM orders o
+            WHERE o.vendor_id = ? AND o.status = 'delivered'
+        ");
+        $stmt->execute([$vendorId]);
+        $totalEarningsResult = $stmt->fetch(PDO::FETCH_ASSOC);
+        $totalEarnings = floatval($totalEarningsResult['total_earnings'] ?? 0);
+
+        // Earnings breakdown from delivered orders only.
+        $stmt = $pdo->prepare("\n            SELECT
+                o.id as order_id,
+                o.created_at as order_date,
+                p.name as product_name,
+                o.quantity,
+                o.total_amount as order_total,
+                COALESCE(o.commission_amount, 0) as commission_amount,
+                (o.total_amount - COALESCE(o.commission_amount, 0)) as net_amount
             FROM orders o
             JOIN products p ON o.product_id = p.id
-            WHERE p.vendor_id = ? 
-            AND o.advertisement_id IS NOT NULL
+            WHERE o.vendor_id = ? AND o.status = 'delivered'
+            ORDER BY COALESCE(o.last_status_updated, o.created_at) DESC, o.id DESC
+            LIMIT 20
         ");
         $stmt->execute([$vendorId]);
-        $adRevenueResult = $stmt->fetch(PDO::FETCH_ASSOC);
-        $adRevenue = floatval($adRevenueResult['ad_revenue']);
-        
-        // Net earnings from ads (from vendor_earnings for ad orders)
-        $stmt = $pdo->prepare("
-            SELECT COALESCE(SUM(ve.net_amount), 0) as ad_earnings
-            FROM vendor_earnings ve
-            JOIN orders o ON ve.order_id = o.id
-            WHERE ve.vendor_id = ? 
-            AND o.advertisement_id IS NOT NULL
-            AND ve.status = 'confirmed'
+        $earningsBreakdown = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Informational ad-attributed metrics (delivered orders only).
+        $stmt = $pdo->prepare("\n            SELECT
+                COALESCE(SUM(o.total_amount), 0) as ad_revenue,
+                COALESCE(SUM(o.total_amount - COALESCE(o.commission_amount, 0)), 0) as ad_earnings
+            FROM orders o
+            WHERE o.vendor_id = ?
+              AND o.status = 'delivered'
+              AND o.advertisement_id IS NOT NULL
         ");
         $stmt->execute([$vendorId]);
-        $adEarningsResult = $stmt->fetch(PDO::FETCH_ASSOC);
-        $adEarnings = floatval($adEarningsResult['ad_earnings']);
-        
-        // If vendor hasn't reached threshold, ad earnings = ad revenue (100%)
-        // Check if vendor has reached threshold
-        $stmt = $pdo->prepare("SELECT lifetime_sales FROM vendors WHERE id = ?");
-        $stmt->execute([$vendorId]);
-        $vendorData = $stmt->fetch(PDO::FETCH_ASSOC);
-        $lifetimeSales = floatval($vendorData['lifetime_sales'] ?? 0);
-        $threshold = 10000;
-        
-        if ($lifetimeSales < $threshold) {
-            // Vendor below threshold: earnings = revenue (100%)
-            // Calculate earnings from ad orders that haven't been processed yet (only delivered)
-            $stmt = $pdo->prepare("
-                SELECT COALESCE(SUM(o.total_amount), 0) as pending_ad_earnings
-                FROM orders o
-                JOIN products p ON o.product_id = p.id
-                WHERE p.vendor_id = ? 
-                AND o.advertisement_id IS NOT NULL
-                AND o.status = 'delivered'
-                AND NOT EXISTS (
-                    SELECT 1 FROM vendor_earnings ve WHERE ve.order_id = o.id
-                )
-            ");
-            $stmt->execute([$vendorId]);
-            $pendingResult = $stmt->fetch(PDO::FETCH_ASSOC);
-            $pendingAdEarnings = floatval($pendingResult['pending_ad_earnings']);
-            $adEarnings = $adEarnings + $pendingAdEarnings;
-        }
-        
-        // Get per-ad revenue breakdown (only delivered orders)
-        $stmt = $pdo->prepare("
-            SELECT 
+        $adMetrics = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $adRevenue = floatval($adMetrics['ad_revenue'] ?? 0);
+        $adEarnings = floatval($adMetrics['ad_earnings'] ?? 0);
+
+        // Get per-ad revenue breakdown (only delivered orders).
+        $stmt = $pdo->prepare("\n            SELECT 
                 a.id as ad_id,
                 a.ad_title,
                 COALESCE(SUM(o.total_amount), 0) as revenue_generated
@@ -1139,6 +1406,8 @@ function handleGetVendorEarnings() {
             'earnings_breakdown' => $earningsBreakdown,
             'ad_revenue' => $adRevenue,
             'ad_earnings' => $adEarnings,
+            'ads_attributed_order_value' => $adRevenue,
+            'ads_attributed_received_amount' => $adEarnings,
             'ad_revenue_breakdown' => $adRevenueBreakdown
         ]);
         

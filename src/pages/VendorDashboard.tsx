@@ -258,6 +258,18 @@ const VendorDashboard = () => {
     ward_id: null as number | null
   });
   const [profileSubmitting, setProfileSubmitting] = useState(false);
+  const [payoutFormData, setPayoutFormData] = useState({
+    method: 'mobile_money',
+    account_name: '',
+    provider_name: '',
+    provider_code: '',
+    account_number: ''
+  });
+  const [currentPayoutAccount, setCurrentPayoutAccount] = useState<any>(null);
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+  const [payoutProviders, setPayoutProviders] = useState<Array<{ name: string; code: string }>>([]);
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const [providerSearchTerm, setProviderSearchTerm] = useState('');
   
   // AI Assistant states
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
@@ -354,21 +366,23 @@ const VendorDashboard = () => {
       safeFetch(getApiUrl('/api/vendor/orders') + '?t=' + Date.now(), 'Orders'),
       safeFetch(getApiUrl('/api/vendor/earnings'), 'Earnings'),
       safeFetch(getApiUrl('/api/vendor/advertisements'), 'Advertisements'),
-    ]).then(async ([statsRes, productsRes, ordersRes, earningsRes, adsRes]) => {
+      safeFetch(getApiUrl('/api/vendor/payout-account'), 'Payout Account'),
+    ]).then(async ([statsRes, productsRes, ordersRes, earningsRes, adsRes, payoutAccountRes]) => {
       if (import.meta.env.DEV) {
         console.log('API responses received:', {
           stats: statsRes?.status || 'failed',
           products: productsRes?.status || 'failed',
           orders: ordersRes?.status || 'failed',
           earnings: earningsRes?.status || 'failed',
-          ads: adsRes?.status || 'failed'
+          ads: adsRes?.status || 'failed',
+          payoutAccount: payoutAccountRes?.status || 'failed'
         });
       }
       
       // Check if all requests returned 401 - token is expired
       const all401 = statsRes?.status === 401 && productsRes?.status === 401 && 
-                    ordersRes?.status === 401 && earningsRes?.status === 401 && 
-                    adsRes?.status === 401;
+            ordersRes?.status === 401 && earningsRes?.status === 401 && 
+            adsRes?.status === 401 && payoutAccountRes?.status === 401;
       
       if (all401) {
         // All requests failed with 401 - token is expired
@@ -407,18 +421,20 @@ const VendorDashboard = () => {
       };
       
       // Parse all responses
-      const [stats, products, orders, earnings, ads] = await Promise.all([
+      const [stats, products, orders, earnings, ads, payoutAccount] = await Promise.all([
         parseResponse(statsRes, 'Stats'),
         parseResponse(productsRes, 'Products'),
         parseResponse(ordersRes, 'Orders'),
         parseResponse(earningsRes, 'Earnings'),
         parseResponse(adsRes, 'Advertisements'),
+        parseResponse(payoutAccountRes, 'Payout Account'),
       ]);
       
       setStats(stats);
       setProducts(Array.isArray(products) ? products : []);
       setOrders(Array.isArray(orders) ? orders : []);
       setEarnings(earnings?.success ? earnings : null);
+      setCurrentPayoutAccount(payoutAccount?.payout_account || null);
       
       // Ensure advertisements is always an array and log for debugging
       if (Array.isArray(ads)) {
@@ -630,14 +646,12 @@ const VendorDashboard = () => {
             .then(r => r.json())
             .then(ordersData => setOrders(Array.isArray(ordersData) ? ordersData : []));
           
-          // Refresh earnings if order was delivered
-          if (newStatus === 'delivered') {
-            setTimeout(() => {
-              fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } })
-                .then(r => r.json())
-                .then(earningsData => setEarnings(earningsData?.success ? earningsData : null));
-            }, 500);
-          }
+          // Refresh earnings after any order status change.
+          setTimeout(() => {
+            fetch(getApiUrl('/api/vendor/earnings'), { headers: { Authorization: `Bearer ${token}` } })
+              .then(r => r.json())
+              .then(earningsData => setEarnings(earningsData?.success ? earningsData : null));
+          }, 500);
         }
         
         toast.success(`Order status has been updated to ${newStatus}.`);
@@ -1495,7 +1509,68 @@ const VendorDashboard = () => {
   };
 
   // Profile edit functions
-  const openEditProfileModal = () => {
+  const loadPayoutProviders = async (method: string) => {
+    try {
+      setProvidersLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(getApiUrl(`/api/vendor/payout-providers?method=${method}`), {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load payout providers');
+      }
+
+      const data = await response.json();
+      let providers = Array.isArray(data?.providers) ? data.providers : [];
+      if (method === 'mobile_money' && providers.length === 0) {
+        providers = [
+          { name: 'Safaricom M-Pesa', code: 'MPESA' },
+          { name: 'Airtel Money', code: 'AIRTEL_MONEY' }
+        ];
+      }
+      setPayoutProviders(providers);
+    } catch (error) {
+      console.error('Failed to load payout providers:', error);
+      if (method === 'mobile_money') {
+        setPayoutProviders([
+          { name: 'Safaricom M-Pesa', code: 'MPESA' },
+          { name: 'Airtel Money', code: 'AIRTEL_MONEY' }
+        ]);
+      } else {
+        setPayoutProviders([]);
+      }
+    } finally {
+      setProvidersLoading(false);
+    }
+  };
+
+  const fetchCurrentPayoutAccount = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/vendor/payout-account'), {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const payoutAccount = data?.payout_account || null;
+        setCurrentPayoutAccount(payoutAccount);
+        return payoutAccount;
+      }
+    } catch (error) {
+      console.error('Failed to load payout account:', error);
+    }
+
+    setCurrentPayoutAccount(null);
+    return null;
+  };
+
+  const openEditProfileModal = async () => {
     if (user) {
       setProfileFormData({
         full_name: user.name || '',
@@ -1510,6 +1585,24 @@ const VendorDashboard = () => {
         ward_id: (user.vendorData as any)?.ward_id || null
       });
     }
+
+    const payoutAccount = await fetchCurrentPayoutAccount();
+
+    if (payoutAccount) {
+      setPayoutFormData((prev) => ({
+        ...prev,
+        method: payoutAccount.method || 'mobile_money',
+        account_name: payoutAccount.account_name || '',
+        provider_name: payoutAccount.provider_name || '',
+        provider_code: payoutAccount.provider_code || '',
+        account_number: ''
+      }));
+
+      await loadPayoutProviders(payoutAccount.method || 'mobile_money');
+    } else {
+      await loadPayoutProviders('mobile_money');
+    }
+
     setShowEditProfileModal(true);
   };
 
@@ -1558,6 +1651,82 @@ const VendorDashboard = () => {
       toast.error(error instanceof Error ? error.message : "Failed to update profile. Please try again.");
     } finally {
       setProfileSubmitting(false);
+    }
+  };
+
+  const handlePayoutFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+
+    if (name === 'method') {
+      setProviderSearchTerm('');
+      setPayoutFormData((prev) => ({
+        ...prev,
+        method: value,
+        provider_name: '',
+        provider_code: '',
+        account_number: ''
+      }));
+      loadPayoutProviders(value);
+      return;
+    }
+
+    if (name === 'provider_code') {
+      const selected = payoutProviders.find((provider) => provider.code === value);
+      setPayoutFormData((prev) => ({
+        ...prev,
+        provider_name: selected?.name || '',
+        provider_code: value
+      }));
+      return;
+    }
+
+    setPayoutFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const filteredPayoutProviders = payoutProviders.filter((provider) =>
+    provider.name.toLowerCase().includes(providerSearchTerm.toLowerCase()) ||
+    provider.code.toLowerCase().includes(providerSearchTerm.toLowerCase())
+  );
+
+  const handleSavePayoutAccount = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    if (!payoutFormData.account_name || !payoutFormData.provider_name || !payoutFormData.account_number) {
+      toast.error('Please fill all required payout account fields.');
+      return;
+    }
+
+    if (payoutFormData.method === 'bank' && !payoutFormData.provider_code) {
+      toast.error('Bank code is required for bank payout method.');
+      return;
+    }
+
+    setPayoutSubmitting(true);
+    try {
+      const response = await fetch(getApiUrl('/api/vendor/payout-account'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payoutFormData)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.details || data?.error || 'Failed to save payout account');
+      }
+
+      setCurrentPayoutAccount(data?.payout_account || null);
+      setPayoutFormData((prev) => ({ ...prev, account_number: '' }));
+      toast.success('Payout account saved. Your account is now payout-ready.');
+      await fetchCurrentPayoutAccount();
+    } catch (error) {
+      console.error('Error saving payout account:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save payout account.');
+    } finally {
+      setPayoutSubmitting(false);
     }
   };
 
@@ -2097,16 +2266,16 @@ const VendorDashboard = () => {
                     </Card>
                   </div>
 
-                  {/* Advertisement Revenue and Earnings */}
+                  {/* Advertisement-attributed informational metrics */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                     <Card>
                       <CardContent className="p-4">
                         <div className="text-center">
-                          <p className="text-sm text-gray-600">Ad Revenue (Gross)</p>
+                          <p className="text-sm text-gray-600">Ad-Attributed Order Value</p>
                           <p className="text-2xl font-bold text-blue-600">
                             KSH {earnings?.ad_revenue?.toFixed(2) || '0.00'}
                           </p>
-                          <p className="text-xs text-gray-500">Total from advertisements</p>
+                          <p className="text-xs text-gray-500">Delivered orders linked to your ads</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -2114,11 +2283,11 @@ const VendorDashboard = () => {
                     <Card>
                       <CardContent className="p-4">
                         <div className="text-center">
-                          <p className="text-sm text-gray-600">Ad Earnings (Net)</p>
+                          <p className="text-sm text-gray-600">Amount Received Through Ads</p>
                           <p className="text-2xl font-bold text-green-600">
                             KSH {earnings?.ad_earnings?.toFixed(2) || '0.00'}
                           </p>
-                          <p className="text-xs text-gray-500">After commission deduction</p>
+                          <p className="text-xs text-gray-500">Your net from delivered ad-attributed orders</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -2164,9 +2333,9 @@ const VendorDashboard = () => {
                     <CardContent className="p-4">
                       <h3 className="text-lg font-semibold text-primary mb-3">How Commission Works</h3>
                       <div className="space-y-2 text-sm text-gray-600">
-                        <p>• <strong>Platform Commission:</strong> 10% of each delivered order goes to Poultry Hub Kenya</p>
-                        <p>• <strong>Your Earnings:</strong> 90% of each delivered order goes to you</p>
-                        <p>• <strong>Commission Processing:</strong> Only triggered when order status is marked as "delivered"</p>
+                        <p>• <strong>Platform Commission:</strong> 10% is charged only after your delivered revenue was already at KSH 10,000</p>
+                        <p>• <strong>Your Earnings:</strong> Net amount is calculated from delivered orders only</p>
+                        <p>• <strong>Ad Metrics:</strong> Ad values are informational and show performance of ad-attributed delivered orders</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -2357,6 +2526,32 @@ const VendorDashboard = () => {
                           </div>
                         </div>
                         
+                        <div className="pt-4 border-t border-gray-200">
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Payout Details</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700">Status</label>
+                              <p className="text-gray-900">{currentPayoutAccount ? 'Configured' : 'Not configured'}</p>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700">Method</label>
+                              <p className="text-gray-900">{currentPayoutAccount?.method ? currentPayoutAccount.method.replace('_', ' ') : 'Not provided'}</p>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700">Provider</label>
+                              <p className="text-gray-900">{currentPayoutAccount?.provider_name || 'Not provided'}</p>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700">Account</label>
+                              <p className="text-gray-900">{currentPayoutAccount?.account_number_masked || 'Not provided'}</p>
+                            </div>
+                            <div className="space-y-2 sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700">Recipient Code</label>
+                              <p className="text-gray-900 break-all">{currentPayoutAccount?.paystack_recipient_code || 'Not provided'}</p>
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="pt-4 border-t border-gray-200">
                           <h3 className="text-lg font-medium text-gray-900 mb-4">Account Status</h3>
                           <div className="flex items-center space-x-2">
@@ -3315,7 +3510,7 @@ const VendorDashboard = () => {
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold text-primary mb-4">Update Order Status</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
+                    {['pending', 'confirmed', 'processing', 'shipped', 'cancelled'].map((status) => (
                       <Button
                         key={status}
                         variant={selectedOrder.status === status ? "default" : "outline"}
@@ -3495,6 +3690,129 @@ const VendorDashboard = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                         placeholder="Describe your farm and what you produce"
                       />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payout Details */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payout Details</h3>
+                  <div className="space-y-4">
+                    {currentPayoutAccount && (
+                      <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+                        Current payout account: {currentPayoutAccount.provider_name} ({currentPayoutAccount.account_number_masked})
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="method" className="block text-sm font-medium text-gray-700 mb-1">
+                          Payout Method *
+                        </label>
+                        <select
+                          id="method"
+                          name="method"
+                          value={payoutFormData.method}
+                          onChange={handlePayoutFormChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        >
+                          <option value="mobile_money">Mobile Money</option>
+                          <option value="bank">Bank</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="account_name" className="block text-sm font-medium text-gray-700 mb-1">
+                          Account Name *
+                        </label>
+                        <input
+                          type="text"
+                          id="account_name"
+                          name="account_name"
+                          value={payoutFormData.account_name}
+                          onChange={handlePayoutFormChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                          placeholder="Name on account"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="provider_code" className="block text-sm font-medium text-gray-700 mb-1">
+                          {payoutFormData.method === 'bank' ? 'Bank *' : 'Mobile Money Provider *'}
+                        </label>
+                        <input
+                          type="text"
+                          value={providerSearchTerm}
+                          onChange={(e) => setProviderSearchTerm(e.target.value)}
+                          className="w-full mb-2 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                          placeholder="Search provider by name or code"
+                        />
+                        <select
+                          id="provider_code"
+                          name="provider_code"
+                          value={payoutFormData.provider_code}
+                          onChange={handlePayoutFormChange}
+                          disabled={providersLoading}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                        >
+                          <option value="">{providersLoading ? 'Loading providers...' : 'Select provider'}</option>
+                          {filteredPayoutProviders.map((provider) => (
+                            <option key={`${provider.name}-${provider.code}`} value={provider.code}>
+                              {provider.name}
+                            </option>
+                          ))}
+                        </select>
+                        {!providersLoading && filteredPayoutProviders.length === 0 && (
+                          <p className="text-xs text-amber-700 mt-1">No providers match your search.</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          Provider code is filled automatically from your selection.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label htmlFor="provider_code" className="block text-sm font-medium text-gray-700 mb-1">
+                          Provider Code
+                        </label>
+                        <input
+                          type="text"
+                          id="provider_code"
+                          name="provider_code"
+                          value={payoutFormData.provider_code}
+                          readOnly
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 focus:outline-none"
+                          placeholder="Auto-filled"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label htmlFor="account_number" className="block text-sm font-medium text-gray-700 mb-1">
+                          {payoutFormData.method === 'bank' ? 'Account Number *' : 'Mobile Money Number *'}
+                        </label>
+                        <input
+                          type="text"
+                          id="account_number"
+                          name="account_number"
+                          value={payoutFormData.account_number}
+                          onChange={handlePayoutFormChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                          placeholder={payoutFormData.method === 'bank' ? 'Enter account number' : 'Enter mobile money number'}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Your account number is encrypted before storage. Updating details creates a new transfer recipient automatically.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        onClick={handleSavePayoutAccount}
+                        disabled={payoutSubmitting}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        {payoutSubmitting ? 'Saving Payout Account...' : 'Save Payout Account'}
+                      </Button>
                     </div>
                   </div>
                 </div>

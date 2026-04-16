@@ -13,6 +13,9 @@ define('PAYSTACK_WEBHOOK_SECRET', getenv('PAYSTACK_WEBHOOK_SECRET') ?: '');
 define('PAYSTACK_INIT_TRANSACTION', PAYSTACK_BASE_URL . '/transaction/initialize');
 define('PAYSTACK_VERIFY_TRANSACTION', PAYSTACK_BASE_URL . '/transaction/verify/');
 define('PAYSTACK_CHARGE_AUTHORIZATION', PAYSTACK_BASE_URL . '/transaction/charge_authorization');
+define('PAYSTACK_CREATE_TRANSFER_RECIPIENT', PAYSTACK_BASE_URL . '/transferrecipient');
+define('PAYSTACK_INITIATE_TRANSFER', PAYSTACK_BASE_URL . '/transfer');
+define('PAYSTACK_LIST_BANKS', PAYSTACK_BASE_URL . '/bank');
 
 // Currency and Country Settings
 define('PAYSTACK_CURRENCY', 'KES'); // Kenyan Shillings
@@ -56,6 +59,49 @@ function getPaystackHeaders() {
         'Content-Type: application/json',
         'Cache-Control: no-cache'
     ];
+}
+
+function sendPaystackJsonRequest($url, array $payload) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, getPaystackHeaders());
+    curl_setopt($ch, CURLOPT_TIMEOUT, PAYSTACK_REQUEST_TIMEOUT);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+
+    return [
+        'http_code' => $httpCode,
+        'response' => json_decode($response, true),
+        'raw_response' => $response,
+        'curl_error' => $curlError
+    ];
+}
+
+function sendPaystackGetRequest($url) {
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPGET, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, getPaystackHeaders());
+    curl_setopt($ch, CURLOPT_TIMEOUT, PAYSTACK_REQUEST_TIMEOUT);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+
+    return [
+        'http_code' => $httpCode,
+        'response' => json_decode($response, true),
+        'raw_response' => $response,
+        'curl_error' => $curlError
+    ];
+}
+
+function formatPaystackTransferAmount($amount) {
+    return (int) round(floatval($amount) * 100);
 }
 
 function generatePaystackReference($orderId = null) {

@@ -346,6 +346,48 @@ switch ($path) {
             handleAdminCommissionData();
         }
         break;
+
+    case 'api/admin/wallet/report':
+        if ($method === 'GET') {
+            include 'routes/admin.php';
+            handleAdminWalletReport();
+        }
+        break;
+
+    case 'api/admin/wallet/transactions':
+        if ($method === 'GET') {
+            include 'routes/admin.php';
+            handleAdminWalletTransactions();
+        }
+        break;
+
+    case 'api/admin/payouts':
+        if ($method === 'GET') {
+            include 'routes/admin.php';
+            handleAdminPayouts();
+        }
+        break;
+
+    case 'api/admin/payouts/manual':
+        if ($method === 'POST') {
+            include 'routes/admin.php';
+            handleAdminProcessManualPayouts();
+        }
+        break;
+
+    case 'api/admin/payouts/retry':
+        if ($method === 'POST') {
+            include 'routes/admin.php';
+            handleAdminRetryFailedPayout();
+        }
+        break;
+
+    case 'api/admin/payouts/recipient':
+        if ($method === 'POST') {
+            include 'routes/admin.php';
+            handleAdminSetVendorRecipientCode();
+        }
+        break;
         
     case 'api/admin/vendors':
         if ($method === 'GET') {
@@ -625,6 +667,23 @@ switch ($path) {
         if ($method === 'PUT') {
             include 'routes/vendors.php';
             handleUpdateVendorProfile();
+        }
+        break;
+
+    case 'api/vendor/payout-account':
+        if ($method === 'GET') {
+            include 'routes/vendors.php';
+            handleGetVendorPayoutAccount();
+        } elseif ($method === 'PUT') {
+            include 'routes/vendors.php';
+            handleUpsertVendorPayoutAccount();
+        }
+        break;
+
+    case 'api/vendor/payout-providers':
+        if ($method === 'GET') {
+            include 'routes/vendors.php';
+            handleGetVendorPayoutProviders();
         }
         break;
         

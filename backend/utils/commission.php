@@ -1,75 +1,105 @@
 <?php
 /**
  * Commission calculation utilities
- * Handles 10% platform commission and 90% vendor earnings
+ * Handles 10% platform commission and 90% vendor earnings.
+ * Commission threshold is based on delivered revenue only.
  */
 
+require_once __DIR__ . '/wallet.php';
+
 /**
- * Get vendor lifetime sales (cumulative sales from all delivered orders)
+ * Get vendor delivered revenue (cumulative revenue from delivered orders only)
  */
-function getVendorLifetimeSales($vendorId) {
+function getVendorDeliveredRevenue($vendorId) {
     global $pdo;
     
     try {
-        $stmt = $pdo->prepare("SELECT lifetime_sales FROM vendors WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT vendor_delivered_revenue, lifetime_sales FROM vendors WHERE id = ?");
         $stmt->execute([$vendorId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ? floatval($result['lifetime_sales']) : 0.00;
+        if (!$result) {
+            return 0.00;
+        }
+
+        if (array_key_exists('vendor_delivered_revenue', $result)) {
+            return floatval($result['vendor_delivered_revenue'] ?? 0);
+        }
+
+        return floatval($result['lifetime_sales'] ?? 0);
     } catch (Exception $e) {
-        error_log("Error getting vendor lifetime sales: " . $e->getMessage());
+        error_log("Error getting vendor delivered revenue: " . $e->getMessage());
         return 0.00;
     }
 }
 
 /**
- * Update vendor lifetime sales
+ * Backward-compatible alias.
  */
-function updateVendorLifetimeSales($vendorId, $orderAmount) {
+function getVendorLifetimeSales($vendorId) {
+    return getVendorDeliveredRevenue($vendorId);
+}
+
+/**
+ * Update vendor delivered revenue. This mirrors lifetime_sales for compatibility.
+ */
+function updateVendorDeliveredRevenue($vendorId, $deltaAmount) {
     global $pdo;
     
     try {
         $stmt = $pdo->prepare("
             UPDATE vendors 
-            SET lifetime_sales = lifetime_sales + ? 
+            SET vendor_delivered_revenue = GREATEST(vendor_delivered_revenue + ?, 0),
+                lifetime_sales = GREATEST(lifetime_sales + ?, 0)
             WHERE id = ?
         ");
-        $stmt->execute([$orderAmount, $vendorId]);
+        $stmt->execute([$deltaAmount, $deltaAmount, $vendorId]);
         return true;
     } catch (Exception $e) {
-        error_log("Error updating vendor lifetime sales: " . $e->getMessage());
+        error_log("Error updating vendor delivered revenue: " . $e->getMessage());
         return false;
     }
+}
+
+/**
+ * Backward-compatible alias.
+ */
+function updateVendorLifetimeSales($vendorId, $orderAmount) {
+    return updateVendorDeliveredRevenue($vendorId, $orderAmount);
 }
 
 /**
  * Check if vendor has exceeded commission threshold
  */
 function hasExceededCommissionThreshold($vendorId, $threshold = 10000) {
-    $lifetimeSales = getVendorLifetimeSales($vendorId);
-    return $lifetimeSales >= $threshold;
+    $deliveredRevenue = getVendorDeliveredRevenue($vendorId);
+    return $deliveredRevenue >= $threshold;
 }
 
 /**
  * Calculate commission for an order
  * Returns commission only if vendor has exceeded KSh 10,000 threshold
  */
-function calculateCommission($totalAmount, $vendorId = null) {
+function calculateCommission($totalAmount, $vendorId = null, $deliveredRevenueBefore = null) {
     $commissionRate = 0.10; // 10% platform commission
     $vendorRate = 0.90;     // 90% vendor earnings
     $threshold = 10000;     // KSh 10,000 threshold
     
     // If vendor_id is provided, check threshold
-    if ($vendorId !== null) {
-        $lifetimeSales = getVendorLifetimeSales($vendorId);
+    if ($vendorId !== null || $deliveredRevenueBefore !== null) {
+        $revenueBefore = $deliveredRevenueBefore;
+        if ($revenueBefore === null && $vendorId !== null) {
+            $revenueBefore = getVendorDeliveredRevenue($vendorId);
+        }
+        $revenueBefore = floatval($revenueBefore ?? 0);
         
         // If vendor hasn't reached threshold, no commission
-        if ($lifetimeSales < $threshold) {
+        if ($revenueBefore < $threshold) {
             return [
                 'total_amount' => floatval($totalAmount),
                 'commission_amount' => 0.00,
                 'vendor_amount' => floatval($totalAmount), // Vendor keeps 100%
                 'threshold_reached' => false,
-                'lifetime_sales' => $lifetimeSales,
+                'delivered_revenue_before' => $revenueBefore,
                 'threshold' => $threshold
             ];
         }
@@ -81,7 +111,9 @@ function calculateCommission($totalAmount, $vendorId = null) {
         'commission_amount' => round($totalAmount * $commissionRate, 2),
         'vendor_amount' => round($totalAmount * $vendorRate, 2),
         'threshold_reached' => true,
-        'lifetime_sales' => $vendorId !== null ? getVendorLifetimeSales($vendorId) : null,
+        'delivered_revenue_before' => $deliveredRevenueBefore !== null
+            ? floatval($deliveredRevenueBefore)
+            : ($vendorId !== null ? getVendorDeliveredRevenue($vendorId) : null),
         'threshold' => $threshold
     ];
 }
@@ -99,24 +131,40 @@ function processCommission($orderId, $vendorId, $totalAmount) {
             $pdo->beginTransaction();
         }
         
-        // Check if commission already exists for this order
-        $stmt = $pdo->prepare("SELECT id FROM platform_commissions WHERE order_id = ?");
+        // Lock and validate order. Commission is only ever processed for delivered orders.
+        $stmt = $pdo->prepare("\n            SELECT order_number, user_id, advertisement_id, status, commission_applied, commission_amount\n            FROM orders\n            WHERE id = ?\n            FOR UPDATE\n        ");
         $stmt->execute([$orderId]);
-        if ($stmt->fetch()) {
+        $orderState = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$orderState) {
             if (!$inTransaction) {
                 $pdo->rollBack();
             }
-            return ['success' => false, 'message' => 'Commission already processed for this order'];
+            return ['success' => false, 'message' => 'Order not found'];
+        }
+
+        if (($orderState['status'] ?? '') !== 'delivered') {
+            if (!$inTransaction) {
+                $pdo->rollBack();
+            }
+            return ['success' => false, 'message' => 'Commission can only be processed for delivered orders'];
+        }
+
+        // Idempotency: if earnings already exist for this order, treat as already processed.
+        $stmt = $pdo->prepare("SELECT id FROM vendor_earnings WHERE order_id = ? LIMIT 1");
+        $stmt->execute([$orderId]);
+        if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (!$inTransaction) {
+                $pdo->commit();
+            }
+            return ['success' => true, 'message' => 'Commission already processed for this order'];
         }
         
-        // IMPORTANT: Get current lifetime sales BEFORE adding this order
-        // This ensures we check the threshold continuously as orders are updated
-        // The threshold check uses lifetime sales BEFORE this order is added
-        $lifetimeSalesBefore = getVendorLifetimeSales($vendorId);
+        // IMPORTANT: threshold uses delivered revenue BEFORE this order is counted.
+        $deliveredRevenueBefore = getVendorDeliveredRevenue($vendorId);
         
-        // Calculate commission amounts (checks threshold using current lifetime sales)
-        // This checks if vendor has reached threshold BEFORE processing this order
-        $commission = calculateCommission($totalAmount, $vendorId);
+        // Calculate commission based on delivered revenue before this order.
+        $commission = calculateCommission($totalAmount, $vendorId, $deliveredRevenueBefore);
         
         // Get order details including advertisement_id
         $stmt = $pdo->prepare("
@@ -129,18 +177,15 @@ function processCommission($orderId, $vendorId, $totalAmount) {
         $stmt->execute([$orderId]);
         $orderDetails = $stmt->fetch(PDO::FETCH_ASSOC);
         
-        // Update vendor lifetime sales (always update, even if no commission)
-        // This adds the current order amount to lifetime sales
-        updateVendorLifetimeSales($vendorId, $totalAmount);
+        // Add this delivered order to vendor delivered revenue (always, regardless of commission).
+        updateVendorDeliveredRevenue($vendorId, $totalAmount);
         
-        // After updating lifetime sales, verify threshold status
-        // This handles edge cases where threshold status might have changed
-        $lifetimeSalesAfter = getVendorLifetimeSales($vendorId);
+        // Track threshold crossing informationally.
+        $deliveredRevenueAfter = getVendorDeliveredRevenue($vendorId);
         $threshold = 10000;
         
-        // Log if vendor just crossed the threshold (for tracking purposes)
-        if ($lifetimeSalesBefore < $threshold && $lifetimeSalesAfter >= $threshold) {
-            error_log("Vendor {$vendorId} crossed threshold with order {$orderId}. Lifetime sales: {$lifetimeSalesBefore} -> {$lifetimeSalesAfter}. Commission already calculated based on pre-order threshold.");
+        if ($deliveredRevenueBefore < $threshold && $deliveredRevenueAfter >= $threshold) {
+            error_log("Vendor {$vendorId} crossed delivered threshold with order {$orderId}. Delivered revenue: {$deliveredRevenueBefore} -> {$deliveredRevenueAfter}. Commission remains based on pre-order revenue.");
         }
         
         // If vendor hasn't reached threshold, no commission to process
@@ -161,6 +206,19 @@ function processCommission($orderId, $vendorId, $totalAmount) {
                 0.00, // No commission
                 $totalAmount // Vendor gets 100%
             ]);
+
+            // Move earning from pending to available in wallet ledger.
+            releasePendingWalletEarning(
+                $vendorId,
+                $orderId,
+                $totalAmount,
+                0.00,
+                'order-' . $orderId
+            );
+
+            // Persist per-order commission state.
+            $stmt = $pdo->prepare("\n                UPDATE orders\n                SET commission_applied = 0, commission_amount = 0\n                WHERE id = ?\n            ");
+            $stmt->execute([$orderId]);
             
             // NOTE: Ad revenue update is now handled separately AFTER the transaction commits
             // This ensures ad orders are processed exactly like normal orders
@@ -173,7 +231,7 @@ function processCommission($orderId, $vendorId, $totalAmount) {
                 'success' => true,
                 'message' => 'Order processed. No commission applied (vendor below KSh 10,000 threshold)',
                 'commission' => $commission,
-                'lifetime_sales' => $lifetimeSalesBefore + $totalAmount
+                'delivered_revenue' => $deliveredRevenueAfter
             ];
         }
         
@@ -210,6 +268,19 @@ function processCommission($orderId, $vendorId, $totalAmount) {
             $commission['commission_amount'],
             $commission['vendor_amount']
         ]);
+
+        // Persist per-order commission state.
+        $stmt = $pdo->prepare("\n            UPDATE orders\n            SET commission_applied = 1, commission_amount = ?\n            WHERE id = ?\n        ");
+        $stmt->execute([$commission['commission_amount'], $orderId]);
+
+        // Move earning from pending to available and apply commission deduction in wallet ledger.
+        releasePendingWalletEarning(
+            $vendorId,
+            $orderId,
+            $commission['total_amount'],
+            $commission['commission_amount'],
+            'order-' . $orderId
+        );
         
         // NOTE: Ad revenue update is now handled separately AFTER the transaction commits
         // This ensures ad orders are processed exactly like normal orders
@@ -244,6 +315,42 @@ function processCommission($orderId, $vendorId, $totalAmount) {
         }
         error_log("Commission processing error: " . $e->getMessage());
         return ['success' => false, 'message' => 'Failed to process commission: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Reverse commission and delivered revenue for an order that is moved away from delivered.
+ */
+function reverseCommissionForOrder($orderId, $vendorId, $totalAmount) {
+    global $pdo;
+
+    $inTransaction = $pdo->inTransaction();
+    if (!$inTransaction) {
+        $pdo->beginTransaction();
+    }
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM vendor_earnings WHERE order_id = ?");
+        $stmt->execute([$orderId]);
+
+        $stmt = $pdo->prepare("DELETE FROM platform_commissions WHERE order_id = ?");
+        $stmt->execute([$orderId]);
+
+        updateVendorDeliveredRevenue($vendorId, -abs(floatval($totalAmount)));
+
+        $stmt = $pdo->prepare("\n            UPDATE orders\n            SET commission_applied = 0, commission_amount = 0\n            WHERE id = ?\n        ");
+        $stmt->execute([$orderId]);
+
+        if (!$inTransaction) {
+            $pdo->commit();
+        }
+
+        return ['success' => true];
+    } catch (Exception $e) {
+        if (!$inTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return ['success' => false, 'message' => $e->getMessage()];
     }
 }
 

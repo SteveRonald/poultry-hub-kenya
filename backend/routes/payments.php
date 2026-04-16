@@ -3,6 +3,7 @@
 
 // Include auth utilities
 require_once __DIR__ . '/../utils/auth.php';
+require_once __DIR__ . '/../utils/wallet.php';
 
 // Initialize Paystack transaction
 function handleInitializePaystackPayment() {
@@ -648,7 +649,19 @@ function handleManualPaymentVerification() {
                 $vendorId
             ]);
             
-            $orderIds[] = $pdo->lastInsertId();
+            $orderId = $pdo->lastInsertId();
+            $orderIds[] = $orderId;
+
+            try {
+                recordPendingWalletEarning(
+                    $vendorId,
+                    $orderId,
+                    $itemSubtotal + $itemDeliveryFee,
+                    $reference
+                );
+            } catch (Exception $walletError) {
+                error_log("Failed to seed wallet earning for order {$orderId}: " . $walletError->getMessage());
+            }
             error_log("Created order ID: " . end($orderIds) . " for product: " . ($item['product_name'] ?? 'Unknown') . " with vendor: " . $vendorId);
         }
         

@@ -284,7 +284,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
       icon: DollarSign,
       collapsible: true,
       items: [
-        { id: 'commission', label: 'Commission', icon: DollarSign }
+        { id: 'commission', label: 'Commission', icon: DollarSign },
+        { id: 'wallet-payouts', label: 'Wallet & Payouts', icon: DollarSign }
       ]
     },
     {

@@ -41,6 +41,17 @@ const AdminDashboard = () => {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [contactMessages, setContactMessages] = useState<any[]>([]);
   const [commissionData, setCommissionData] = useState<any>(null);
+  const [walletReport, setWalletReport] = useState<any>(null);
+  const [walletPeriodType, setWalletPeriodType] = useState('monthly');
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [payoutsPeriodMeta, setPayoutsPeriodMeta] = useState<any>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [payoutProcessing, setPayoutProcessing] = useState(false);
+  const [recipientVendorEmail, setRecipientVendorEmail] = useState('');
+  const [recipientCode, setRecipientCode] = useState('');
+  const [vendorPayoutLoading, setVendorPayoutLoading] = useState<string | null>(null);
+  const [retryPayoutLoading, setRetryPayoutLoading] = useState<number | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -301,6 +312,12 @@ const AdminDashboard = () => {
 
     return () => clearInterval(interval);
   }, [contactMessages]);
+
+  useEffect(() => {
+    if (activeTab === 'wallet-payouts') {
+      fetchWalletData(walletPeriodType);
+    }
+  }, [activeTab, walletPeriodType]);
 
   const handleApproveVendor = async (vendorId: string) => {
     const vendor = vendors.find(v => v.id === vendorId);
@@ -565,6 +582,231 @@ const AdminDashboard = () => {
       toast.error('Network error while fetching products');
     }
   };
+
+  const fetchWalletData = async (periodType = walletPeriodType) => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) return;
+
+    setWalletLoading(true);
+    try {
+      const [reportRes, payoutsRes, txRes] = await Promise.all([
+        fetch(getApiUrl(`/api/admin/wallet/report?period_type=${periodType}`), {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(getApiUrl(`/api/admin/payouts?limit=50&period_type=${periodType}`), {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(getApiUrl('/api/admin/wallet/transactions?limit=50'), {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+
+      const reportData = await reportRes.json();
+      const payoutsData = await payoutsRes.json();
+      const txData = await txRes.json();
+
+      setWalletReport(reportData?.report || null);
+      setPayouts(Array.isArray(payoutsData?.payouts) ? payoutsData.payouts : []);
+      setPayoutsPeriodMeta({
+        period_type: payoutsData?.period_type || periodType,
+        start_date: payoutsData?.start_date || null,
+        end_date: payoutsData?.end_date || null
+      });
+      setWalletTransactions(Array.isArray(txData?.transactions) ? txData.transactions : []);
+    } catch (error) {
+      toast.error('Failed to fetch wallet and payout data');
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  const handleRunManualPayouts = async () => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) return;
+
+    setPayoutProcessing(true);
+    try {
+      const response = await fetch(getApiUrl('/api/admin/payouts/manual'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ period_type: walletPeriodType, auto_transfer: true })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to process manual payouts');
+      }
+
+      const paidCount = Array.isArray(data?.results)
+        ? data.results.filter((r: any) => r.status === 'paid').length
+        : 0;
+
+      toast.success(`Manual payout run complete for ${walletPeriodType}. Paid vendors: ${paidCount}`);
+      fetchWalletData(walletPeriodType);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to process manual payouts');
+    } finally {
+      setPayoutProcessing(false);
+    }
+  };
+
+  const handleSaveRecipientCode = async () => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) return;
+
+    if (!recipientVendorEmail || !recipientCode) {
+      toast.error('Vendor email and recipient code are required');
+      return;
+    }
+
+    try {
+      const response = await fetch(getApiUrl('/api/admin/payouts/recipient'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          vendor_email: recipientVendorEmail,
+          paystack_recipient_code: recipientCode
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to save recipient code');
+      }
+
+      toast.success('Recipient code saved');
+      setRecipientCode('');
+      setRecipientVendorEmail('');
+      fetchWalletData(walletPeriodType);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to save recipient code');
+    }
+  };
+
+  const handleRunVendorPayout = async (vendorId: string, vendorName: string) => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) return;
+
+    setVendorPayoutLoading(vendorId);
+    try {
+      const response = await fetch(getApiUrl('/api/admin/payouts/manual'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          period_type: walletPeriodType,
+          auto_transfer: true,
+          vendor_ids: [vendorId]
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to process vendor payout');
+      }
+
+      const vendorResult = Array.isArray(data?.results) ? data.results[0] : null;
+      if (!vendorResult) {
+        toast.message(`No payable amount found for ${vendorName} in ${walletPeriodType} period.`);
+      } else if (vendorResult.status === 'paid') {
+        toast.success(`Paid ${vendorName} successfully.`);
+      } else {
+        toast.message(`${vendorName}: ${vendorResult.reason || vendorResult.status}`);
+      }
+
+      fetchWalletData(walletPeriodType);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to process vendor payout');
+    } finally {
+      setVendorPayoutLoading(null);
+    }
+  };
+
+  const handleRetryPayout = async (payoutId: number, vendorName: string) => {
+    const token = localStorage.getItem('admin_session_token');
+    if (!token) return;
+
+    setRetryPayoutLoading(payoutId);
+    try {
+      const response = await fetch(getApiUrl('/api/admin/payouts/retry'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ payout_id: payoutId })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to retry payout');
+      }
+
+      if (data?.status === 'paid') {
+        toast.success(`Retry successful for ${vendorName}.`);
+      } else {
+        toast.error(`${vendorName}: ${data?.reason || data?.message || 'Retry failed'}`);
+      }
+
+      fetchWalletData(walletPeriodType);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to retry payout');
+    } finally {
+      setRetryPayoutLoading(null);
+    }
+  };
+
+  const getPayoutStatusClass = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800 border border-green-200';
+      case 'pending':
+        return 'bg-amber-100 text-amber-800 border border-amber-200';
+      case 'approved':
+        return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'failed':
+        return 'bg-red-100 text-red-800 border border-red-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border border-gray-200';
+    }
+  };
+
+  const getLedgerTypeClass = (type: string) => {
+    switch (type) {
+      case 'earning':
+        return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+      case 'commission':
+        return 'bg-sky-100 text-sky-800 border border-sky-200';
+      case 'payout':
+        return 'bg-fuchsia-100 text-fuchsia-800 border border-fuchsia-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border border-gray-200';
+    }
+  };
+
+  const getLedgerStatusClass = (status: string) => {
+    switch (status) {
+      case 'paid':
+      case 'available':
+        return 'bg-green-100 text-green-800 border border-green-200';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border border-gray-200';
+    }
+  };
+
+  const selectedPeriodPayableTotal = (walletReport?.vendors || []).reduce((sum: number, vendor: any) => {
+    const payable = Math.max(Number(vendor?.earnings_total || 0) - Number(vendor?.payout_total || 0), 0);
+    return sum + payable;
+  }, 0);
 
   const fetchContactMessages = async () => {
     const token = localStorage.getItem('admin_session_token');
@@ -2856,6 +3098,290 @@ const AdminDashboard = () => {
                       <p className="text-gray-500">Loading commission data...</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {activeTab === 'wallet-payouts' && (
+                <div id="tab-section-wallet-payouts" className="space-y-6 scroll-mt-24">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <h2 className="text-xl font-semibold text-primary">Wallet & Manual Payouts</h2>
+                    <div className="flex gap-2">
+                      <Select value={walletPeriodType} onValueChange={setWalletPeriodType}>
+                        <SelectTrigger className="w-40">
+                          <SelectValue placeholder="Period" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                          <SelectItem value="yearly">Yearly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button onClick={() => fetchWalletData(walletPeriodType)} disabled={walletLoading}>
+                        {walletLoading ? 'Refreshing...' : 'Refresh'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {walletReport && (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Card className="border-green-200 bg-green-50/40">
+                        <CardContent className="p-4">
+                          <p className="text-sm text-gray-600">Period Earnings</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            KSH {walletReport?.totals?.earnings_total?.toFixed(2) || '0.00'}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-blue-200 bg-blue-50/40">
+                        <CardContent className="p-4">
+                          <p className="text-sm text-gray-600">Period Commission</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            KSH {walletReport?.totals?.commission_total?.toFixed(2) || '0.00'}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-orange-200 bg-orange-50/50">
+                        <CardContent className="p-4">
+                          <p className="text-sm text-gray-600">Period Payouts</p>
+                          <p className="text-2xl font-bold text-orange-600">
+                            KSH {walletReport?.totals?.payout_total?.toFixed(2) || '0.00'}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-indigo-200 bg-indigo-50/50">
+                        <CardContent className="p-4">
+                          <p className="text-sm text-gray-600">Selected Period Payable Total</p>
+                          <p className="text-2xl font-bold text-indigo-700">
+                            KSH {selectedPeriodPayableTotal.toFixed(2)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Manual Payout Run</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <p className="text-sm text-gray-600">
+                        Creates payouts from each vendor payable amount for the selected period and triggers Paystack transfers for vendors with recipient codes.
+                      </p>
+                      <Button onClick={handleRunManualPayouts} disabled={payoutProcessing}>
+                        {payoutProcessing ? 'Processing...' : 'Run Manual Payouts'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Set Vendor Recipient Code</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <Input
+                          value={recipientVendorEmail}
+                          onChange={(e) => setRecipientVendorEmail(e.target.value)}
+                          placeholder="Vendor Email"
+                        />
+                        <Input
+                          value={recipientCode}
+                          onChange={(e) => setRecipientCode(e.target.value)}
+                          placeholder="Paystack recipient code"
+                        />
+                        <Button onClick={handleSaveRecipientCode}>Save Recipient</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Vendor Wallet Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2">Vendor</th>
+                              <th className="text-left py-2">Email</th>
+                              <th className="text-left py-2">Available</th>
+                              <th className="text-left py-2">Pending</th>
+                              <th className="text-left py-2">Total Earned</th>
+                              <th className="text-left py-2">Total Withdrawn</th>
+                              <th className="text-left py-2">Payable (Selected Period)</th>
+                              <th className="text-left py-2">Recipient</th>
+                              <th className="text-left py-2">Payout Details</th>
+                              <th className="text-left py-2">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(walletReport?.vendors || []).map((vendor: any) => {
+                              const payableForPeriod = Math.max(
+                                Number(vendor?.earnings_total || 0) - Number(vendor?.payout_total || 0),
+                                0
+                              );
+
+                              return (
+                              <tr key={vendor.vendor_id} className="border-b">
+                                <td className="py-2">{vendor.farm_name}</td>
+                                <td className="py-2 text-gray-600">{vendor.email || 'N/A'}</td>
+                                <td className="py-2 font-semibold text-green-700">KSH {vendor.available_balance.toFixed(2)}</td>
+                                <td className="py-2 text-amber-700">KSH {vendor.pending_balance.toFixed(2)}</td>
+                                <td className="py-2 text-emerald-700">KSH {vendor.total_earned.toFixed(2)}</td>
+                                <td className="py-2 text-purple-700">KSH {vendor.total_withdrawn.toFixed(2)}</td>
+                                <td className="py-2 font-semibold text-indigo-700">KSH {payableForPeriod.toFixed(2)}</td>
+                                <td className="py-2">
+                                  {vendor.paystack_recipient_code ? (
+                                    <Badge className="bg-green-100 text-green-800 border border-green-200">Configured</Badge>
+                                  ) : (
+                                    <Badge className="bg-red-100 text-red-800 border border-red-200">Missing</Badge>
+                                  )}
+                                  {vendor.paystack_recipient_code ? (
+                                    <p className="text-xs text-gray-500 mt-1 break-all">{String(vendor.paystack_recipient_code).slice(0, 14)}...</p>
+                                  ) : null}
+                                </td>
+                                <td className="py-2 text-xs text-gray-700">
+                                  {vendor.payout_provider_name ? (
+                                    <>
+                                      <div className="font-medium text-gray-900">{vendor.payout_provider_name}</div>
+                                      <div className="capitalize">{(vendor.payout_method || '').replace('_', ' ')}</div>
+                                      <div>******{vendor.payout_account_last4 || '----'}</div>
+                                    </>
+                                  ) : (
+                                    <span className="text-amber-700">No payout account details</span>
+                                  )}
+                                </td>
+                                <td className="py-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleRunVendorPayout(vendor.vendor_id, vendor.farm_name)}
+                                    disabled={vendorPayoutLoading === vendor.vendor_id || payoutProcessing || payableForPeriod <= 0}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                  >
+                                    {vendorPayoutLoading === vendor.vendor_id ? 'Paying...' : 'Payout'}
+                                  </Button>
+                                </td>
+                              </tr>
+                            )})}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">
+                        Recent Payouts
+                        {payoutsPeriodMeta?.start_date && payoutsPeriodMeta?.end_date
+                          ? ` (${payoutsPeriodMeta.start_date} to ${payoutsPeriodMeta.end_date})`
+                          : ''}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2">Vendor</th>
+                              <th className="text-left py-2">Amount</th>
+                              <th className="text-left py-2">Period</th>
+                              <th className="text-left py-2">Range</th>
+                              <th className="text-left py-2">Status</th>
+                              <th className="text-left py-2">Failure Reason</th>
+                              <th className="text-left py-2">Payout Details</th>
+                              <th className="text-left py-2">Reference</th>
+                              <th className="text-left py-2">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {payouts.map((payout: any) => (
+                              <tr key={payout.id} className="border-b">
+                                <td className="py-2">{payout.farm_name}</td>
+                                <td className="py-2">KSH {parseFloat(payout.amount).toFixed(2)}</td>
+                                <td className="py-2">{payout.period_type}</td>
+                                <td className="py-2 text-xs text-gray-600">{payout.start_date} to {payout.end_date}</td>
+                                <td className="py-2">
+                                  <Badge className={getPayoutStatusClass(payout.status)}>{payout.status}</Badge>
+                                </td>
+                                <td className="py-2 text-xs text-red-700 max-w-[260px] break-words">
+                                  {payout.status === 'failed'
+                                    ? (payout.failure_reason || 'Reason not captured for this attempt')
+                                    : '-'}
+                                </td>
+                                <td className="py-2 text-xs text-gray-700">
+                                  {payout.payout_provider_name ? (
+                                    <>
+                                      <div className="font-medium text-gray-900">{payout.payout_provider_name}</div>
+                                      <div className="capitalize">{(payout.payout_method || '').replace('_', ' ')}</div>
+                                      <div>******{payout.payout_account_last4 || '----'}</div>
+                                    </>
+                                  ) : (
+                                    <span>N/A</span>
+                                  )}
+                                </td>
+                                <td className="py-2">{payout.paystack_transfer_reference || 'N/A'}</td>
+                                <td className="py-2">
+                                  {payout.status === 'failed' ? (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleRetryPayout(Number(payout.id), payout.farm_name)}
+                                      disabled={retryPayoutLoading === Number(payout.id)}
+                                      className="bg-red-600 hover:bg-red-700 text-white"
+                                    >
+                                      {retryPayoutLoading === Number(payout.id) ? 'Retrying...' : 'Retry'}
+                                    </Button>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Recent Wallet Ledger Transactions</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2">Date</th>
+                              <th className="text-left py-2">Vendor</th>
+                              <th className="text-left py-2">Type</th>
+                              <th className="text-left py-2">Amount</th>
+                              <th className="text-left py-2">Status</th>
+                              <th className="text-left py-2">Reference</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {walletTransactions.map((tx: any) => (
+                              <tr key={tx.id} className="border-b">
+                                <td className="py-2">{new Date(tx.created_at).toLocaleString()}</td>
+                                <td className="py-2">{tx.farm_name}</td>
+                                <td className="py-2">
+                                  <Badge className={getLedgerTypeClass(tx.type)}>{tx.type}</Badge>
+                                </td>
+                                <td className="py-2">KSH {parseFloat(tx.amount).toFixed(2)}</td>
+                                <td className="py-2">
+                                  <Badge className={getLedgerStatusClass(tx.status)}>{tx.status}</Badge>
+                                </td>
+                                <td className="py-2">{tx.reference || 'N/A'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
 

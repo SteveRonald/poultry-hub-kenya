@@ -74,11 +74,41 @@ try {
     
     echo "\n✓ Default settings inserted successfully\n\n";
 
-    // Migration 4: Create warehouses and pickup_locations tables
-    echo "Migration 4: Creating warehouses and pickup_locations tables...\n";
+    // Migration 4: Create wallet, ledger and payout tables
+    echo "Migration 4: Creating wallet, ledger and payout tables...\n";
+    require_once __DIR__ . '/add_wallet_tables.php';
+    migrate_add_wallet_tables($pdo);
+    echo "\n✓ Wallet and payout tables migration complete\n\n";
+
+    // Migration 5: Create warehouses and pickup_locations tables
+    echo "Migration 5: Creating warehouses and pickup_locations tables...\n";
     require_once __DIR__ . '/add_warehouse_pickup_locations_tables.php';
     migrate_add_warehouse_pickup_locations_tables($pdo);
     echo "\n✓ Warehouses and pickup locations migration complete\n\n";
+
+    // Migration 6: Add delivered revenue and order commission tracking fields
+    echo "Migration 6: Adding delivered revenue and order commission tracking...\n";
+    require_once __DIR__ . '/add_delivered_revenue_and_commission_fields.php';
+    migrate_add_delivered_revenue_and_commission_fields($pdo);
+    echo "\n✓ Delivered revenue and order commission tracking migration complete\n\n";
+
+    // Migration 7: Ensure payouts period_type supports yearly
+    echo "Migration 7: Ensuring payouts period_type supports yearly...\n";
+    require_once __DIR__ . '/add_yearly_period_to_payouts.php';
+    migrate_add_yearly_period_to_payouts($pdo);
+    echo "\n✓ Payouts yearly period migration complete\n\n";
+
+    // Migration 8: Create vendor payout accounts table
+    echo "Migration 8: Creating vendor payout accounts table...\n";
+    require_once __DIR__ . '/add_vendor_payout_accounts_table.php';
+    migrate_add_vendor_payout_accounts_table($pdo);
+    echo "\n✓ Vendor payout accounts migration complete\n\n";
+
+    // Migration 9: Add payout failure reason and retry tracking fields
+    echo "Migration 9: Adding payout failure and retry tracking fields...\n";
+    require_once __DIR__ . '/add_payout_failure_retry_fields.php';
+    migrate_add_payout_failure_retry_fields($pdo);
+    echo "\n✓ Payout failure/retry fields migration complete\n\n";
     
     echo "=== ALL MIGRATIONS COMPLETED SUCCESSFULLY ===\n";
     

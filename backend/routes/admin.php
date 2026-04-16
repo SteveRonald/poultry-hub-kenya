@@ -3,6 +3,8 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/notifications.php';
 require_once __DIR__ . '/../utils/system_logs.php';
+require_once __DIR__ . '/../utils/wallet.php';
+require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
 
 function handleAdminLogin() {
     global $pdo;
@@ -458,9 +460,9 @@ function handleUpdateOrderStatus() {
     try {
         $pdo->beginTransaction();
         
-        // Get order details including vendor_id and total_amount
+        // Get order details including current status, vendor_id and total_amount
         $stmt = $pdo->prepare("
-            SELECT o.id, o.total_amount, p.vendor_id
+            SELECT o.id, o.status, o.total_amount, p.vendor_id
             FROM orders o 
             JOIN products p ON o.product_id = p.id 
             WHERE o.id = ?
@@ -532,27 +534,17 @@ function handleUpdateOrderStatus() {
         
         // If changing FROM delivered to another status, reverse commission/earnings
         if ($oldStatus === 'delivered' && $newStatus !== 'delivered') {
-            // Check if earnings exist for this order
-            $stmt = $pdo->prepare("SELECT id FROM vendor_earnings WHERE order_id = ?");
-            $stmt->execute([$orderId]);
-            $existingEarning = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($existingEarning) {
-                // Delete vendor earnings and platform commission records
-                $stmt = $pdo->prepare("DELETE FROM vendor_earnings WHERE order_id = ?");
-                $stmt->execute([$orderId]);
-                
-                $stmt = $pdo->prepare("DELETE FROM platform_commissions WHERE order_id = ?");
-                $stmt->execute([$orderId]);
-                
-                // Reverse lifetime sales update (subtract the amount)
-                $stmt = $pdo->prepare("
-                    UPDATE vendors 
-                    SET lifetime_sales = lifetime_sales - ? 
-                    WHERE id = ?
-                ");
-                $stmt->execute([$order['total_amount'], $order['vendor_id']]);
-                
+            // Reverse wallet earning/commission ledger for this delivered order.
+            try {
+                reverseWalletEarning($order['vendor_id'], $orderId);
+            } catch (Exception $walletReverseError) {
+                error_log("Wallet reversal failed for order {$orderId}: " . $walletReverseError->getMessage());
+            }
+
+            $reverseResult = reverseCommissionForOrder($orderId, $order['vendor_id'], $order['total_amount']);
+            if (!$reverseResult['success']) {
+                error_log("Commission reversal failed for order {$orderId}: " . ($reverseResult['message'] ?? 'Unknown error'));
+            } else {
                 error_log("Reversed commission/earnings for order {$orderId} (status changed from delivered to {$newStatus})");
             }
         }
@@ -657,7 +649,7 @@ function handleUpdateOrderStatus() {
             $orderForSMS = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($orderForSMS) {
-                OrderNotificationService::orderStatusChanged($pdo, $orderForSMS, $newStatus);
+                call_user_func(['OrderNotificationService', 'orderStatusChanged'], $pdo, $orderForSMS, $newStatus);
             }
         } catch (Exception $smsError) {
             error_log('Order status updated but SMS queue/send failed: ' . $smsError->getMessage());
@@ -1763,6 +1755,681 @@ function handleValidateAdminSession() {
         http_response_code(500);
         error_log("Error validating admin session: " . $e->getMessage());
         echo json_encode(['error' => 'Failed to validate session']);
+    }
+}
+
+function handleAdminWalletReport() {
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    $periodType = $_GET['period_type'] ?? 'monthly';
+    if (!in_array($periodType, ['daily', 'weekly', 'monthly', 'yearly'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid period_type. Use daily, weekly, monthly, or yearly']);
+        return;
+    }
+
+    $startDate = $_GET['start_date'] ?? null;
+    $endDate = $_GET['end_date'] ?? null;
+
+    try {
+        $report = getWalletReportByPeriod($periodType, $startDate, $endDate);
+        echo json_encode(['success' => true, 'report' => $report]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch wallet report: ' . $e->getMessage()]);
+    }
+}
+
+function handleAdminWalletTransactions() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    $vendorId = $_GET['vendor_id'] ?? null;
+    $status = $_GET['status'] ?? null;
+    $type = $_GET['type'] ?? null;
+    $limit = intval($_GET['limit'] ?? 100);
+    $limit = min(max($limit, 1), 500);
+
+    try {
+        $where = [];
+        $params = [];
+
+        if ($vendorId) {
+            $where[] = 'wt.vendor_id = ?';
+            $params[] = $vendorId;
+        }
+        if ($status) {
+            $where[] = 'wt.status = ?';
+            $params[] = $status;
+        }
+        if ($type) {
+            $where[] = 'wt.type = ?';
+            $params[] = $type;
+        }
+
+        $whereSql = empty($where) ? '' : ('WHERE ' . implode(' AND ', $where));
+        $sql = "
+            SELECT
+                wt.*,
+                v.farm_name,
+                o.order_number
+            FROM wallet_transactions wt
+            JOIN vendors v ON v.id = wt.vendor_id
+            LEFT JOIN orders o ON o.id = wt.order_id
+            {$whereSql}
+            ORDER BY wt.created_at DESC
+            LIMIT {$limit}
+        ";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'transactions' => $rows]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch wallet transactions: ' . $e->getMessage()]);
+    }
+}
+
+function handleAdminPayouts() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    $status = $_GET['status'] ?? null;
+    $vendorId = $_GET['vendor_id'] ?? null;
+    $periodType = $_GET['period_type'] ?? null;
+    $startDate = $_GET['start_date'] ?? null;
+    $endDate = $_GET['end_date'] ?? null;
+    $limit = intval($_GET['limit'] ?? 100);
+    $limit = min(max($limit, 1), 500);
+
+    try {
+        $where = [];
+        $params = [];
+
+        if ($status) {
+            $where[] = 'p.status = ?';
+            $params[] = $status;
+        }
+        if ($vendorId) {
+            $where[] = 'p.vendor_id = ?';
+            $params[] = $vendorId;
+        }
+
+        if ($periodType) {
+            if (!in_array($periodType, ['daily', 'weekly', 'monthly', 'yearly', 'manual'])) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid period_type']);
+                return;
+            }
+
+            [$rangeStart, $rangeEnd] = getWalletPeriodRange($periodType, $startDate, $endDate);
+            $where[] = 'p.start_date = ?';
+            $where[] = 'p.end_date = ?';
+            $params[] = $rangeStart;
+            $params[] = $rangeEnd;
+
+            // For non-manual views, keep rows for the same logical period type.
+            if ($periodType !== 'manual') {
+                $where[] = 'p.period_type = ?';
+                $params[] = $periodType;
+            }
+        }
+
+        $whereSql = empty($where) ? '' : ('WHERE ' . implode(' AND ', $where));
+        $sql = "
+            SELECT
+                p.*,
+                v.farm_name,
+                COALESCE(vpa.paystack_recipient_code, r.paystack_recipient_code) as paystack_recipient_code,
+                vpa.method as payout_method,
+                vpa.provider_name as payout_provider_name,
+                vpa.account_last4 as payout_account_last4
+            FROM payouts p
+            JOIN vendors v ON v.id = p.vendor_id
+            LEFT JOIN vendor_transfer_recipients r ON r.vendor_id = p.vendor_id
+            LEFT JOIN (
+                SELECT vpa1.vendor_id, vpa1.method, vpa1.provider_name, vpa1.account_last4, vpa1.paystack_recipient_code
+                FROM vendor_payout_accounts vpa1
+                INNER JOIN (
+                    SELECT vendor_id, MAX(id) as max_id
+                    FROM vendor_payout_accounts
+                    WHERE is_active = 1
+                    GROUP BY vendor_id
+                ) vpa2 ON vpa2.max_id = vpa1.id
+            ) vpa ON vpa.vendor_id = p.vendor_id
+            {$whereSql}
+            ORDER BY p.created_at DESC
+            LIMIT {$limit}
+        ";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'payouts' => $rows,
+            'period_type' => $periodType,
+            'start_date' => $rangeStart ?? null,
+            'end_date' => $rangeEnd ?? null
+        ]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to fetch payouts: ' . $e->getMessage()]);
+    }
+}
+
+function handleAdminSetVendorRecipientCode() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $vendorId = $input['vendor_id'] ?? null;
+    $vendorEmail = trim($input['vendor_email'] ?? '');
+    $recipientCode = trim($input['paystack_recipient_code'] ?? '');
+
+    if ((!$vendorId && $vendorEmail === '') || $recipientCode === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'vendor_email (or vendor_id) and paystack_recipient_code are required']);
+        return;
+    }
+
+    try {
+        if ($vendorEmail !== '') {
+            $stmt = $pdo->prepare("\n                SELECT v.id\n                FROM vendors v\n                JOIN user_profiles u ON u.id = v.user_id\n                WHERE LOWER(u.email) = LOWER(?)\n                LIMIT 1\n            ");
+            $stmt->execute([$vendorEmail]);
+            $vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$vendor) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Vendor not found for the provided email']);
+                return;
+            }
+            $vendorId = $vendor['id'];
+        } else {
+            $stmt = $pdo->prepare("SELECT id FROM vendors WHERE id = ?");
+            $stmt->execute([$vendorId]);
+            if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Vendor not found']);
+                return;
+            }
+        }
+
+        upsertVendorRecipientCode($vendorId, $recipientCode);
+        echo json_encode(['success' => true, 'message' => 'Recipient code saved successfully']);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to save recipient code: ' . $e->getMessage()]);
+    }
+}
+
+function handleAdminProcessManualPayouts() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $periodType = $input['period_type'] ?? 'manual';
+    $startDate = $input['start_date'] ?? null;
+    $endDate = $input['end_date'] ?? null;
+    $autoTransfer = !isset($input['auto_transfer']) || boolval($input['auto_transfer']);
+    $vendorIds = isset($input['vendor_ids']) && is_array($input['vendor_ids']) ? $input['vendor_ids'] : [];
+
+    if (!in_array($periodType, ['daily', 'weekly', 'monthly', 'yearly', 'manual'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid period_type']);
+        return;
+    }
+
+    [$rangeStart, $rangeEnd] = getWalletPeriodRange($periodType, $startDate, $endDate);
+
+    try {
+        $where = [];
+        $params = [$rangeStart, $rangeEnd, $rangeStart, $rangeEnd, $periodType];
+
+        if (!empty($vendorIds)) {
+            $placeholders = implode(',', array_fill(0, count($vendorIds), '?'));
+            $where[] = "v.id IN ({$placeholders})";
+            $params = array_merge($params, $vendorIds);
+        }
+
+        $whereSql = empty($where) ? '' : ('WHERE ' . implode(' AND ', $where));
+
+        $sql = "
+            SELECT
+                v.id as vendor_id,
+                v.farm_name,
+                u.email,
+                COALESCE(pe.period_earned, 0) as period_earned,
+                COALESCE(pp.period_payouts, 0) as period_payouts,
+                GREATEST(COALESCE(pe.period_earned, 0) - COALESCE(pp.period_payouts, 0), 0) as payout_amount
+            FROM vendors v
+            JOIN user_profiles u ON u.id = v.user_id
+            LEFT JOIN (
+                SELECT vendor_id, COALESCE(SUM(net_amount), 0) as period_earned
+                FROM vendor_earnings
+                WHERE status = 'confirmed'
+                  AND DATE(COALESCE(confirmed_at, created_at)) BETWEEN ? AND ?
+                GROUP BY vendor_id
+            ) pe ON pe.vendor_id = v.id
+            LEFT JOIN (
+                SELECT vendor_id, COALESCE(SUM(amount), 0) as period_payouts
+                FROM payouts
+                WHERE start_date = ?
+                  AND end_date = ?
+                  AND period_type = ?
+                  AND status IN ('pending', 'approved', 'paid')
+                GROUP BY vendor_id
+            ) pp ON pp.vendor_id = v.id
+            {$whereSql}
+            HAVING payout_amount > 0
+            ORDER BY payout_amount DESC
+        ";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $wallets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $results = [];
+
+        foreach ($wallets as $walletRow) {
+            $vendorId = $walletRow['vendor_id'];
+            $amount = round(floatval($walletRow['payout_amount'] ?? 0), 2);
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $pdo->beginTransaction();
+
+            $existingStmt = $pdo->prepare("\n                SELECT id, status FROM payouts\n                WHERE vendor_id = ? AND period_type = ? AND start_date = ? AND end_date = ?\n                  AND status IN ('pending', 'approved', 'paid')\n                ORDER BY id DESC\n                LIMIT 1\n                FOR UPDATE\n            ");
+            $existingStmt->execute([$vendorId, $periodType, $rangeStart, $rangeEnd]);
+            $existingPayout = $existingStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existingPayout) {
+                $pdo->commit();
+                $results[] = [
+                    'vendor_id' => $vendorId,
+                    'vendor_name' => $walletRow['farm_name'],
+                    'vendor_email' => $walletRow['email'] ?? null,
+                    'status' => 'skipped',
+                    'reason' => 'Payout already exists for selected period',
+                    'payout_id' => intval($existingPayout['id'])
+                ];
+                continue;
+            }
+
+            $insertStmt = $pdo->prepare("\n                INSERT INTO payouts (vendor_id, amount, period_type, start_date, end_date, status)\n                VALUES (?, ?, ?, ?, ?, 'pending')\n            ");
+            $insertStmt->execute([$vendorId, $amount, $periodType, $rangeStart, $rangeEnd]);
+            $payoutId = intval($pdo->lastInsertId());
+
+            $transferReference = 'PAYOUT-' . $payoutId . '-' . date('YmdHis');
+
+            $updateRefStmt = $pdo->prepare("UPDATE payouts SET paystack_transfer_reference = ? WHERE id = ?");
+            $updateRefStmt->execute([$transferReference, $payoutId]);
+
+            $pdo->commit();
+
+            if (!$autoTransfer) {
+                $results[] = [
+                    'vendor_id' => $vendorId,
+                    'vendor_name' => $walletRow['farm_name'],
+                    'vendor_email' => $walletRow['email'] ?? null,
+                    'status' => 'pending',
+                    'reason' => 'Payout created but transfer not initiated',
+                    'payout_id' => $payoutId,
+                    'reference' => $transferReference,
+                    'amount' => $amount
+                ];
+                continue;
+            }
+
+            $recipientCode = getVendorRecipientCode($vendorId);
+            if (!$recipientCode) {
+                $results[] = [
+                    'vendor_id' => $vendorId,
+                    'vendor_name' => $walletRow['farm_name'],
+                    'vendor_email' => $walletRow['email'] ?? null,
+                    'status' => 'pending',
+                    'reason' => 'Missing Paystack recipient code',
+                    'payout_id' => $payoutId,
+                    'reference' => $transferReference,
+                    'amount' => $amount
+                ];
+                continue;
+            }
+
+            $transferResponse = createPaystackTransfer(
+                $amount,
+                $recipientCode,
+                $transferReference,
+                'Vendor payout for ' . $periodType . ' period'
+            );
+
+            $successfulTransfer = !empty($transferResponse['response']['status']);
+
+            $pdo->beginTransaction();
+
+            $payoutLockStmt = $pdo->prepare("SELECT * FROM payouts WHERE id = ? FOR UPDATE");
+            $payoutLockStmt->execute([$payoutId]);
+            $payout = $payoutLockStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$payout) {
+                $pdo->rollBack();
+                $results[] = [
+                    'vendor_id' => $vendorId,
+                    'vendor_name' => $walletRow['farm_name'],
+                    'vendor_email' => $walletRow['email'] ?? null,
+                    'status' => 'failed',
+                    'reason' => 'Payout record disappeared before settlement',
+                    'payout_id' => $payoutId
+                ];
+                continue;
+            }
+
+            if ($successfulTransfer) {
+                $wallet = getVendorWallet($vendorId, true);
+                $balanceBefore = floatval($wallet['available_balance'] ?? 0);
+                $settledAmount = round(floatval($payout['amount']), 2);
+                $balanceAfter = $balanceBefore - $settledAmount;
+
+                $ledgerCheckStmt = $pdo->prepare("\n                    SELECT id FROM wallet_transactions\n                    WHERE vendor_id = ? AND reference = ? AND type = 'payout'\n                    LIMIT 1\n                ");
+                $ledgerCheckStmt->execute([$vendorId, $transferReference]);
+                $existingLedger = $ledgerCheckStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$existingLedger) {
+                    $insertLedgerStmt = $pdo->prepare("\n                        INSERT INTO wallet_transactions\n                            (vendor_id, order_id, type, amount, balance_before, balance_after, status, reference)\n                        VALUES (?, NULL, 'payout', ?, ?, ?, 'paid', ?)\n                    ");
+                    $insertLedgerStmt->execute([
+                        $vendorId,
+                        $settledAmount,
+                        $balanceBefore,
+                        $balanceAfter,
+                        $transferReference
+                    ]);
+
+                    $walletUpdateStmt = $pdo->prepare("\n                        UPDATE vendor_wallet\n                        SET available_balance = GREATEST(available_balance - ?, 0),\n                            total_withdrawn = total_withdrawn + ?,\n                            updated_at = NOW()\n                        WHERE vendor_id = ?\n                    ");
+                    $walletUpdateStmt->execute([$settledAmount, $settledAmount, $vendorId]);
+                }
+
+                $updatePayoutStmt = $pdo->prepare("\n                    UPDATE payouts\n                    SET status = 'paid',\n                        failure_reason = NULL,\n                        last_error_code = NULL,\n                        updated_at = NOW()\n                    WHERE id = ?\n                ");
+                $updatePayoutStmt->execute([$payoutId]);
+
+                $pdo->commit();
+
+                $results[] = [
+                    'vendor_id' => $vendorId,
+                    'vendor_name' => $walletRow['farm_name'],
+                    'vendor_email' => $walletRow['email'] ?? null,
+                    'status' => 'paid',
+                    'payout_id' => $payoutId,
+                    'reference' => $transferReference,
+                    'amount' => $amount,
+                    'paystack_response' => $transferResponse['response'] ?? null
+                ];
+            } else {
+                $failureReason = $transferResponse['response']['message'] ?? $transferResponse['curl_error'] ?? 'Transfer failed';
+                $failureCode = $transferResponse['response']['code'] ?? null;
+
+                $updatePayoutStmt = $pdo->prepare("\n                    UPDATE payouts\n                    SET status = 'failed',\n                        failure_reason = ?,\n                        last_error_code = ?,\n                        updated_at = NOW()\n                    WHERE id = ?\n                ");
+                $updatePayoutStmt->execute([$failureReason, $failureCode, $payoutId]);
+                $pdo->commit();
+
+                $results[] = [
+                    'vendor_id' => $vendorId,
+                    'vendor_name' => $walletRow['farm_name'],
+                    'vendor_email' => $walletRow['email'] ?? null,
+                    'status' => 'failed',
+                    'reason' => $failureReason,
+                    'payout_id' => $payoutId,
+                    'reference' => $transferReference,
+                    'amount' => $amount,
+                    'paystack_response' => $transferResponse['response'] ?? null
+                ];
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'period_type' => $periodType,
+            'start_date' => $rangeStart,
+            'end_date' => $rangeEnd,
+            'results' => $results
+        ]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to process manual payouts: ' . $e->getMessage()]);
+    }
+}
+
+function handleAdminRetryFailedPayout() {
+    global $pdo;
+
+    $token = getBearerToken();
+    if (!$token || !validateAdminSession($token)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+    $payoutId = intval($input['payout_id'] ?? 0);
+
+    if ($payoutId <= 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Valid payout_id is required']);
+        return;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare("\n            SELECT
+                p.*,
+                v.farm_name,
+                u.email,
+                COALESCE(vpa.paystack_recipient_code, r.paystack_recipient_code) as paystack_recipient_code
+            FROM payouts p
+            JOIN vendors v ON v.id = p.vendor_id
+            JOIN user_profiles u ON u.id = v.user_id
+            LEFT JOIN vendor_transfer_recipients r ON r.vendor_id = p.vendor_id
+            LEFT JOIN (
+                SELECT vpa1.vendor_id, vpa1.paystack_recipient_code
+                FROM vendor_payout_accounts vpa1
+                INNER JOIN (
+                    SELECT vendor_id, MAX(id) as max_id
+                    FROM vendor_payout_accounts
+                    WHERE is_active = 1
+                    GROUP BY vendor_id
+                ) vpa2 ON vpa2.max_id = vpa1.id
+            ) vpa ON vpa.vendor_id = p.vendor_id
+            WHERE p.id = ?
+            FOR UPDATE
+        ");
+        $stmt->execute([$payoutId]);
+        $payout = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$payout) {
+            $pdo->rollBack();
+            http_response_code(404);
+            echo json_encode(['error' => 'Payout not found']);
+            return;
+        }
+
+        if ($payout['status'] !== 'failed') {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'Only failed payouts can be retried']);
+            return;
+        }
+
+        $recipientCode = trim((string)($payout['paystack_recipient_code'] ?? ''));
+        if ($recipientCode === '') {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing Paystack recipient code for this vendor']);
+            return;
+        }
+
+        $newReference = 'PAYOUT-' . $payoutId . '-RETRY-' . date('YmdHis');
+        $amount = round(floatval($payout['amount'] ?? 0), 2);
+        if ($amount <= 0) {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid payout amount']);
+            return;
+        }
+
+        $pdo->commit();
+
+        $transferResponse = createPaystackTransfer(
+            $amount,
+            $recipientCode,
+            $newReference,
+            'Retry payout for ' . ($payout['period_type'] ?? 'manual') . ' period'
+        );
+
+        $successfulTransfer = !empty($transferResponse['response']['status']);
+        $failureReason = $transferResponse['response']['message'] ?? $transferResponse['curl_error'] ?? 'Transfer failed';
+        $failureCode = $transferResponse['response']['code'] ?? null;
+
+        $pdo->beginTransaction();
+
+        $lockStmt = $pdo->prepare("SELECT * FROM payouts WHERE id = ? FOR UPDATE");
+        $lockStmt->execute([$payoutId]);
+        $lockedPayout = $lockStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$lockedPayout) {
+            $pdo->rollBack();
+            http_response_code(404);
+            echo json_encode(['error' => 'Payout not found during retry']);
+            return;
+        }
+
+        if ($successfulTransfer) {
+            $wallet = getVendorWallet($lockedPayout['vendor_id'], true);
+            $balanceBefore = floatval($wallet['available_balance'] ?? 0);
+            $balanceAfter = $balanceBefore - $amount;
+
+            $ledgerCheckStmt = $pdo->prepare("\n                SELECT id FROM wallet_transactions
+                WHERE vendor_id = ? AND reference = ? AND type = 'payout'
+                LIMIT 1
+            ");
+            $ledgerCheckStmt->execute([$lockedPayout['vendor_id'], $newReference]);
+            $existingLedger = $ledgerCheckStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$existingLedger) {
+                $insertLedgerStmt = $pdo->prepare("\n                    INSERT INTO wallet_transactions
+                        (vendor_id, order_id, type, amount, balance_before, balance_after, status, reference)
+                    VALUES (?, NULL, 'payout', ?, ?, ?, 'paid', ?)
+                ");
+                $insertLedgerStmt->execute([
+                    $lockedPayout['vendor_id'],
+                    $amount,
+                    $balanceBefore,
+                    $balanceAfter,
+                    $newReference
+                ]);
+
+                $walletUpdateStmt = $pdo->prepare("\n                    UPDATE vendor_wallet
+                    SET available_balance = GREATEST(available_balance - ?, 0),
+                        total_withdrawn = total_withdrawn + ?,
+                        updated_at = NOW()
+                    WHERE vendor_id = ?
+                ");
+                $walletUpdateStmt->execute([$amount, $amount, $lockedPayout['vendor_id']]);
+            }
+
+            $updatePayoutStmt = $pdo->prepare("\n                UPDATE payouts
+                SET status = 'paid',
+                    paystack_transfer_reference = ?,
+                    failure_reason = NULL,
+                    last_error_code = NULL,
+                    retry_count = retry_count + 1,
+                    last_retry_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = ?
+            ");
+            $updatePayoutStmt->execute([$newReference, $payoutId]);
+
+            $pdo->commit();
+            echo json_encode([
+                'success' => true,
+                'status' => 'paid',
+                'message' => 'Payout retried successfully',
+                'payout_id' => $payoutId,
+                'reference' => $newReference,
+                'vendor_name' => $payout['farm_name'] ?? null,
+                'vendor_email' => $payout['email'] ?? null,
+                'amount' => $amount,
+                'paystack_response' => $transferResponse['response'] ?? null
+            ]);
+            return;
+        }
+
+        $updateFailedStmt = $pdo->prepare("\n            UPDATE payouts
+            SET status = 'failed',
+                paystack_transfer_reference = ?,
+                failure_reason = ?,
+                last_error_code = ?,
+                retry_count = retry_count + 1,
+                last_retry_at = NOW(),
+                updated_at = NOW()
+            WHERE id = ?
+        ");
+        $updateFailedStmt->execute([$newReference, $failureReason, $failureCode, $payoutId]);
+
+        $pdo->commit();
+        echo json_encode([
+            'success' => false,
+            'status' => 'failed',
+            'message' => 'Retry attempt failed',
+            'reason' => $failureReason,
+            'payout_id' => $payoutId,
+            'reference' => $newReference,
+            'vendor_name' => $payout['farm_name'] ?? null,
+            'vendor_email' => $payout['email'] ?? null,
+            'amount' => $amount,
+            'paystack_response' => $transferResponse['response'] ?? null
+        ]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to retry payout: ' . $e->getMessage()]);
     }
 }
 ?>

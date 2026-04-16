@@ -3,6 +3,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/email.php';
 require_once __DIR__ . '/../utils/auth.php';
 require_once __DIR__ . '/../utils/system_logs.php';
+require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
 
 function handleCreateOrder() {
     global $pdo;
@@ -44,6 +45,20 @@ function handleCreateOrder() {
     
     try {
         $pdo->beginTransaction();
+
+        // Load current order state for transition-based commission handling.
+        $stmt = $pdo->prepare("\n            SELECT o.status, o.total_amount, p.vendor_id\n            FROM orders o\n            JOIN products p ON o.product_id = p.id\n            WHERE o.id = ?\n            FOR UPDATE\n        ");
+        $stmt->execute([$input['order_id']]);
+        $currentOrder = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$currentOrder) {
+            $pdo->rollBack();
+            http_response_code(404);
+            echo json_encode(['error' => 'Order not found']);
+            return;
+        }
+
+        $oldStatus = $currentOrder['status'];
         
         if ($isDirectOrder) {
             // Handle direct single-product order
@@ -329,7 +344,7 @@ function handleCreateOrder() {
         try {
             require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
 
-            OrderNotificationService::orderCreated($pdo, $createdOrders, $vendorEmails, [
+                call_user_func(['OrderNotificationService', 'orderCreated'], $pdo, $createdOrders, $vendorEmails, [
                 'order_number' => $orderNumber,
                 'customer_id' => $payload['user_id'] ?? null,
                 'checkout_phone' => $input['contact_phone'] ?? null,
@@ -510,6 +525,24 @@ function handleUpdateOrderStatus() {
             http_response_code(404);
             echo json_encode(['error' => 'Order not found']);
             return;
+        }
+
+        // Reverse financial records only when moving away from delivered.
+        if ($oldStatus === 'delivered' && $input['status'] !== 'delivered') {
+            try {
+                reverseWalletEarning($currentOrder['vendor_id'], $input['order_id']);
+            } catch (Exception $walletReverseError) {
+                error_log("Wallet reversal failed for order {$input['order_id']}: " . $walletReverseError->getMessage());
+            }
+
+            $reverseResult = reverseCommissionForOrder(
+                $input['order_id'],
+                $currentOrder['vendor_id'],
+                $currentOrder['total_amount']
+            );
+            if (!$reverseResult['success']) {
+                error_log("Commission reversal failed for order {$input['order_id']}: " . ($reverseResult['message'] ?? 'Unknown error'));
+            }
         }
         
         // Process commission if status is 'delivered'

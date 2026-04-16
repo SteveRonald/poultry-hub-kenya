@@ -10,6 +10,8 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/paystack_config.php';
 require_once __DIR__ . '/../routes/email_queue.php';
 require_once __DIR__ . '/../utils/system_logs.php';
+require_once __DIR__ . '/../utils/wallet.php';
+require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
 
 // Set timezone
 date_default_timezone_set('Africa/Nairobi');
@@ -212,8 +214,6 @@ function handleChargeSuccess($eventData) {
 
         // Queue/send email + SMS notifications (best-effort)
         try {
-            require_once __DIR__ . '/../services/notifications/OrderNotificationService.php';
-
             $checkoutData = null;
             if (!empty($payment['metadata'])) {
                 $meta = json_decode($payment['metadata'], true);
@@ -268,7 +268,7 @@ function handleChargeSuccess($eventData) {
             // Only queue; let the worker send (webhooks should be fast and not depend on external SMS APIs)
             // This also avoids holding DB transactions open while calling OpenSMS.
             // Note: SMS_SEND_IMMEDIATELY is still respected in the service, but webhook processing may end early.
-            OrderNotificationService::orderCreated($pdo, $createdOrders, $vendorGroups, [
+            \OrderNotificationService::orderCreated($pdo, $createdOrders, $vendorGroups, [
                 'order_number' => $createdOrders[0]['order_number'] ?? null,
                 'idempotency_group' => $reference,
                 'customer_id' => $payment['user_id'],
@@ -387,7 +387,23 @@ function createOrdersFromPayment($payment, $eventData = null) {
                 $vendorId
             ]);
 
-            $orderIds[] = $pdo->lastInsertId();
+            $orderId = $pdo->lastInsertId();
+            $orderIds[] = $orderId;
+
+            try {
+                recordPendingWalletEarning(
+                    $vendorId,
+                    $orderId,
+                    floatval($item['price']) * floatval($item['quantity']),
+                    $payment['paystack_reference'] ?: $payment['transaction_reference']
+                );
+            } catch (Exception $walletError) {
+                logSystemEvent('webhook_wallet_earning_error', 'Failed to seed pending wallet earning', [
+                    'order_id' => $orderId,
+                    'vendor_id' => $vendorId,
+                    'error' => $walletError->getMessage()
+                ]);
+            }
         }
 
         logSystemEvent('webhook_orders_created', 'Orders created from payment', [
@@ -641,9 +657,97 @@ function handleChargeFailed($eventData) {
  * Handle transfer events (for future payout implementation)
  */
 function handleTransferEvent($event, $eventData) {
+    global $pdo;
+
+    $reference = $eventData['reference'] ?? $eventData['transfer_code'] ?? null;
+
     logSystemEvent('webhook_transfer_event', "Transfer event received: {$event}", [
         'event' => $event,
-        'reference' => $eventData['reference'] ?? 'unknown'
+        'reference' => $reference ?? 'unknown'
     ]);
+
+    if (!$reference) {
+        return;
+    }
+
+    try {
+        if (!$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+        }
+
+        $stmt = $pdo->prepare("SELECT * FROM payouts WHERE paystack_transfer_reference = ? FOR UPDATE");
+        $stmt->execute([$reference]);
+        $payout = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$payout) {
+            if ($pdo->inTransaction()) {
+                $pdo->commit();
+            }
+            return;
+        }
+
+        $newStatus = $event === 'transfer.success' ? 'paid' : 'failed';
+        if ($event === 'transfer.success') {
+            $updateStmt = $pdo->prepare("UPDATE payouts SET status = ?, failure_reason = NULL, last_error_code = NULL, updated_at = NOW() WHERE id = ?");
+            $updateStmt->execute([$newStatus, $payout['id']]);
+        } else {
+            $webhookFailureReason = $eventData['reason']
+                ?? $eventData['failure_reason']
+                ?? $eventData['gateway_response']
+                ?? $eventData['status']
+                ?? 'Transfer failed';
+            $webhookFailureCode = $eventData['status'] ?? null;
+
+            $updateStmt = $pdo->prepare("UPDATE payouts SET status = ?, failure_reason = ?, last_error_code = ?, updated_at = NOW() WHERE id = ?");
+            $updateStmt->execute([$newStatus, $webhookFailureReason, $webhookFailureCode, $payout['id']]);
+        }
+
+        if ($event === 'transfer.success') {
+            $ledgerStmt = $pdo->prepare("SELECT id FROM wallet_transactions WHERE vendor_id = ? AND reference = ? AND type = 'payout'");
+            $ledgerStmt->execute([$payout['vendor_id'], $reference]);
+            $existingLedger = $ledgerStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$existingLedger) {
+                $wallet = getVendorWallet($payout['vendor_id'], true);
+                $balanceBefore = floatval($wallet['available_balance'] ?? 0);
+                $balanceAfter = $balanceBefore - floatval($payout['amount']);
+
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO wallet_transactions
+                        (vendor_id, order_id, type, amount, balance_before, balance_after, status, reference)
+                    VALUES (?, NULL, 'payout', ?, ?, ?, 'paid', ?)
+                ");
+                $insertStmt->execute([
+                    $payout['vendor_id'],
+                    $payout['amount'],
+                    $balanceBefore,
+                    $balanceAfter,
+                    $reference
+                ]);
+
+                $walletUpdate = $pdo->prepare("
+                    UPDATE vendor_wallet
+                    SET available_balance = GREATEST(available_balance - ?, 0),
+                        total_withdrawn = total_withdrawn + ?,
+                        updated_at = NOW()
+                    WHERE vendor_id = ?
+                ");
+                $walletUpdate->execute([$payout['amount'], $payout['amount'], $payout['vendor_id']]);
+            }
+        }
+
+        if ($pdo->inTransaction()) {
+            $pdo->commit();
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        logSystemEvent('webhook_transfer_event_error', 'Failed to reconcile transfer webhook', [
+            'event' => $event,
+            'reference' => $reference,
+            'error' => $e->getMessage()
+        ]);
+    }
 }
 ?>

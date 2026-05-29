@@ -1,7 +1,0 @@
-[install]
-# Use npm instead of bun for package management
-cache = false
-frozen-lockfile = false
-
-[install.scopes]
-# Configure package scopes if needed

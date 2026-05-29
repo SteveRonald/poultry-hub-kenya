@@ -1,0 +1,10 @@
+{
+  "name": "poultry-hub-frontend-wrapper",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix .. run dev",
+    "build": "npm --prefix .. run build",
+    "preview": "npm --prefix .. run preview",
+    "ws": "npm --prefix .. run ws"
+  }
+}

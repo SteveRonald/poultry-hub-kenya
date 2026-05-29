@@ -17,21 +17,26 @@ if (Test-Path $viteCachePath) {
     Write-Host "  No Vite cache found in node_modules/.vite" -ForegroundColor Gray
 }
 
-# Clear Vite cache in .vite (root directory, if exists)
-$rootViteCache = ".vite"
-if (Test-Path $rootViteCache) {
-    Remove-Item -Recurse -Force $rootViteCache
-    Write-Host "✓ Vite cache cleared: $rootViteCache" -ForegroundColor Green
-    $cleared = $true
+# Clear Vite cache in .vite (root and frontend, if exists)
+$viteCaches = @(".vite", "frontend\\.vite")
+foreach ($cachePath in $viteCaches) {
+    if (Test-Path $cachePath) {
+        Remove-Item -Recurse -Force $cachePath
+        Write-Host "✓ Vite cache cleared: $cachePath" -ForegroundColor Green
+        $cleared = $true
+    }
 }
 
-# Clear dist folder
-$distPath = "dist"
-if (Test-Path $distPath) {
-    Remove-Item -Recurse -Force $distPath
-    Write-Host "✓ Dist folder cleared: $distPath" -ForegroundColor Green
-    $cleared = $true
-} else {
+# Clear dist folders (root and frontend)
+$distPaths = @("dist", "frontend\\dist")
+foreach ($distPath in $distPaths) {
+    if (Test-Path $distPath) {
+        Remove-Item -Recurse -Force $distPath
+        Write-Host "✓ Dist folder cleared: $distPath" -ForegroundColor Green
+        $cleared = $true
+    }
+}
+if (-not (Test-Path "dist") -and -not (Test-Path "frontend\\dist")) {
     Write-Host "  No dist folder found" -ForegroundColor Gray
 }
 

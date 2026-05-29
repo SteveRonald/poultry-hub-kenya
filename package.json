@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "ws": "node socketServer.cjs",
+    "ws": "node backend/realtime/socketServer.cjs",
     "dev": "concurrently \"vite\" \"npm:ws\" \"echo 'Backend running on http://localhost/poultry-hub-kenya/backend'\"",
     "build": "vite build",
     "build:dev": "vite build --mode development",

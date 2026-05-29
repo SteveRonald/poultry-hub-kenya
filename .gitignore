@@ -14,6 +14,10 @@ dist
 dist-ssr
 *.local
 
+# Frontend build artifacts
+frontend/dist
+frontend/.vite
+
 # Environment variables (CRITICAL - Never commit these!)
 .env
 .env.*
@@ -48,6 +52,10 @@ backend/config/google_drive_tokens.json
 backend/logs/
 backend/backups/
 backups/
+
+# Runtime uploads (keep directory, ignore contents)
+uploads/**
+!uploads/.gitkeep
 
 # OAuth and API tokens
 **/google_drive_tokens.json

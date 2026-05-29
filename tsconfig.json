@@ -6,7 +6,7 @@
   ],
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./frontend/src/*"]
     },
     "strict": true,
     "forceConsistentCasingInFileNames": true,

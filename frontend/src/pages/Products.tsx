@@ -479,7 +479,7 @@ const Products = () => {
           </Breadcrumb>
 
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-8 hidden sm:block">
             <h1 className="text-3xl font-bold text-primary mb-2">Browse Products</h1>
             <p className="text-gray-600">Find quality poultry products from trusted farmers across Kenya</p>
           </div>
@@ -493,517 +493,285 @@ const Products = () => {
                 key={ad.id}
                 advertisement={ad}
                 onClose={() => handleAdClose(ad.id)}
-                pageLocation="products"
-              />
+                pageLocation="products" />
             ))}
 
           {/* Filters */}
           <div className="mb-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-            <div className="border-b border-stone-200 bg-stone-50/80 px-4 py-3 sm:px-6">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2 text-sm text-stone-600">
-                  <span className="font-medium text-stone-900">{resultSummary}</span>
-                  {hasAnyFilters && (
-                    <Badge variant="secondary" className="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-medium text-green-700">
-                      {activeFilters.length} active
-                    </Badge>
-                  )}
-                </div>
-                {hasAnyFilters && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetAllFilters}
-                    className="h-8 rounded-full px-3 text-xs text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  >
-                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
-                    Clear
-                  </Button>
-                )}
-              </div>
+            <div className="hidden border-b border-stone-200 bg-stone-50/80 px-4 py-3 sm:block sm:px-6">
+              <h3 className="text-sm font-semibold text-stone-900">Search & Categories</h3>
+              <p className="mt-1 text-sm text-stone-600">Search by product name or narrow the list by category.</p>
             </div>
-            <div className="border-b border-stone-100 px-4 py-4 sm:hidden">
-              <div className="space-y-3">
+            <div className="px-4 py-4 sm:px-6">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                   <Input
                     type="text"
-                    placeholder="Search products, vendors, or categories..."
+                    placeholder="Search products..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="h-12 rounded-xl border-stone-200 pl-10 text-base placeholder:text-stone-400 focus-visible:ring-green-600"
-                    aria-label="Search products, vendors, or categories"
-                  />
+                    aria-label="Search products" />
                 </div>
 
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger className="h-11 rounded-xl border-stone-200 text-left text-sm" aria-label={`Product category filter, ${selectedCategory === 'all' ? 'showing all categories' : `filtered to ${selectedCategory}`}`}>
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories ({allProducts.length})</SelectItem>
-                      <SelectItem value="chicks">Chicks ({getCategoryCount('chicks')})</SelectItem>
-                      <SelectItem value="eggs">Eggs ({getCategoryCount('eggs')})</SelectItem>
-                      <SelectItem value="chickens">Chickens ({getCategoryCount('chickens')})</SelectItem>
-                      <SelectItem value="feed">Feed ({getCategoryCount('feed')})</SelectItem>
-                      <SelectItem value="equipment">Equipment ({getCategoryCount('equipment')})</SelectItem>
-                      <SelectItem value="medicine">Medicine ({getCategoryCount('medicine')})</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button
-                    variant="outline"
-                    className="h-11 rounded-xl border-stone-200 px-4 text-sm font-medium text-stone-700 hover:bg-stone-50"
-                    onClick={() => setShowMoreFilters(true)}
-                  >
-                    <SlidersHorizontal className="mr-2 h-4 w-4" />
-                    Filters
-                    {advancedFilterCount > 0 && (
-                      <Badge className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-green-600 px-1.5 text-[11px] text-white">
-                        {advancedFilterCount}
-                      </Badge>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
-                  <span className="rounded-full bg-stone-100 px-3 py-1.5">
-                    {selectedLocation === 'all' ? 'All locations' : selectedLocation}
-                  </span>
-                  <span className="rounded-full bg-stone-100 px-3 py-1.5">
-                    {sortBy === 'newest' ? 'Newest First' : sortBy === 'price-low' ? 'Price Low to High' : sortBy === 'price-high' ? 'Price High to Low' : 'Best Rated'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            {/* Search & Category Section */}
-            <div className="hidden border-b border-stone-100 sm:block">
-              <button
-                onClick={() => setExpandedSections(prev => ({ ...prev, searchCategory: !prev.searchCategory }))}
-                className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-stone-50 sm:px-6"
-                aria-expanded={expandedSections.searchCategory}
-                aria-controls="search-category-section"
-              >
-                <h3 className="font-semibold text-stone-900">Search & Categories</h3>
-                {expandedSections.searchCategory ? (
-                  <ChevronUp className="h-5 w-5 text-stone-500" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-stone-500" />
-                )}
-              </button>
-
-              {expandedSections.searchCategory && (
-                <div id="search-category-section" className="px-4 pb-5 sm:px-6">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                      <Input
-                        type="text"
-                        placeholder="Search products, vendors, or categories..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="h-12 rounded-xl border-stone-200 pl-10 text-base placeholder:text-stone-400 focus-visible:ring-green-600"
-                        aria-label="Search products, vendors, or categories"
-                      />
-                    </div>
-
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="h-12 rounded-xl border-stone-200 text-left" aria-label={`Product category filter, ${selectedCategory === 'all' ? 'showing all categories' : `filtered to ${selectedCategory}`}`}>
-                        <SelectValue placeholder="All Categories" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Categories ({allProducts.length})</SelectItem>
-                        <SelectItem value="chicks">Chicks ({getCategoryCount('chicks')})</SelectItem>
-                        <SelectItem value="eggs">Eggs ({getCategoryCount('eggs')})</SelectItem>
-                        <SelectItem value="chickens">Chickens ({getCategoryCount('chickens')})</SelectItem>
-                        <SelectItem value="feed">Feed ({getCategoryCount('feed')})</SelectItem>
-                        <SelectItem value="equipment">Equipment ({getCategoryCount('equipment')})</SelectItem>
-                        <SelectItem value="medicine">Medicine ({getCategoryCount('medicine')})</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <div className="hidden sm:block">
-                      <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                        <SelectTrigger className="h-12 rounded-xl border-stone-200 text-left" aria-label={`Location filter, ${selectedLocation === 'all' ? 'showing all locations' : `filtered to ${selectedLocation}`}`}>
-                          <SelectValue placeholder="All Locations" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {locations.map(location => (
-                            <SelectItem key={location} value={location}>
-                              {location === 'all' ? `All Locations (${allProducts.length})` : `${location} (${getLocationCount(location)})`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="hidden sm:block">
-                      <Select value={sortBy} onValueChange={setSortBy}>
-                        <SelectTrigger className="h-12 rounded-xl border-stone-200 bg-white text-sm">
-                          <SelectValue placeholder="Sort products" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="newest">Newest First</SelectItem>
-                          <SelectItem value="price-low">Price Low to High</SelectItem>
-                          <SelectItem value="price-high">Price High to Low</SelectItem>
-                          <SelectItem value="rating">Best Rated</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Filters Section */}
-            <div className="border-b border-stone-100">
-              <button
-                onClick={() => setExpandedSections(prev => ({ ...prev, quickFilters: !prev.quickFilters }))}
-                className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-stone-50 sm:px-6"
-                aria-expanded={expandedSections.quickFilters}
-                aria-controls="quick-filters-section"
-              >
-                <h3 className="font-semibold text-stone-900">Quick Filters</h3>
-                {expandedSections.quickFilters ? (
-                  <ChevronUp className="h-5 w-5 text-stone-500" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-stone-500" />
-                )}
-              </button>
-
-              {expandedSections.quickFilters && (
-                <div id="quick-filters-section" className="px-4 pb-5 sm:px-6">
-                  <div>
-                    <div className="flex flex-wrap gap-2">
-                      {quickPriceRanges.map((range) => {
-                        const isActive = minPrice === range.min && maxPrice === range.max;
-                        return (
-                          <Button
-                            key={range.label}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (isActive) {
-                                setMinPrice('');
-                                setMaxPrice('');
-                                return;
-                              }
-                              setMinPrice(range.min);
-                              setMaxPrice(range.max);
-                            }}
-                            className={cn(
-                              'h-9 rounded-full border px-4 text-xs font-medium transition-all',
-                              isActive
-                                ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100'
-                                : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
-                            )}
-                          >
-                            {range.label}
-                          </Button>
-                        );
-                      })}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setMinRating(minRating === '4' ? '0' : '4')}
-                        className={cn(
-                          'h-9 rounded-full border px-4 text-xs font-medium transition-all',
-                          minRating === '4'
-                            ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100'
-                            : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
-                        )}
-                      >
-                        4+ Rating
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setInStockOnly(!inStockOnly)}
-                        className={cn(
-                          'h-9 rounded-full border px-4 text-xs font-medium transition-all',
-                          inStockOnly
-                            ? 'border-green-600 bg-green-50 text-green-700 hover:bg-green-100'
-                            : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
-                        )}
-                      >
-                        In Stock
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Filter Actions */}
-            <div className="border-t border-stone-100 bg-stone-50 px-4 py-3 sm:px-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-stone-600">
-                  <span className="font-medium text-stone-900">{resultSummary}</span>
-                  <span className="hidden sm:inline"> across the marketplace</span>
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-xl border-stone-200 bg-white text-stone-700 hover:bg-stone-100"
-                  onClick={() => setShowMoreFilters(true)}
-                  aria-label={`Advanced filters ${advancedFilterCount > 0 ? `(${advancedFilterCount} active)` : ''}`}
-                >
-                  <SlidersHorizontal className="mr-2 h-4 w-4" />
-                  Advanced Filters
-                  {advancedFilterCount > 0 && (
-                    <Badge className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-green-600 px-1.5 text-[11px] text-white">
-                      {advancedFilterCount}
-                    </Badge>
-                  )}
-                </Button>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="h-12 rounded-xl border-stone-200 text-left" aria-label={`Product category filter, ${selectedCategory === 'all' ? 'showing all categories' : `filtered to ${selectedCategory}`}`}>
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories ({allProducts.length})</SelectItem>
+                    <SelectItem value="chicks">Chicks ({getCategoryCount('chicks')})</SelectItem>
+                    <SelectItem value="eggs">Eggs ({getCategoryCount('eggs')})</SelectItem>
+                    <SelectItem value="chickens">Chickens ({getCategoryCount('chickens')})</SelectItem>
+                    <SelectItem value="feed">Feed ({getCategoryCount('feed')})</SelectItem>
+                    <SelectItem value="equipment">Equipment ({getCategoryCount('equipment')})</SelectItem>
+                    <SelectItem value="medicine">Medicine ({getCategoryCount('medicine')})</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Active Filter Chips */}
-          {activeFilters.length > 0 && (
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              {activeFilters.map((filter, index) => (
-                <Badge
-                  key={index}
-                  variant="secondary"
-                  className="flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700"
+        {/* Active Filter Chips */}
+        {activeFilters.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {activeFilters.map((filter, index) => (
+              <Badge
+                key={index}
+                variant="secondary"
+                className="flex items-center gap-1 rounded-md bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700"
+              >
+                <span className="truncate max-w-[180px] sm:max-w-none">{filter.label}</span>
+                <button
+                  onClick={filter.clear}
+                  className="ml-1 rounded-md p-0.5 transition-colors hover:bg-stone-200"
+                  aria-label={`Remove ${filter.label} filter`}
                 >
-                  <span className="truncate max-w-[180px] sm:max-w-none">{filter.label}</span>
-                  <button
-                    onClick={filter.clear}
-                    className="ml-1 rounded-full p-0.5 transition-colors hover:bg-stone-200"
-                    aria-label={`Remove ${filter.label} filter`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          )}
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
 
-          {/* Advanced Filters Modal */}
-          {showMoreFilters && (
-            <div
-              className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
-              onClick={() => setShowMoreFilters(false)}
-            >
-              <Card className="animate-in zoom-in-95 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border-0 shadow-2xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-                <CardHeader className="sticky top-0 z-10 border-b bg-white px-4 py-3 sm:px-6 sm:py-4">
-                  <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-stone-200 sm:hidden" />
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <Filter className="h-5 w-5 text-gray-600" />
-                      <div>
-                        <CardTitle className="text-base font-bold text-gray-900 sm:text-lg">Advanced Filters</CardTitle>
-                        <p className="mt-0.5 text-xs text-stone-500">Vendor, price, and detailed preferences</p>
-                      </div>
+        {/* Advanced Filters Modal */}
+        {showMoreFilters && (
+          <div
+            className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+            onClick={() => setShowMoreFilters(false)}
+          >
+            <Card className="animate-in zoom-in-95 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border-0 shadow-2xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+              <CardHeader className="sticky top-0 z-10 border-b bg-white px-4 py-3 sm:px-6 sm:py-4">
+                <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-stone-200 sm:hidden" />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Filter className="h-5 w-5 text-gray-600" />
+                    <div>
+                      <CardTitle className="text-base font-bold text-gray-900 sm:text-lg">Advanced Filters</CardTitle>
+                      <p className="mt-0.5 text-xs text-stone-500">Vendor, price, and detailed preferences</p>
                     </div>
-                    <button
-                      onClick={() => setShowMoreFilters(false)}
-                      className="flex-shrink-0 rounded-full bg-stone-100 p-2.5 text-gray-600 transition-colors duration-150 hover:bg-stone-200 hover:text-gray-800 touch-manipulation"
-                      aria-label="Close filters"
-                      title="Close"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
                   </div>
-                </CardHeader>
-                <CardContent className="flex-1 space-y-5 overflow-y-auto p-4 pb-24 sm:space-y-6 sm:p-6 sm:pb-6">
-                  {/* Sort By */}
-                  <div>
-                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Sort By</label>
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="newest">Newest First</SelectItem>
-                        <SelectItem value="price-low">Price: Low to High</SelectItem>
-                        <SelectItem value="price-high">Price: High to Low</SelectItem>
-                        <SelectItem value="rating">Best Rated</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <button
+                    onClick={() => setShowMoreFilters(false)}
+                    className="flex-shrink-0 rounded-full bg-stone-100 p-2.5 text-gray-600 transition-colors duration-150 hover:bg-stone-200 hover:text-gray-800 touch-manipulation"
+                    aria-label="Close filters"
+                    title="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 space-y-5 overflow-y-auto p-4 pb-24 sm:space-y-6 sm:p-6 sm:pb-6">
+                {/* Sort By */}
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Sort By</label>
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest First</SelectItem>
+                      <SelectItem value="price-low">Price: Low to High</SelectItem>
+                      <SelectItem value="price-high">Price: High to Low</SelectItem>
+                      <SelectItem value="rating">Best Rated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {/* Stock Availability */}
-                  <div>
-                    <label htmlFor="in-stock-only" className="flex items-center gap-3 rounded-xl border border-stone-200 p-3 cursor-pointer">
-                      <input
-                        id="in-stock-only"
-                        type="checkbox"
-                        checked={inStockOnly}
-                        onChange={(e) => setInStockOnly(e.target.checked)}
-                        aria-label="Show only products in stock"
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <span className="text-sm font-medium text-gray-700">In Stock Only</span>
-                    </label>
-                  </div>
+                {/* Stock Availability */}
+                <div>
+                  <label htmlFor="in-stock-only" className="flex items-center gap-3 rounded-xl border border-stone-200 p-3 cursor-pointer">
+                    <input
+                      id="in-stock-only"
+                      type="checkbox"
+                      checked={inStockOnly}
+                      onChange={(e) => setInStockOnly(e.target.checked)}
+                      aria-label="Show only products in stock"
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                    <span className="text-sm font-medium text-gray-700">In Stock Only</span>
+                  </label>
+                </div>
 
-                  {/* Vendor Filter */}
-                  <div>
-                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Vendor/Farm</label>
-                    <Select value={selectedVendor} onValueChange={setSelectedVendor}>
-                      <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Vendors ({allProducts.length})</SelectItem>
-                        {vendors.map((vendor) => {
-                          const vendorValue = getVendorOptionValue(vendor.id, vendor.name);
-                          return (
+                {/* Vendor Filter */}
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Vendor/Farm</label>
+                  <Select value={selectedVendor} onValueChange={setSelectedVendor}>
+                    <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Vendors ({allProducts.length})</SelectItem>
+                      {vendors.map((vendor) => {
+                        const vendorValue = getVendorOptionValue(vendor.id, vendor.name);
+                        return (
                           <SelectItem key={vendorValue} value={vendorValue}>
                             {vendor.name || 'Unknown'} ({getVendorCount(vendorValue)})
                           </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {/* Location Filter */}
-                  <div>
-                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Location</label>
-                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                      <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {locations.map(location => (
-                          <SelectItem key={location} value={location}>
-                            {location === 'all' ? `All Locations (${allProducts.length})` : `${location} (${getLocationCount(location)})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Location Filter */}
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Location</label>
+                  <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                    <SelectTrigger className="h-11 rounded-xl border-stone-200 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.map(location => (
+                        <SelectItem key={location} value={location}>
+                          {location === 'all' ? `All Locations (${allProducts.length})` : `${location} (${getLocationCount(location)})`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {/* Price Range */}
-                  <div>
-                    <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Price Range (KSH)</label>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <Input
-                        type="number"
-                        placeholder="Min price"
-                        value={minPrice}
-                        onChange={(e) => setMinPrice(e.target.value)}
-                        className="h-11 rounded-xl border-stone-200 text-sm"
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Max price"
-                        value={maxPrice}
-                        onChange={(e) => setMaxPrice(e.target.value)}
-                        className="h-11 rounded-xl border-stone-200 text-sm"
-                      />
+                {/* Price Range */}
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Price Range (KSH)</label>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Input
+                      type="number"
+                      placeholder="Min price"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value)}
+                      className="h-11 rounded-xl border-stone-200 text-sm" />
+                    <Input
+                      type="number"
+                      placeholder="Max price"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                      className="h-11 rounded-xl border-stone-200 text-sm" />
+                  </div>
+                </div>
+
+                {/* Rating Filter */}
+                <div>
+                  <label htmlFor="min-rating-slider" className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Minimum Rating</label>
+                  <div className="rounded-xl border border-stone-200 p-3">
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="min-rating-slider"
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.5"
+                        value={minRating}
+                        onChange={(e) => setMinRating(e.target.value)}
+                        className="flex-1 accent-green-600"
+                        aria-label="Minimum rating filter"
+                        title={`Minimum rating: ${minRating} stars`} />
+                      <span className="whitespace-nowrap text-sm font-medium text-gray-700">
+                        {minRating} <Star className="h-3 w-3 sm:h-4 sm:w-4 inline text-yellow-400 fill-yellow-400" />
+                      </span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Rating Filter */}
-                  <div>
-                    <label htmlFor="min-rating-slider" className="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">Minimum Rating</label>
-                    <div className="rounded-xl border border-stone-200 p-3">
-                      <div className="flex items-center gap-3">
-                        <input
-                          id="min-rating-slider"
-                          type="range"
-                          min="0"
-                          max="5"
-                          step="0.5"
-                          value={minRating}
-                          onChange={(e) => setMinRating(e.target.value)}
-                          className="flex-1 accent-green-600"
-                          aria-label="Minimum rating filter"
-                          title={`Minimum rating: ${minRating} stars`}
-                        />
-                        <span className="whitespace-nowrap text-sm font-medium text-gray-700">
-                          {minRating} <Star className="h-3 w-3 sm:h-4 sm:w-4 inline text-yellow-400 fill-yellow-400" />
-                        </span>
-                      </div>
-                    </div>
+                {/* Action Buttons */}
+                <div className="sticky bottom-0 -mx-4 -mb-4 mt-6 border-t bg-white px-4 py-4 sm:static sm:m-0 sm:border-t-0 sm:bg-transparent sm:p-0">
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={resetAdvancedFilters}
+                      className="h-12 flex-1 rounded-md border-stone-300 text-sm font-medium touch-manipulation sm:h-10"
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      onClick={() => setShowMoreFilters(false)}
+                      className="h-12 flex-1 rounded-md bg-green-600 text-sm font-medium text-white touch-manipulation hover:bg-green-700 sm:h-10"
+                    >
+                      Show Results
+                    </Button>
                   </div>
-
-                  {/* Action Buttons */}
-                  <div className="sticky bottom-0 -mx-4 -mb-4 mt-6 border-t bg-white px-4 py-4 sm:static sm:m-0 sm:border-t-0 sm:bg-transparent sm:p-0">
-                    <div className="flex gap-3">
-                      <Button
-                        variant="outline"
-                        onClick={resetAdvancedFilters}
-                        className="h-12 flex-1 rounded-xl border-stone-300 text-sm font-medium touch-manipulation sm:h-10"
-                      >
-                        Reset
-                      </Button>
-                      <Button
-                        onClick={() => setShowMoreFilters(false)}
-                        className="h-12 flex-1 rounded-xl bg-green-600 text-sm font-medium text-white touch-manipulation hover:bg-green-700 sm:h-10"
-                      >
-                        Show Results
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Screen Reader Announcements */}
-          <div className="sr-only" aria-live="polite" aria-atomic="true">
-            {products.length === 1 ? '1 product found' : `${products.length} products found`}
-            {searchTerm && ` matching "${searchTerm}"`}
-            {selectedCategory !== 'all' && ` in ${selectedCategory} category`}
-            {selectedLocation !== 'all' && ` from ${selectedLocation}`}
+                </div>
+              </CardContent>
+            </Card>
           </div>
+        )}
 
-          {/* Loading State */}
-          {isLoading && (
-            <div className="text-center py-12" aria-label="Loading products">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" aria-hidden="true"></div>
-              <p className="text-gray-500 mt-4">Loading products...</p>
-            </div>
-          )}
+        {/* Screen Reader Announcements */}
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {products.length === 1 ? '1 product found' : `${products.length} products found`}
+          {searchTerm && ` matching "${searchTerm}"`}
+          {selectedCategory !== 'all' && ` in ${selectedCategory} category`}
+          {selectedLocation !== 'all' && ` from ${selectedLocation}`}
+        </div>
 
-          {/* Products Grid */}
-          {!isLoading && (
-            <div ref={productsGridRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {products.map((product, index) => {
-                const isHighlighted = highlightedProductId === product.id;
-                // Vary animation directions: 0=up, 1=left, 2=right, 3=down
-                const direction = index % 4;
-                const directionClasses = {
-                  0: 'opacity-0 translate-y-8', // up
-                  1: 'opacity-0 -translate-x-8', // left
-                  2: 'opacity-0 translate-x-8', // right
-                  3: 'opacity-0 translate-y-8' // up (alternate)
-                };
-                return (
+        {/* Loading State */}
+        {isLoading && (
+          <div className="text-center py-12" aria-label="Loading products">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" aria-hidden="true"></div>
+            <p className="text-gray-500 mt-4">Loading products...</p>
+          </div>
+        )}
+
+        {/* Products Grid */}
+        {!isLoading && (
+          <div ref={productsGridRef} className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            {products.map((product, index) => {
+              const isHighlighted = highlightedProductId === product.id;
+              // Vary animation directions: 0=up, 1=left, 2=right, 3=down
+              const direction = index % 4;
+              const directionClasses = {
+                0: 'opacity-0 translate-y-8', // up
+                1: 'opacity-0 -translate-x-8', // left
+                2: 'opacity-0 translate-x-8', // right
+                3: 'opacity-0 translate-y-8' // up (alternate)
+              };
+              return (
                 <ProductCard
                   key={product.id}
                   product={product}
                   highlighted={isHighlighted}
+                  variant="compact"
                   imageSrc={getProductCardImage(product)}
                   animationClassName={`${directionClasses[direction as keyof typeof directionClasses]} animate-out`}
                   animationDelayMs={(index % 6) * 30}
-                  cardRef={(el) => { productRefs.current[product.id] = el; }}
+                  cardRef={(el) => { productRefs.current[product.id] = el; } }
                   onCardClick={() => {
                     navigate(`/product/${product.id}`);
-                  }}
+                  } }
                   onAddToCart={handleAddToCart}
-                  onOrderNow={handleOrderNow}
-                />
-                );
-              })}
-            </div>
-          )}
+                  onOrderNow={handleOrderNow} />
+              );
+            })}
+          </div>
+        )}
 
-          {!isLoading && products.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No products found matching your criteria.</p>
-              <p className="text-gray-400 mt-2">Try adjusting your search or filters.</p>
-            </div>
-          )}
-        </div>
+        {!isLoading && products.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">No products found matching your criteria.</p>
+            <p className="text-gray-400 mt-2">Try adjusting your search or filters.</p>
+          </div>
+        )}
       </div>
 
       <Footer />

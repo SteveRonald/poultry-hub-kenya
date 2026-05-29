@@ -15,7 +15,7 @@ import ProductCard from '../components/ProductCard';
 import type { Product } from '../hooks/useProducts';
 import { toast } from 'sonner';
 
-// Hero media for carousel - Balanced poultry-related images plus login/register animation video
+// Hero media for carousel - Balanced poultry-related images
 const heroMedia = [
   {
     type: "image" as const,
@@ -44,13 +44,6 @@ const heroMedia = [
     alt: "Curated poultry marketplace products and supplies",
     objectPosition: "center center",
     objectFit: "cover" as const
-  },
-  {
-    type: "video" as const,
-    url: "/Animations/Hero-Section-animation.mp4",
-    alt: "KukuSoko homepage hero animation",
-    objectPosition: "center center",
-    objectFit: "contain" as const
   }
 ];
 
@@ -68,7 +61,6 @@ const Index = () => {
   // Hero media carousel state
   const [currentHeroImageIndex, setCurrentHeroImageIndex] = useState(0);
   const heroImageIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const heroVideoRef = useRef<HTMLVideoElement | null>(null);
   
   // Scroll animation refs
   const heroTextRef = useRef<HTMLDivElement>(null);
@@ -93,27 +85,11 @@ const Index = () => {
       heroImageIntervalRef.current = null;
     }
 
-    const current = heroMedia[currentHeroImageIndex];
-    if (!current) return;
+    if (!heroMedia[currentHeroImageIndex]) return;
 
-    if (current.type === 'image') {
-      heroImageIntervalRef.current = setTimeout(() => {
-        setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroMedia.length);
-      }, 5000);
-      if (heroVideoRef.current) {
-        heroVideoRef.current.pause();
-      }
-    } else {
-      if (heroVideoRef.current) {
-        heroVideoRef.current.currentTime = 0;
-        const playPromise = heroVideoRef.current.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => {
-            // Autoplay might be blocked; user interaction will start playback
-          });
-        }
-      }
-    }
+    heroImageIntervalRef.current = setTimeout(() => {
+      setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroMedia.length);
+    }, 5000);
   }, [currentHeroImageIndex]);
 
   const fetchFeaturedProducts = async () => {
@@ -383,25 +359,24 @@ const Index = () => {
               className="opacity-0 translate-y-8 transition-all duration-1000 ease-out animate-out"
             >
               <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6">
-                <span className="inline-block opacity-0 translate-x-[-20px] transition-all duration-700 delay-100 animate-out">Kenya's Premier</span>
+                <span className="inline-block opacity-0 translate-x-[-20px] transition-all duration-700 delay-100 animate-out">Kenya's Trusted</span>
                 <br />
-                <span className="inline-block opacity-0 translate-x-[-20px] transition-all duration-700 delay-300 animate-out text-accent"> Poultry</span>
+                <span className="inline-block opacity-0 translate-x-[-20px] transition-all duration-700 delay-300 animate-out text-accent">Poultry</span>
                 <span className="inline-block opacity-0 translate-x-[-20px] transition-all duration-700 delay-500 animate-out"> Marketplace</span>
               </h1>
               <p className="text-base sm:text-lg md:text-xl mb-6 sm:mb-8 text-gray-200 opacity-0 translate-y-4 transition-all duration-700 delay-700 animate-out">
-                Connect with trusted poultry farmers across Kenya. Buy quality chicks, eggs, meat and/or poultry products 
-                directly from verified suppliers.
+                Browse quality chicks, eggs, meat, feed, and poultry supplies from verified farmers and suppliers across Kenya.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 opacity-0 translate-y-4 transition-all duration-700 delay-900 animate-out">
                 <Link to="/products" className="w-full sm:w-auto">
-                  <Button className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-black font-semibold px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
-                    Browse Products
+                  <Button className="w-full rounded-md sm:w-auto bg-accent hover:bg-accent/90 text-black font-semibold px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
+                    Buy Products
                     <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 inline-block group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
                 {!user && (
                   <Link to="/register" className="w-full sm:w-auto">
-                    <Button variant="outline" className="w-full sm:w-auto border-white text-black dark:text-white hover:bg-white hover:text-primary dark:hover:bg-white dark:hover:text-primary px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
+                    <Button variant="outline" className="w-full rounded-md sm:w-auto border-white text-black dark:text-white hover:bg-white hover:text-primary dark:hover:bg-white dark:hover:text-primary px-6 sm:px-8 py-2.5 sm:py-3 text-base sm:text-lg transform hover:scale-105 transition-transform">
                       Become a Seller
                     </Button>
                   </Link>
@@ -409,7 +384,7 @@ const Index = () => {
               </div>
             </div>
             
-            {/* Animated Image Carousel */}
+            {/* Hero Image Carousel */}
             <div className="relative h-[300px] sm:h-[400px] md:h-[450px] lg:h-[500px] w-full">
               <div className="relative w-full h-full overflow-hidden rounded-lg bg-gray-200 shadow-2xl dark:bg-gray-800">
                 {heroMedia.map((item, index) => (
@@ -423,63 +398,39 @@ const Index = () => {
                         : 'opacity-0 scale-95 translate-x-full z-0'
                     }`}
                   >
-                    {item.type === 'image' ? (
-                      <img 
-                        key={`img-${index}-${item.url.substring(0, 20)}`}
-                        src={item.url} 
-                        alt={item.alt} 
-                        className="w-full h-full object-cover"
-                        style={{ 
-                          objectFit: item.objectFit || 'cover', 
-                          objectPosition: item.objectPosition || 'center center',
-                          width: '100%', 
-                          height: '100%',
-                          minHeight: '100%',
-                          minWidth: '100%'
-                        }}
-                        loading="eager"
-                        crossOrigin="anonymous"
-                        onError={(e) => {
-                          // Fallback to a reliable poultry image if original fails
-                          // Use different fallbacks based on image index to avoid all showing the same image
-                          const target = e.target as HTMLImageElement;
-                          const fallbackImages = [
-                            "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=1200&h=800&auto=format&fit=crop&q=90", // eggs
-                            "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=1200&h=800&auto=format&fit=crop&q=90", // live chicken
-                            "https://images.unsplash.com/photo-1606914469633-bd39294ea743?w=1200&h=800&auto=format&fit=crop&q=90", // meat
-                            "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=1200&h=800&auto=format&fit=crop&q=90", // chicks
-                            "https://images.unsplash.com/photo-1564759224907-6b3d55e4d7f9?w=1200&h=800&auto=format&fit=crop&q=90", // farm
-                            "https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=1200&h=800&auto=format&fit=crop&q=90" // feed
-                          ];
-                          const imageIndex = heroMedia.findIndex(img => img.url === target.src);
-                          if (imageIndex >= 0 && imageIndex < fallbackImages.length) {
-                            target.src = fallbackImages[imageIndex];
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.28),_transparent_42%),linear-gradient(135deg,_rgba(255,247,230,0.96),_rgba(244,238,225,0.94))] p-3 sm:p-4">
-                        <video
-                          ref={index === currentHeroImageIndex ? heroVideoRef : null}
-                          src={item.url}
-                          className="h-full w-full rounded-md object-cover shadow-[0_18px_45px_rgba(40,52,27,0.16)]"
-                          style={{
-                            objectFit: item.objectFit || 'cover',
-                            objectPosition: item.objectPosition || 'center center',
-                            width: '100%',
-                            height: '100%',
-                            minHeight: '100%',
-                            minWidth: '100%'
-                          }}
-                          muted
-                          playsInline
-                          preload="auto"
-                          onEnded={() => {
-                            setCurrentHeroImageIndex((prevIndex) => (prevIndex + 1) % heroMedia.length);
-                          }}
-                        />
-                      </div>
-                    )}
+                    <img 
+                      key={`img-${index}-${item.url.substring(0, 20)}`}
+                      src={item.url} 
+                      alt={item.alt} 
+                      className="w-full h-full object-cover"
+                      style={{ 
+                        objectFit: item.objectFit || 'cover', 
+                        objectPosition: item.objectPosition || 'center center',
+                        width: '100%', 
+                        height: '100%',
+                        minHeight: '100%',
+                        minWidth: '100%'
+                      }}
+                      loading="eager"
+                      crossOrigin="anonymous"
+                      onError={(e) => {
+                        // Fallback to a reliable poultry image if original fails
+                        // Use different fallbacks based on image index to avoid all showing the same image
+                        const target = e.target as HTMLImageElement;
+                        const fallbackImages = [
+                          "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=1200&h=800&auto=format&fit=crop&q=90", // eggs
+                          "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=1200&h=800&auto=format&fit=crop&q=90", // live chicken
+                          "https://images.unsplash.com/photo-1606914469633-bd39294ea743?w=1200&h=800&auto=format&fit=crop&q=90", // meat
+                          "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=1200&h=800&auto=format&fit=crop&q=90", // chicks
+                          "https://images.unsplash.com/photo-1564759224907-6b3d55e4d7f9?w=1200&h=800&auto=format&fit=crop&q=90", // farm
+                          "https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=1200&h=800&auto=format&fit=crop&q=90" // feed
+                        ];
+                        const imageIndex = heroMedia.findIndex(img => img.url === target.src);
+                        if (imageIndex >= 0 && imageIndex < fallbackImages.length) {
+                          target.src = fallbackImages[imageIndex];
+                        }
+                      }}
+                    />
                     {/* Gradient overlay for better text readability */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                   </div>
@@ -589,27 +540,26 @@ const Index = () => {
             {categories.map((cat) => (
               <Card
                 key={cat.name}
-                className="card-hover overflow-hidden cursor-pointer"
+                className="card-hover overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
                 onClick={() => {
                   window.location.href = `/products?category=${encodeURIComponent(cat.name)}`;
                 }}
               >
-                <div className="relative aspect-[16/9] overflow-hidden">
+                <div className="relative aspect-[4/3] overflow-hidden bg-stone-100">
                   <img 
                     src={cat.image} 
                     alt={cat.name}
-                    className="w-full h-full object-cover transform hover:scale-110 transition-transform duration-500"
+                    className="h-full w-full object-cover object-center transition-transform duration-500 hover:scale-[1.04]"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <h3 className="text-2xl font-bold text-white">{cat.name}</h3>
-                  </div>
+                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/55 to-transparent" />
                 </div>
-                <CardContent className="p-6">
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">{cat.description}</p>
-                  <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="text-primary font-semibold flex items-center hover:text-primary/80 group">
-                    Shop Now
-                    <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                <CardContent className="p-4 sm:p-5">
+                  <h3 className="mb-2 text-base font-semibold text-stone-900">{cat.name}</h3>
+                  <p className="text-sm leading-6 text-gray-600 dark:text-gray-300">{cat.description}</p>
+                  <Link to={`/products?category=${encodeURIComponent(cat.name)}`} className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary/80 group">
+                    Explore category
+                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </Link>
                 </CardContent>
               </Card>
@@ -619,15 +569,15 @@ const Index = () => {
           {/* Featured products carousel */}
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <div className="mb-2 inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-green-700">
-                Featured Picks
+              <div className="mb-2 inline-flex items-center rounded-md bg-green-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-green-700">
+                Featured Products
               </div>
-              <h3 className="text-2xl font-bold text-primary">Explore trusted products faster</h3>
+              <h3 className="text-2xl font-bold text-primary">Top picks at a glance</h3>
               <p className="mt-2 max-w-2xl text-sm text-stone-600 sm:text-base">
-                Browse a representative mix of high-interest products across the marketplace, then narrow down by category if you already know what you need.
+                Browse a quick mix of popular products and narrow down by category if needed.
               </p>
             </div>
-            <Link to="/products" className="text-primary font-semibold flex items-center hover:text-primary/80 group">
+            <Link to="/products" className="inline-flex items-center rounded-md border border-stone-200 px-3.5 py-2 text-primary font-semibold hover:bg-stone-50 hover:text-primary/80 group">
               View All
               <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </Link>
@@ -643,7 +593,7 @@ const Index = () => {
                   key={category.id}
                   type="button"
                   onClick={() => setFeaturedCategory(category.id)}
-                  className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-medium transition-colors sm:px-4 ${
+                  className={`whitespace-nowrap rounded-md border px-3.5 py-2 text-sm font-medium transition-colors sm:px-4 ${
                     isActive
                       ? 'border-green-600 bg-green-600 text-white'
                       : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50'
@@ -661,12 +611,10 @@ const Index = () => {
               <p className="text-sm text-stone-600">
                 <span className="font-semibold text-stone-900">{displayedFeaturedProducts.length}</span>{' '}
                 {featuredCategory === 'all'
-                  ? 'featured products chosen from across the marketplace'
-                  : `featured ${featuredCategory} products ready to explore`}
+                  ? 'featured products'
+                  : `${featuredCategory} picks`}
               </p>
-              <p className="text-xs uppercase tracking-[0.16em] text-stone-400">
-                Swipe or use arrows to browse
-              </p>
+              <p className="text-xs uppercase tracking-[0.16em] text-stone-400">Browse picks</p>
             </div>
             <div className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10">
               <Button
@@ -676,7 +624,7 @@ const Index = () => {
                 onClick={() => scrollFeatured('left')}
                 onMouseEnter={() => setIsPaused(true)}
                 onMouseLeave={() => setIsPaused(false)}
-                className="bg-white/80 hover:bg-white border-gray-200 shadow"
+                className="rounded-md bg-white/80 hover:bg-white border-gray-200 shadow"
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
@@ -689,7 +637,7 @@ const Index = () => {
                 onClick={() => scrollFeatured('right')}
                 onMouseEnter={() => setIsPaused(true)}
                 onMouseLeave={() => setIsPaused(false)}
-                className="bg-white/80 hover:bg-white border-gray-200 shadow"
+                className="rounded-md bg-white/80 hover:bg-white border-gray-200 shadow"
               >
                 <ChevronRight className="h-5 w-5" />
               </Button>
@@ -711,6 +659,7 @@ const Index = () => {
                 >
                   <ProductCard
                     product={prod}
+                    variant="compact"
                     imageSrc={getFeaturedImage(prod)}
                     onCardClick={() => navigate(`/product/${prod.id}`)}
                     onAddToCart={handleFeaturedAddToCart}

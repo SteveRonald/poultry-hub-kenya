@@ -61,6 +61,7 @@ const createCategoryPlaceholder = (category?: string, name?: string) => {
 interface ProductCardProps {
   product: Product;
   highlighted?: boolean;
+  variant?: 'full' | 'compact';
   animationClassName?: string;
   animationDelayMs?: number;
   imageSrc: string;
@@ -73,6 +74,7 @@ interface ProductCardProps {
 const ProductCard = ({
   product,
   highlighted = false,
+  variant = 'full',
   animationClassName = '',
   animationDelayMs = 0,
   imageSrc,
@@ -90,6 +92,7 @@ const ProductCard = ({
   const ratingValue = product.average_rating || 0;
   const ratingCount = product.total_ratings || 0;
   const hasRatings = ratingValue > 0 && ratingCount > 0;
+  const isCompact = variant === 'compact';
 
   return (
     <Card
@@ -109,8 +112,8 @@ const ProductCard = ({
         </div>
       )}
 
-      <div className="relative border-b border-stone-200 bg-[#f5f5f5]">
-        <div className="flex h-[200px] items-center justify-center p-4">
+      <div className={`relative border-b border-stone-200 bg-[#f5f5f5] ${isCompact ? 'rounded-t-2xl' : ''}`}>
+        <div className={`flex items-center justify-center p-4 ${isCompact ? 'h-[210px] sm:h-[220px]' : 'h-[200px]'}`}>
           <img
             src={imageSrc}
             alt={product.name}
@@ -127,13 +130,13 @@ const ProductCard = ({
         </div>
       </div>
 
-      <CardContent className="flex flex-1 flex-col p-4">
-        <div className="space-y-2.5">
-          <div className="space-y-1.5">
-            <h3 className="line-clamp-2 min-h-[3rem] text-sm font-semibold leading-6 text-stone-900 md:text-base">
+      <CardContent className={`flex flex-1 flex-col ${isCompact ? 'p-3' : 'p-4'}`}>
+        <div className={isCompact ? 'space-y-2' : 'space-y-2.5'}>
+          <div className={isCompact ? 'space-y-1' : 'space-y-1.5'}>
+            <h3 className={`font-semibold leading-6 text-stone-900 ${isCompact ? 'line-clamp-1 text-[15px]' : 'line-clamp-2 min-h-[3rem] text-sm md:text-base'}`}>
               {product.name}
             </h3>
-            <div className="flex min-h-[1.25rem] items-center justify-between gap-3">
+            <div className={`flex min-h-[1.25rem] items-center gap-3 ${isCompact ? 'justify-start' : 'justify-between'}`}>
               {hasRatings ? (
                 <div className="flex items-center gap-1.5 text-xs text-stone-500">
                   <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
@@ -143,98 +146,150 @@ const ProductCard = ({
               ) : (
                 <span className="text-xs text-stone-400">No ratings yet</span>
               )}
-              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-                {product.category || 'Product'}
-              </span>
+              {!isCompact && (
+                <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                  {product.category || 'Product'}
+                </span>
+              )}
             </div>
-            <div className="flex items-start justify-between gap-3">
+            <div className={`flex items-start gap-3 ${isCompact ? 'flex-col' : 'justify-between'}`}>
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-stone-400">
                   Price
                 </p>
-                <p className="text-xl font-bold leading-none text-stone-950">
+                <p className={`font-bold leading-none text-stone-950 ${isCompact ? 'text-[1.1rem]' : 'text-xl'}`}>
                   KSH {product.price.toLocaleString()}
                 </p>
               </div>
-              {isOutOfStock ? (
-                <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
-                  Out of stock
-                </span>
-              ) : isLowStock ? (
-                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                  Limited stock
-                </span>
-              ) : null}
+              {!isCompact && (
+                isOutOfStock ? (
+                  <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                    Out of stock
+                  </span>
+                ) : isLowStock ? (
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    Limited stock
+                  </span>
+                ) : null
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
-            <div className="rounded-lg bg-white px-3 py-2">
-              <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-stone-400">
-                <Package className="h-3.5 w-3.5" />
-                <span>Stock</span>
+          {!isCompact && (
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
+              <div className="rounded-lg bg-white px-3 py-2">
+                <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-stone-400">
+                  <Package className="h-3.5 w-3.5" />
+                  <span>Stock</span>
+                </div>
+                <span className="text-sm font-semibold text-stone-900">{product.stock_quantity}</span>
               </div>
-              <span className="text-sm font-semibold text-stone-900">{product.stock_quantity}</span>
-            </div>
-            <div className="rounded-lg bg-white px-3 py-2">
-              <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-stone-400">
-                <ShoppingCart className="h-3.5 w-3.5" />
-                <span>Min Order</span>
+              <div className="rounded-lg bg-white px-3 py-2">
+                <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-stone-400">
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  <span>Min Order</span>
+                </div>
+                <span className="text-sm font-semibold text-stone-900">
+                  {minOrder} {product.unit || 'item'}
+                </span>
               </div>
-              <span className="text-sm font-semibold text-stone-900">
-                {minOrder} {product.unit || 'item'}
-              </span>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-1.5 text-sm text-stone-600">
-            <div className="flex items-start gap-2">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-              <span className="line-clamp-1">{vendorLocation}</span>
+          {isCompact ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+              <div className="min-w-0 space-y-2 text-[13px] text-stone-600">
+                <div className="flex items-start gap-2">
+                  <Store className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-400" />
+                  <span className="line-clamp-1">{vendorName}</span>
+                </div>
+              </div>
+
+              <div className="justify-self-end flex w-[118px] flex-col gap-1.5 overflow-visible transition-all duration-200 sm:-mt-6 sm:w-[44px] sm:group-hover:w-[132px]">
+                <Button
+                  size="sm"
+                  className="h-8 w-full justify-between rounded-lg border border-green-600 bg-green-600 px-2 text-[11px] font-semibold text-white shadow-none transition-all duration-200 sm:border-transparent sm:bg-transparent sm:px-2 sm:text-green-600 sm:hover:border-green-600 sm:hover:bg-green-600 sm:hover:pr-3 sm:hover:text-white sm:group-hover:border-green-600 sm:group-hover:bg-green-600 sm:group-hover:pr-3 sm:group-hover:text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddToCart(product.id);
+                  }}
+                  disabled={isOutOfStock}
+                >
+                  <span className="max-w-[84px] overflow-hidden whitespace-nowrap opacity-100 transition-all duration-200 sm:max-w-0 sm:opacity-0 sm:group-hover:max-w-[84px] sm:group-hover:opacity-100">
+                    Add to Cart
+                  </span>
+                  <Plus className="h-4 w-4 shrink-0 text-white transition-colors duration-200 sm:text-green-600 sm:group-hover:text-white" />
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-full justify-between rounded-lg border border-stone-300 bg-white px-2 text-[11px] font-semibold text-stone-900 shadow-none transition-all duration-200 sm:border-transparent sm:bg-transparent sm:px-2 sm:text-stone-800 sm:hover:border-stone-300 sm:hover:bg-white sm:hover:pr-3 sm:hover:text-stone-900 sm:group-hover:border-stone-300 sm:group-hover:bg-white sm:group-hover:pr-3 sm:group-hover:text-stone-900"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOrderNow(product);
+                  }}
+                  disabled={isOutOfStock}
+                >
+                  <span className="max-w-[84px] overflow-hidden whitespace-nowrap opacity-100 transition-all duration-200 sm:max-w-0 sm:opacity-0 sm:group-hover:max-w-[84px] sm:group-hover:opacity-100">
+                    Order Now
+                  </span>
+                  <ShoppingCart className="h-4 w-4 shrink-0 text-stone-700 transition-colors duration-200 sm:text-stone-700 sm:group-hover:text-stone-900" />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-start gap-2">
-              <Store className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-              <span className="line-clamp-1">{vendorName}</span>
+          ) : (
+            <div className="space-y-1.5 text-sm text-stone-600">
+              <div className="flex items-start gap-2">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
+                <span className="line-clamp-1">{vendorLocation}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Store className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
+                <span className="line-clamp-1">{vendorName}</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <div className="mt-auto flex flex-col gap-2 pt-4">
-          <Button
-            size="sm"
-            className="h-11 w-full rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddToCart(product.id);
-            }}
-            disabled={isOutOfStock}
-          >
-            <Plus className="h-4 w-4" />
-            Add to Cart
-          </Button>
+        {!isCompact && (
+          <div className="mt-auto flex flex-col gap-2 pt-4">
+            <Button
+              size="sm"
+              className="h-11 w-full rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddToCart(product.id);
+              }}
+              disabled={isOutOfStock}
+            >
+              <Plus className="h-4 w-4" />
+              Add to Cart
+            </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-11 w-full rounded-xl border-stone-300 bg-white text-sm font-semibold text-stone-800 hover:bg-stone-50"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOrderNow(product);
-            }}
-            disabled={isOutOfStock}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Order Now
-          </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-11 w-full rounded-xl border-stone-300 bg-white text-sm font-semibold text-stone-800 hover:bg-stone-50"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOrderNow(product);
+              }}
+              disabled={isOutOfStock}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Order Now
+            </Button>
 
-          <ChatButton
-            productId={product.id}
-            vendorId={product.vendor_id}
-            vendorUserId={product.vendor_profiles?.user_id || product.vendor_user_id}
-            variant="ghost"
-            className="h-10 w-full justify-start rounded-xl px-2 text-sm font-medium text-stone-600 hover:bg-transparent hover:text-stone-900"
-          />
-        </div>
+            <ChatButton
+              productId={product.id}
+              vendorId={product.vendor_id}
+              vendorUserId={product.vendor_profiles?.user_id || product.vendor_user_id}
+              variant="ghost"
+              className="h-10 w-full justify-start rounded-xl px-2 text-sm font-medium text-stone-600 hover:bg-transparent hover:text-stone-900"
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

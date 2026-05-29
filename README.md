@@ -1,9 +1,9 @@
-# 🐔 Poultry Hub Kenya
+# Poultry Hub Kenya
 
 > **Kenya's Premier Poultry Marketplace** - Connecting farmers, vendors,
 > and customers across Kenya
 
-## 🎯 The Problem We're Solving
+## The Problem I'm Solving
 
 The Kenyan poultry market faces critical challenges:
 
@@ -13,7 +13,7 @@ The Kenyan poultry market faces critical challenges:
 - **Market Information Gap**: Lack of clear pricing and product availability information
 - **Payment Friction**: Unsafe and cumbersome transaction methods
 
-## 💡 Our Solution
+## My Solution
 
 **Poultry Hub Kenya** is a digital marketplace platform that:
 
@@ -24,7 +24,7 @@ The Kenyan poultry market faces critical challenges:
 - Offers a multi-language experience (English & Kiswahili) to serve all users
 - Helps vendors reach more customers through advertisements and better visibility
 
-## ✨ What We've Built
+## What I Built
 
 - **Product Marketplace**: Browse, search, and purchase poultry products by location,
  and category
@@ -39,7 +39,7 @@ The Kenyan poultry market faces critical challenges:
 
 ---
 
-## 🛠️ Built With
+##  Built With
 
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS
 - **Backend**: PHP, MySQL, Apache
@@ -47,18 +47,11 @@ The Kenyan poultry market faces critical challenges:
 
 ---
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
-for details.
-
----
-
-## 🙏 Thanks To
+##  Thanks To
 
 - **Google Gemini**: For AI-powered image analysis and description generation
 - **Chatbase**: For chatbot powered conversation system
 
 ---
 
-## Made with ❤️ for the Kenyan Poultry Community
+## Made with Love for the Kenyan Poultry Community

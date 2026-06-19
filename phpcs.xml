@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<ruleset name="PoultryHub Kenya">
+    <description>PHP CodeSniffer configuration for PoultryHub Kenya</description>
+    
+    <!-- Exclude vendor directories from linting -->
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    
+    <!-- Exclude test files from vendor packages -->
+    <exclude-pattern>*/vendor/*/test/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*/tests/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*/Test/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*/Tests/*</exclude-pattern>
+    
+    <!-- Include only our backend source files -->
+    <file>backend/routes</file>
+    <file>backend/config</file>
+    <file>backend/utils</file>
+    <file>backend/index.php</file>
+</ruleset>

@@ -1,0 +1,9 @@
+# Simple Railway Configuration
+# Let Railway auto-detect services
+
+[build]
+builder = "NIXPACKS"
+
+[variables]
+NODE_ENV = "production"
+PHP_ENV = "production"

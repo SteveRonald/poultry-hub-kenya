@@ -68,7 +68,7 @@ function handleLogin() {
         // SECURITY CHECK: Prevent admins from logging in through regular user login
         if ($user['role'] === 'admin') {
             http_response_code(401);
-            echo json_encode(['error' => 'Admin accounts must use the admin login page. Please go to /admin-login']);
+            echo json_encode(['error' => 'login failed try again later']);
             return;
         }
         
@@ -176,7 +176,7 @@ function handleRegister() {
         $stmt->execute([$email]);
         if ($stmt->fetch()) {
             http_response_code(409);
-            echo json_encode(['error' => 'Email already registered']);
+            echo json_encode(['error' => 'Please login']);
             return;
         }
         
